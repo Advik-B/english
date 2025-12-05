@@ -24,6 +24,9 @@ type ReturnValue struct {
 	Value Value
 }
 
+// BreakValue is used to implement break statements
+type BreakValue struct{}
+
 // RuntimeError represents an error during execution
 type RuntimeError struct {
 	Message   string
@@ -196,6 +199,8 @@ func (ev *Evaluator) Eval(node interface{}) (Value, error) {
 		return ev.evalForEachLoop(node)
 	case *ast.ToggleStatement:
 		return ev.evalToggle(node)
+	case *ast.BreakStatement:
+		return &BreakValue{}, nil
 	case *ast.NumberLiteral:
 		return node.Value, nil
 	case *ast.StringLiteral:
@@ -446,6 +451,9 @@ func (ev *Evaluator) evalWhileLoop(wl *ast.WhileLoop) (Value, error) {
 		if _, ok := val.(*ReturnValue); ok {
 			return val, nil
 		}
+		if _, ok := val.(*BreakValue); ok {
+			break
+		}
 		result = val
 	}
 	return result, nil
@@ -470,6 +478,9 @@ func (ev *Evaluator) evalForLoop(fl *ast.ForLoop) (Value, error) {
 		}
 		if _, ok := val.(*ReturnValue); ok {
 			return val, nil
+		}
+		if _, ok := val.(*BreakValue); ok {
+			break
 		}
 		result = val
 	}
@@ -501,6 +512,9 @@ func (ev *Evaluator) evalForEachLoop(fel *ast.ForEachLoop) (Value, error) {
 		}
 		if _, ok := val.(*ReturnValue); ok {
 			return val, nil
+		}
+		if _, ok := val.(*BreakValue); ok {
+			break
 		}
 		result = val
 	}

@@ -93,17 +93,17 @@ func getWelcomeMessage() string {
 }
 
 type model struct {
-	input       string
-	history     []string
-	output      []string
-	multiline   bool
-	buffer      []string
-	env         *vm.Environment
-	evaluator   *vm.Evaluator
-	cursorPos   int
-	width       int
-	height      int
-	quitting    bool
+	input     string
+	history   []string
+	output    []string
+	multiline bool
+	buffer    []string
+	env       *vm.Environment
+	evaluator *vm.Evaluator
+	cursorPos int
+	width     int
+	height    int
+	quitting  bool
 }
 
 func initialModel() model {
@@ -346,6 +346,7 @@ func (m *model) highlightSyntax(code string) string {
 		"to": true, "be": true, "always": true, "set": true,
 		"call": true, "return": true, "print": true, "if": true,
 		"then": true, "otherwise": true, "repeat": true, "while": true,
+		"forever": true, "break": true, "out": true, "loop": true,
 		"times": true, "for": true, "each": true, "in": true,
 		"do": true, "takes": true, "and": true, "with": true,
 		"result": true, "of": true, "calling": true, "value": true,

@@ -98,6 +98,8 @@ func (p *Parser) parseStatement() (ast.Statement, error) {
 	switch p.curToken.Type {
 	case token.DECLARE:
 		return p.parseDeclaration()
+	case token.BREAK:
+		return p.parseBreak()
 	case token.SET:
 		return p.parseAssignment()
 	case token.CALL:
@@ -534,6 +536,38 @@ func (p *Parser) parseRepeat() (ast.Statement, error) {
 	}
 	p.nextToken()
 
+	// Check for "repeat forever" syntax
+	if p.curToken.Type == token.FOREVER {
+		p.nextToken()
+
+		if err := p.expectToken(token.COLON); err != nil {
+			return nil, err
+		}
+		p.nextToken()
+
+		body, err := p.parseBlock()
+		if err != nil {
+			return nil, err
+		}
+
+		if p.curToken.Type == token.THATS {
+			p.nextToken()
+			if err := p.expectToken(token.IT); err != nil {
+				return nil, err
+			}
+			p.nextToken()
+			if err := p.expectToken(token.PERIOD); err != nil {
+				return nil, err
+			}
+			p.nextToken()
+		}
+
+		return &ast.WhileLoop{
+			Condition: &ast.BooleanLiteral{Value: true},
+			Body:      body,
+		}, nil
+	}
+
 	if err := p.expectToken(token.THE); err != nil {
 		return nil, err
 	}
@@ -741,6 +775,40 @@ func (p *Parser) parseReturn() (ast.Statement, error) {
 	return &ast.ReturnStatement{
 		Value: value,
 	}, nil
+}
+
+func (p *Parser) parseBreak() (ast.Statement, error) {
+	if err := p.expectToken(token.BREAK); err != nil {
+		return nil, err
+	}
+	p.nextToken()
+
+	if err := p.expectToken(token.OUT); err != nil {
+		return nil, err
+	}
+	p.nextToken()
+
+	if err := p.expectToken(token.OF); err != nil {
+		return nil, err
+	}
+	p.nextToken()
+
+	if err := p.expectToken(token.THE); err != nil {
+		return nil, err
+	}
+	p.nextToken()
+
+	if err := p.expectToken(token.LOOP); err != nil {
+		return nil, err
+	}
+	p.nextToken()
+
+	if err := p.expectToken(token.PERIOD); err != nil {
+		return nil, err
+	}
+	p.nextToken()
+
+	return &ast.BreakStatement{}, nil
 }
 
 func (p *Parser) parseBlock() ([]ast.Statement, error) {

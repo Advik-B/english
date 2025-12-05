@@ -219,6 +219,12 @@ type ToggleStatement struct {
 func (ts *ToggleStatement) node()          {}
 func (ts *ToggleStatement) statementNode() {}
 
+// BreakStatement breaks out of a loop
+type BreakStatement struct{}
+
+func (bs *BreakStatement) node()          {}
+func (bs *BreakStatement) statementNode() {}
+
 // BooleanLiteral represents a boolean literal (true/false)
 type BooleanLiteral struct {
 	Value bool

@@ -10,7 +10,6 @@ Print "This Turing machine increments a binary number".
 Declare tape to be [2, 1, 0, 1, 1, 2, 2, 2, 2, 2].
 Declare head to be 4.
 Declare state to be 1.
-Declare running to be 1.
 Declare steps to be 0.
 
 # States: 1=find_right, 2=increment, 3=done
@@ -19,7 +18,7 @@ Print "Initial tape position 4:".
 Print the item at position 4 in tape.
 
 # Main Turing machine loop
-repeat the following while running is equal to 1:
+repeat forever:
     Declare current_symbol to be the item at position head in tape.
     Set steps to be steps + 1.
     
@@ -47,12 +46,13 @@ repeat the following while running is equal to 1:
     
     # State 3: done - halt
     otherwise if state is equal to 3, then
-        Set running to be 0.
+        break out of this loop.
     
     thats it.
     
+    # Safety limit to prevent infinite execution
     If steps is greater than 50, then
-        Set running to be 0.
+        break out of this loop.
     thats it.
 thats it.
 

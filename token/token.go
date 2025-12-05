@@ -36,6 +36,10 @@ const (
 	OTHERWISE
 	REPEAT
 	WHILE
+	FOREVER
+	BREAK
+	OUT
+	LOOP
 	TIMES
 	FOR
 	EACH
@@ -143,6 +147,14 @@ func (t Type) String() string {
 		return "REPEAT"
 	case WHILE:
 		return "WHILE"
+	case FOREVER:
+		return "FOREVER"
+	case BREAK:
+		return "BREAK"
+	case OUT:
+		return "OUT"
+	case LOOP:
+		return "LOOP"
 	case TIMES:
 		return "TIMES"
 	case FOR:

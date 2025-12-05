@@ -45,6 +45,7 @@ const (
 	NodeReturnStatement
 	NodeOutputStatement
 	NodeToggleStatement
+	NodeBreakStatement
 	NodeLocationExpression
 )
 
@@ -232,6 +233,10 @@ func (e *Encoder) encodeStatement(stmt ast.Statement) error {
 	case *ast.ToggleStatement:
 		e.buf.WriteByte(NodeToggleStatement)
 		e.writeString(s.Name)
+		return nil
+
+	case *ast.BreakStatement:
+		e.buf.WriteByte(NodeBreakStatement)
 		return nil
 
 	default:
@@ -641,6 +646,9 @@ func (d *Decoder) decodeStatement() (ast.Statement, error) {
 			return nil, err
 		}
 		return &ast.ToggleStatement{Name: name}, nil
+
+	case NodeBreakStatement:
+		return &ast.BreakStatement{}, nil
 
 	default:
 		return nil, fmt.Errorf("unknown statement node type: %d", nodeType)

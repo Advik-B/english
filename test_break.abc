@@ -1,0 +1,19 @@
+# Test break statement with repeat forever
+
+Print "Testing repeat forever with break".
+
+Declare counter to be 0.
+
+repeat forever:
+    Set counter to be counter + 1.
+    Print counter.
+    
+    If counter is equal to 5, then
+        Print "Breaking out of loop!".
+        break out of this loop.
+    thats it.
+thats it.
+
+Print "Loop exited successfully!".
+Print "Final counter:".
+Print counter.

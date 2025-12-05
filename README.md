@@ -167,6 +167,14 @@ Repeat while x is less than 10, do the following:
     Print the value of x.
 thats it.
 
+# Infinite loop with break
+repeat forever:
+    Set x to x plus 1.
+    If x is equal to 10, then
+        break out of this loop.
+    thats it.
+thats it.
+
 # For loop (repeat N times)
 Repeat 5 times, do the following:
     Print "Hello".
@@ -176,6 +184,14 @@ thats it.
 Declare mylist to be [1, 2, 3, 4, 5].
 For each item in mylist, do the following:
     Print the value of item.
+thats it.
+
+# Break statement works in all loops
+For each item in mylist, do the following:
+    If item is equal to 3, then
+        break out of this loop.
+    thats it.
+    Print item.
 thats it.
 ```
 

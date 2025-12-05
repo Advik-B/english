@@ -129,7 +129,6 @@ var keywords = map[string]TokenType{
 	"takes":     TOKEN_TAKES,
 	"and":       TOKEN_AND,
 	"with":      TOKEN_WITH,
-	"result":    TOKEN_RESULT,
 	"of":        TOKEN_OF,
 	"calling":   TOKEN_CALLING,
 	"value":     TOKEN_VALUE,
@@ -155,8 +154,9 @@ func (l *Lexer) NextToken() Token {
 		return Token{Type: TOKEN_EOF, Line: line, Col: col}
 	}
 
-	// Check for multi-word comparison operators
-	if l.ch == 'i' && l.input[l.position:l.position+2] == "is" {
+	// Check for multi-word comparison operators (case-insensitive)
+	if (l.ch == 'i' || l.ch == 'I') && l.position+1 < len(l.input) && 
+		strings.ToLower(l.input[l.position:l.position+2]) == "is" {
 		return l.tryMultiWordComparison()
 	}
 

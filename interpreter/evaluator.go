@@ -326,7 +326,8 @@ func (ev *Evaluator) evalForEachLoop(fel *ForEachLoop) (Value, error) {
 
 	var result Value
 	for _, item := range items {
-		ev.env.Define(fel.Item, item, false)
+		// Use direct assignment to update the loop variable each iteration
+		ev.env.variables[fel.Item] = item
 		val, err := ev.evalStatements(fel.Body)
 		if err != nil {
 			return nil, err

@@ -9,7 +9,7 @@ Say THE VALUE OF y.
 
 SET x TO BE 20.
 say "x is now:".
-SAY the value of X.
+SAY the value of x.
 
 # Mixed case function
 DECLARE FUNCTION greet THAT TAKES name AND DOES THE FOLLOWING:
@@ -17,7 +17,6 @@ DECLARE FUNCTION greet THAT TAKES name AND DOES THE FOLLOWING:
     SAY the value of name.
 THATS IT.
 
-call greet.
 SET result TO BE the result of CALLING greet WITH "World".
 
 # Test loops

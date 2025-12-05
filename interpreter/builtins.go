@@ -47,6 +47,8 @@ func toString(v Value) string {
 
 func toBool(v Value) bool {
 	switch val := v.(type) {
+	case bool:
+		return val
 	case float64:
 		return val != 0
 	case string:

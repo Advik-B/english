@@ -3,6 +3,7 @@ package interpreter
 import (
 	"fmt"
 	"strconv"
+	"strings"
 )
 
 type Parser struct {
@@ -188,6 +189,11 @@ func (p *Parser) parseFunctionDeclaration() (Statement, error) {
 
 	var parameters []string
 
+	// Skip optional "that" before "takes" or "does"
+	if p.curToken.Type == TOKEN_THAT {
+		p.nextToken()
+	}
+
 	if p.curToken.Type == TOKEN_TAKES {
 		p.nextToken()
 		for {
@@ -201,14 +207,18 @@ func (p *Parser) parseFunctionDeclaration() (Statement, error) {
 			if p.curToken.Type != TOKEN_AND {
 				break
 			}
+			// Check if "and" is followed by "does" (end of params) or another param
+			if p.peekToken.Type == TOKEN_DOES {
+				break
+			}
 			p.nextToken()
 		}
 	}
 
-	if err := p.expectToken(TOKEN_AND); err != nil {
-		return nil, err
+	// Support "and does" syntax after parameters
+	if p.curToken.Type == TOKEN_AND {
+		p.nextToken()
 	}
-	p.nextToken()
 
 	if err := p.expectToken(TOKEN_DOES); err != nil {
 		return nil, err
@@ -279,7 +289,7 @@ func (p *Parser) parseAssignment() (Statement, error) {
 	// Check for function call result
 	if p.curToken.Type == TOKEN_THE {
 		p.nextToken()
-		if p.curToken.Type == TOKEN_RESULT {
+		if p.curToken.Type == TOKEN_IDENTIFIER && strings.ToLower(p.curToken.Value) == "result" {
 			p.nextToken()
 			if p.curToken.Type == TOKEN_OF {
 				p.nextToken()

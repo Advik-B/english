@@ -799,7 +799,7 @@ func ToString(v Value) string {
 		for _, elem := range val {
 			parts = append(parts, ToString(elem))
 		}
-		return "[" + fmt.Sprintf("%v", parts)[1:len(fmt.Sprintf("%v", parts))-1] + "]"
+		return "[" + strings.Join(parts, " ") + "]"
 	case *FunctionValue:
 		return fmt.Sprintf("<function %s>", val.Name)
 	case nil:

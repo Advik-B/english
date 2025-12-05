@@ -8,6 +8,11 @@ import (
 	"strings"
 )
 
+// Magic string constants used in parsing
+const (
+	resultKeyword = "result"
+)
+
 // Parser transforms tokens into an AST
 type Parser struct {
 	tokens    []token.Token
@@ -305,7 +310,7 @@ func (p *Parser) parseAssignment() (ast.Statement, error) {
 	// Check for function call result
 	if p.curToken.Type == token.THE {
 		p.nextToken()
-		if p.curToken.Type == token.IDENTIFIER && strings.EqualFold(p.curToken.Value, "result") {
+		if p.curToken.Type == token.IDENTIFIER && strings.EqualFold(p.curToken.Value, resultKeyword) {
 			p.nextToken()
 			if p.curToken.Type == token.OF {
 				p.nextToken()

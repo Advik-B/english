@@ -184,8 +184,9 @@ func (s *Session) executeCode(code string) Result {
 	}
 
 	// Capture stdout for output
+	var evalResult vm.Value
 	capturedOutput := captureStdout(func() {
-		_, err = s.evaluator.Eval(program)
+		evalResult, err = s.evaluator.Eval(program)
 	})
 
 	if err != nil {
@@ -198,6 +199,7 @@ func (s *Session) executeCode(code string) Result {
 
 	return Result{
 		Output:     capturedOutput,
+		Value:      evalResult,
 		IsComplete: true,
 	}
 }

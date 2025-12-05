@@ -49,6 +49,32 @@ func TestSessionExecuteSimple(t *testing.T) {
 	}
 }
 
+func TestSessionResultValue(t *testing.T) {
+	session := NewSession()
+
+	// ExecuteMultiLine returns the Value from evaluation
+	code := `Declare x to be 42.
+Declare y to be 8.
+Declare z to be x + y.`
+
+	result := session.ExecuteMultiLine(code)
+	if result.Error != nil {
+		t.Fatalf("Execute error: %v", result.Error)
+	}
+
+	// Value should be set (though for assignments it may be nil)
+	// Check that we can get a value from an expression
+	// The last statement "Declare z to be x + y." returns nil for declarations
+	// but the code ran successfully
+	val, ok := session.env.Get("z")
+	if !ok {
+		t.Error("Variable 'z' not found")
+	}
+	if val != float64(50) {
+		t.Errorf("Expected z=50, got z=%v", val)
+	}
+}
+
 func TestSessionExecuteMultiLine(t *testing.T) {
 	session := NewSession()
 

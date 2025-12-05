@@ -53,6 +53,10 @@ const (
 	TOKEN_REMAINDER
 	TOKEN_DIVIDED
 	TOKEN_BY
+	TOKEN_TRUE
+	TOKEN_FALSE
+	TOKEN_TOGGLE
+	TOKEN_LOCATION
 
 	// Operators and Punctuation
 	TOKEN_PERIOD
@@ -175,6 +179,14 @@ func (t TokenType) String() string {
 		return "DIVIDED"
 	case TOKEN_BY:
 		return "BY"
+	case TOKEN_TRUE:
+		return "TRUE"
+	case TOKEN_FALSE:
+		return "FALSE"
+	case TOKEN_TOGGLE:
+		return "TOGGLE"
+	case TOKEN_LOCATION:
+		return "LOCATION"
 	case TOKEN_PERIOD:
 		return "PERIOD"
 	case TOKEN_COMMA:

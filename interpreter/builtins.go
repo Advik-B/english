@@ -30,6 +30,11 @@ func toString(v Value) string {
 		return strconv.FormatFloat(val, 'f', -1, 64)
 	case string:
 		return val
+	case bool:
+		if val {
+			return "true"
+		}
+		return "false"
 	case []interface{}:
 		var parts []string
 		for _, elem := range val {
@@ -137,6 +142,13 @@ func equals(left, right Value) bool {
 	case string:
 		switch r := right.(type) {
 		case string:
+			return l == r
+		default:
+			return false
+		}
+	case bool:
+		switch r := right.(type) {
+		case bool:
 			return l == r
 		default:
 			return false

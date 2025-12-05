@@ -49,6 +49,30 @@ Declare pi to always be 3.14159.  # Constant (immutable)
 Set x to 10.
 ```
 
+### Boolean Values
+
+```english
+# Boolean literals
+Declare is_raining to be true.
+Declare is_sunny to be false.
+
+# Comparisons with booleans
+If is_raining is equal to true, then
+    Print "Bring an umbrella!".
+thats it.
+
+# Toggle booleans
+Toggle is_raining.                    # Flips true to false or false to true
+Toggle the value of is_raining.       # Alternative syntax
+```
+
+### Memory Location
+
+```english
+# Inspect variable memory location
+Print the location of x.              # Outputs: 0x...:x (memory address)
+```
+
 ### Arithmetic
 
 ```english

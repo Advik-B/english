@@ -171,9 +171,13 @@ func (ev *Evaluator) Eval(node interface{}) (Value, error) {
 		return ev.evalForLoop(node)
 	case *ForEachLoop:
 		return ev.evalForEachLoop(node)
+	case *ToggleStatement:
+		return ev.evalToggle(node)
 	case *NumberLiteral:
 		return node.Value, nil
 	case *StringLiteral:
+		return node.Value, nil
+	case *BooleanLiteral:
 		return node.Value, nil
 	case *ListLiteral:
 		return ev.evalListLiteral(node)
@@ -189,6 +193,8 @@ func (ev *Evaluator) Eval(node interface{}) (Value, error) {
 		return ev.evalIndexExpression(node)
 	case *LengthExpression:
 		return ev.evalLengthExpression(node)
+	case *LocationExpression:
+		return ev.evalLocationExpression(node)
 	default:
 		return nil, fmt.Errorf("unknown node type: %T", node)
 	}
@@ -309,6 +315,35 @@ func (ev *Evaluator) evalLengthExpression(le *LengthExpression) (Value, error) {
 	default:
 		return nil, ev.runtimeError(fmt.Sprintf("cannot get length of %T", list))
 	}
+}
+
+func (ev *Evaluator) evalLocationExpression(loc *LocationExpression) (Value, error) {
+	// Check if variable exists
+	_, ok := ev.env.Get(loc.Name)
+	if !ok {
+		return nil, ev.runtimeError(fmt.Sprintf("undefined variable '%s'", loc.Name))
+	}
+	// Return a unique identifier based on the variable name and environment
+	// This simulates a memory address
+	return fmt.Sprintf("0x%p:%s", ev.env, loc.Name), nil
+}
+
+func (ev *Evaluator) evalToggle(ts *ToggleStatement) (Value, error) {
+	// Get the current value
+	val, ok := ev.env.Get(ts.Name)
+	if !ok {
+		return nil, ev.runtimeError(fmt.Sprintf("undefined variable '%s'", ts.Name))
+	}
+
+	// Check if it's a boolean
+	boolVal, isBool := val.(bool)
+	if !isBool {
+		return nil, ev.runtimeError(fmt.Sprintf("cannot toggle non-boolean variable '%s' (type: %T)", ts.Name, val))
+	}
+
+	// Toggle the value
+	err := ev.env.Set(ts.Name, !boolVal)
+	return nil, err
 }
 
 func (ev *Evaluator) evalFunctionDecl(fd *FunctionDecl) (Value, error) {

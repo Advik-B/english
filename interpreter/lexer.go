@@ -139,6 +139,10 @@ var keywords = map[string]TokenType{
 	"remainder": TOKEN_REMAINDER,
 	"divided":   TOKEN_DIVIDED,
 	"by":        TOKEN_BY,
+	"true":      TOKEN_TRUE,
+	"false":     TOKEN_FALSE,
+	"toggle":    TOKEN_TOGGLE,
+	"location":  TOKEN_LOCATION,
 }
 
 func (l *Lexer) lookupKeyword(word string) TokenType {
@@ -238,9 +242,16 @@ func (l *Lexer) tryMultiWordComparison() Token {
 	saveCol := l.col
 	saveCh := l.ch
 
-	// Try to read the full operator
-	phrase := ""
+	// Try to read the full operator - read words one at a time and check for valid phrases
 	words := []string{}
+	bestMatch := ""
+	bestMatchType := TOKEN_ERROR
+	bestMatchPos := l.position
+	bestMatchReadPos := l.readPosition
+	bestMatchLine := l.line
+	bestMatchCol := l.col
+	bestMatchCh := l.ch
+
 	for {
 		l.skipWhitespace()
 		if !unicode.IsLetter(rune(l.ch)) {
@@ -248,40 +259,64 @@ func (l *Lexer) tryMultiWordComparison() Token {
 		}
 		word := l.readIdentifier()
 		words = append(words, strings.ToLower(word))
+
+		phrase := strings.Join(words, " ")
+
+		// Check if current phrase matches a comparison operator
+		var tokenType TokenType
+		switch phrase {
+		case "is equal to":
+			tokenType = TOKEN_IS_EQUAL_TO
+		case "is less than":
+			tokenType = TOKEN_IS_LESS_THAN
+		case "is greater than":
+			tokenType = TOKEN_IS_GREATER_THAN
+		case "is less than or equal to":
+			tokenType = TOKEN_IS_LESS_EQUAL
+		case "is greater than or equal to":
+			tokenType = TOKEN_IS_GREATER_EQUAL
+		case "is not equal to":
+			tokenType = TOKEN_IS_NOT_EQUAL
+		default:
+			tokenType = TOKEN_ERROR
+		}
+
+		// If we found a match, save it (we want the longest match)
+		if tokenType != TOKEN_ERROR {
+			bestMatch = phrase
+			bestMatchType = tokenType
+			bestMatchPos = l.position
+			bestMatchReadPos = l.readPosition
+			bestMatchLine = l.line
+			bestMatchCol = l.col
+			bestMatchCh = l.ch
+		}
+
 		l.skipWhitespace()
 		if l.ch == ',' || l.ch == ':' || l.ch == 0 {
 			break
 		}
 	}
 
-	phrase = strings.Join(words, " ")
-
-	var tokenType TokenType
-	switch phrase {
-	case "is equal to":
-		tokenType = TOKEN_IS_EQUAL_TO
-	case "is less than":
-		tokenType = TOKEN_IS_LESS_THAN
-	case "is greater than":
-		tokenType = TOKEN_IS_GREATER_THAN
-	case "is less than or equal to":
-		tokenType = TOKEN_IS_LESS_EQUAL
-	case "is greater than or equal to":
-		tokenType = TOKEN_IS_GREATER_EQUAL
-	case "is not equal to":
-		tokenType = TOKEN_IS_NOT_EQUAL
-	default:
-		// Restore position if not a comparison operator
-		l.position = savePos
-		l.readPosition = saveReadPos
-		l.line = saveLine
-		l.col = saveCol
-		l.ch = saveCh
-		word := l.readIdentifier()
-		return Token{Type: l.lookupKeyword(word), Value: word, Line: line, Col: col}
+	// If we found a valid comparison operator, use it
+	if bestMatchType != TOKEN_ERROR {
+		// Restore position to after the matched phrase
+		l.position = bestMatchPos
+		l.readPosition = bestMatchReadPos
+		l.line = bestMatchLine
+		l.col = bestMatchCol
+		l.ch = bestMatchCh
+		return Token{Type: bestMatchType, Value: bestMatch, Line: line, Col: col}
 	}
 
-	return Token{Type: tokenType, Value: phrase, Line: line, Col: col}
+	// Restore position if not a comparison operator
+	l.position = savePos
+	l.readPosition = saveReadPos
+	l.line = saveLine
+	l.col = saveCol
+	l.ch = saveCh
+	word := l.readIdentifier()
+	return Token{Type: l.lookupKeyword(word), Value: word, Line: line, Col: col}
 }
 
 // TokenizeAll returns all tokens from the input

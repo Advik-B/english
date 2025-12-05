@@ -175,3 +175,24 @@ type OutputStatement struct {
 }
 
 func (os *OutputStatement) statementNode() {}
+
+// Toggle Statement - toggles a boolean variable
+type ToggleStatement struct {
+	Name string
+}
+
+func (ts *ToggleStatement) statementNode() {}
+
+// Boolean Literal
+type BooleanLiteral struct {
+	Value bool
+}
+
+func (bl *BooleanLiteral) expressionNode() {}
+
+// Location Expression - returns memory address/id of a variable
+type LocationExpression struct {
+	Name string
+}
+
+func (le *LocationExpression) expressionNode() {}

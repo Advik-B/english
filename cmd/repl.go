@@ -348,6 +348,7 @@ func (m *model) highlightSyntax(code string) string {
 		"times": true, "for": true, "each": true, "in": true,
 		"do": true, "takes": true, "and": true, "with": true,
 		"result": true, "of": true, "calling": true, "value": true,
+		"true": true, "false": true, "toggle": true, "location": true,
 	}
 
 	words := strings.Fields(code)

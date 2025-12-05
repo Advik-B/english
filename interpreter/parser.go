@@ -102,6 +102,8 @@ func (p *Parser) parseStatement() (Statement, error) {
 		return p.parseOutput()
 	case TOKEN_RETURN:
 		return p.parseReturn()
+	case TOKEN_TOGGLE:
+		return p.parseToggle()
 	default:
 		suggestion := ""
 		switch p.curToken.Type {
@@ -842,11 +844,19 @@ func (p *Parser) parsePrimary() (Expression, error) {
 		p.nextToken()
 		return &StringLiteral{Value: value}, nil
 
+	case TOKEN_TRUE:
+		p.nextToken()
+		return &BooleanLiteral{Value: true}, nil
+
+	case TOKEN_FALSE:
+		p.nextToken()
+		return &BooleanLiteral{Value: false}, nil
+
 	case TOKEN_LBRACKET:
 		return p.parseList()
 
 	case TOKEN_THE:
-		// Handle "the item at position X in Y" or "the length of X" or "the remainder of X divided by Y"
+		// Handle "the item at position X in Y" or "the length of X" or "the remainder of X divided by Y" or "the location of X"
 		p.nextToken()
 		if p.curToken.Type == TOKEN_ITEM {
 			return p.parseIndexExpression()
@@ -856,6 +866,9 @@ func (p *Parser) parsePrimary() (Expression, error) {
 		}
 		if p.curToken.Type == TOKEN_REMAINDER {
 			return p.parseRemainderExpression()
+		}
+		if p.curToken.Type == TOKEN_LOCATION {
+			return p.parseLocationExpression()
 		}
 		// Fall back to treating "the" as part of other constructs
 		// Put back THE token context - this is for "the value of" pattern
@@ -1045,6 +1058,66 @@ func (p *Parser) parseRemainderExpression() (Expression, error) {
 		Left:     left,
 		Operator: "%",
 		Right:    right,
+	}, nil
+}
+
+// parseLocationExpression parses "location of X"
+func (p *Parser) parseLocationExpression() (Expression, error) {
+	// Already consumed "the", now at "location"
+	if err := p.expectToken(TOKEN_LOCATION); err != nil {
+		return nil, err
+	}
+	p.nextToken()
+
+	if err := p.expectToken(TOKEN_OF); err != nil {
+		return nil, err
+	}
+	p.nextToken()
+
+	// Get the variable name
+	if p.curToken.Type != TOKEN_IDENTIFIER {
+		return nil, fmt.Errorf("expected variable name after 'the location of', got %v", p.curToken.Type)
+	}
+	name := p.curToken.Value
+	p.nextToken()
+
+	return &LocationExpression{
+		Name: name,
+	}, nil
+}
+
+// parseToggle parses "Toggle x." or "Toggle the value of x."
+func (p *Parser) parseToggle() (Statement, error) {
+	if err := p.expectToken(TOKEN_TOGGLE); err != nil {
+		return nil, err
+	}
+	p.nextToken()
+
+	// Handle "toggle the value of x"
+	if p.curToken.Type == TOKEN_THE {
+		p.nextToken()
+		if p.curToken.Type == TOKEN_VALUE {
+			p.nextToken()
+			if p.curToken.Type == TOKEN_OF {
+				p.nextToken()
+			}
+		}
+	}
+
+	// Get the variable name
+	if p.curToken.Type != TOKEN_IDENTIFIER {
+		return nil, fmt.Errorf("expected variable name after 'Toggle', got %v", p.curToken.Type)
+	}
+	name := p.curToken.Value
+	p.nextToken()
+
+	if err := p.expectToken(TOKEN_PERIOD); err != nil {
+		return nil, err
+	}
+	p.nextToken()
+
+	return &ToggleStatement{
+		Name: name,
 	}, nil
 }
 

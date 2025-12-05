@@ -406,3 +406,57 @@ t.Errorf("Expected %q, got %q", test.expected, output)
 }
 }
 }
+
+func TestEvaluatorBooleanLiterals(t *testing.T) {
+tests := []struct {
+code     string
+expected string
+}{
+{`Declare x to be true.
+Print the value of x.`, "true\n"},
+{`Declare x to be false.
+Print the value of x.`, "false\n"},
+{`Declare x to be true.
+If x is equal to true, then
+    Print "yes".
+thats it.`, "yes\n"},
+}
+
+for _, test := range tests {
+output := captureOutput(func() {
+evaluate(test.code)
+})
+if output != test.expected {
+t.Errorf("Expected %q, got %q", test.expected, output)
+}
+}
+}
+
+func TestEvaluatorToggle(t *testing.T) {
+code := `Declare is_on to be true.
+Toggle is_on.
+Print the value of is_on.
+Toggle the value of is_on.
+Print the value of is_on.`
+
+output := captureOutput(func() {
+evaluate(code)
+})
+expected := "false\ntrue\n"
+if output != expected {
+t.Errorf("Expected %q, got %q", expected, output)
+}
+}
+
+func TestEvaluatorLocation(t *testing.T) {
+code := `Declare x to be 5.
+Print the location of x.`
+
+output := captureOutput(func() {
+evaluate(code)
+})
+// Location should be a non-empty string starting with "0x"
+if len(output) < 3 || output[:2] != "0x" {
+t.Errorf("Expected location string starting with '0x', got %q", output)
+}
+}

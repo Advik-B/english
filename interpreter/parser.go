@@ -289,7 +289,7 @@ func (p *Parser) parseAssignment() (Statement, error) {
 	// Check for function call result
 	if p.curToken.Type == TOKEN_THE {
 		p.nextToken()
-		if p.curToken.Type == TOKEN_IDENTIFIER && strings.ToLower(p.curToken.Value) == "result" {
+		if p.curToken.Type == TOKEN_IDENTIFIER && strings.EqualFold(p.curToken.Value, "result") {
 			p.nextToken()
 			if p.curToken.Type == TOKEN_OF {
 				p.nextToken()

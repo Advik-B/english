@@ -1,0 +1,24 @@
+# Test file to demonstrate error messages
+
+# This will cause an undefined variable error with suggestion
+Declare myVariable to be 10.
+Say the value of myVarible.  # Typo: myVarible instead of myVariable
+
+# This will cause an undefined function error
+Call myFunctoin.  # Typo: myFunctoin
+
+# This will cause a constant reassignment error
+Declare PI to be always 3.14.
+Set PI to be 3.  # Error: cannot reassign constant
+
+# This will cause an argument count mismatch
+Declare function add that takes a and b and does the following:
+    Return a + b.
+thats it.
+
+Set result to be the result of calling add with 5.  # Missing second argument
+
+# This will cause a division by zero error
+Declare x to be 10.
+Declare y to be 0.
+Set result to be x / y.

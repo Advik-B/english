@@ -28,7 +28,7 @@ const (
 	TOKEN_SET
 	TOKEN_CALL
 	TOKEN_RETURN
-	TOKEN_SAY
+	TOKEN_PRINT
 	TOKEN_IF
 	TOKEN_THEN
 	TOKEN_OTHERWISE
@@ -43,10 +43,20 @@ const (
 	TOKEN_AND
 	TOKEN_WITH
 	TOKEN_THE
-	TOKEN_RESULT
 	TOKEN_OF
 	TOKEN_CALLING
 	TOKEN_VALUE
+	TOKEN_ITEM
+	TOKEN_AT
+	TOKEN_POSITION
+	TOKEN_LENGTH
+	TOKEN_REMAINDER
+	TOKEN_DIVIDED
+	TOKEN_BY
+	TOKEN_TRUE
+	TOKEN_FALSE
+	TOKEN_TOGGLE
+	TOKEN_LOCATION
 
 	// Operators and Punctuation
 	TOKEN_PERIOD
@@ -119,8 +129,8 @@ func (t TokenType) String() string {
 		return "CALL"
 	case TOKEN_RETURN:
 		return "RETURN"
-	case TOKEN_SAY:
-		return "SAY"
+	case TOKEN_PRINT:
+		return "PRINT"
 	case TOKEN_IF:
 		return "IF"
 	case TOKEN_THEN:
@@ -149,14 +159,34 @@ func (t TokenType) String() string {
 		return "WITH"
 	case TOKEN_THE:
 		return "THE"
-	case TOKEN_RESULT:
-		return "RESULT"
 	case TOKEN_OF:
 		return "OF"
 	case TOKEN_CALLING:
 		return "CALLING"
 	case TOKEN_VALUE:
 		return "VALUE"
+	case TOKEN_ITEM:
+		return "ITEM"
+	case TOKEN_AT:
+		return "AT"
+	case TOKEN_POSITION:
+		return "POSITION"
+	case TOKEN_LENGTH:
+		return "LENGTH"
+	case TOKEN_REMAINDER:
+		return "REMAINDER"
+	case TOKEN_DIVIDED:
+		return "DIVIDED"
+	case TOKEN_BY:
+		return "BY"
+	case TOKEN_TRUE:
+		return "TRUE"
+	case TOKEN_FALSE:
+		return "FALSE"
+	case TOKEN_TOGGLE:
+		return "TOGGLE"
+	case TOKEN_LOCATION:
+		return "LOCATION"
 	case TOKEN_PERIOD:
 		return "PERIOD"
 	case TOKEN_COMMA:

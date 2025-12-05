@@ -1,0 +1,68 @@
+# Turing Machine Simulation
+# This program demonstrates Turing completeness by implementing a simple Turing machine
+# that performs binary increment (adds 1 to a binary number)
+
+Print "=== Turing Machine Simulation ===".
+Print "This Turing machine increments a binary number".
+
+# Initialize the tape with a binary number (1011 = 11 in decimal)
+# We use 0 and 1, with 2 representing blank
+Declare tape to be [2, 1, 0, 1, 1, 2, 2, 2, 2, 2].
+Declare head to be 4.
+Declare state to be 1.
+Declare running to be 1.
+Declare steps to be 0.
+
+# States: 1=find_right, 2=increment, 3=done
+
+Print "Initial tape position 4:".
+Print the item at position 4 in tape.
+
+# Main Turing machine loop
+repeat the following while running is equal to 1:
+    Declare current_symbol to be the item at position head in tape.
+    Set steps to be steps + 1.
+    
+    # State 1: find_right - move to the rightmost digit
+    If state is equal to 1, then
+        If current_symbol is equal to 2, then
+            Set head to be head - 1.
+            Set state to be 2.
+        otherwise
+            Set head to be head + 1.
+        thats it.
+    
+    # State 2: increment - add 1 with carry
+    otherwise if state is equal to 2, then
+        If current_symbol is equal to 0, then
+            Set the item at position head in tape to be 1.
+            Set state to be 3.
+        otherwise if current_symbol is equal to 1, then
+            Set the item at position head in tape to be 0.
+            Set head to be head - 1.
+        otherwise
+            Set the item at position head in tape to be 1.
+            Set state to be 3.
+        thats it.
+    
+    # State 3: done - halt
+    otherwise if state is equal to 3, then
+        Set running to be 0.
+    
+    thats it.
+    
+    If steps is greater than 50, then
+        Set running to be 0.
+    thats it.
+thats it.
+
+Print "Final result at positions 1-4:".
+Print the item at position 1 in tape.
+Print the item at position 2 in tape.
+Print the item at position 3 in tape.
+Print the item at position 4 in tape.
+Print "Steps taken:".
+Print steps.
+Print "Binary 1011 (11) incremented to 1100 (12)".
+Print "=== Turing Complete! ===".
+

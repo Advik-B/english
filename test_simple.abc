@@ -3,16 +3,16 @@
 Declare x to be 5.
 Declare y to be always 10.
 
-Say "x is:".
-Say the value of x.
+Print "x is:".
+Print the value of x.
 
-Say "y is:".
-Say the value of y.
+Print "y is:".
+Print the value of y.
 
 Set x to be 15.
 
-Say "x after assignment:".
-Say the value of x.
+Print "x after assignment:".
+Print the value of x.
 
 # Test function
 Declare function add that takes a and b and does the following:
@@ -20,8 +20,8 @@ Declare function add that takes a and b and does the following:
 thats it.
 
 Set result to be the result of calling add with 3 and 7.
-Say "3 + 7 =".
-Say the value of result.
+Print "3 + 7 =".
+Print the value of result.
 
 # Test output
-Say "Hello from English!".
+Print "Hello from English!".

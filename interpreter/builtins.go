@@ -30,6 +30,11 @@ func toString(v Value) string {
 		return strconv.FormatFloat(val, 'f', -1, 64)
 	case string:
 		return val
+	case bool:
+		if val {
+			return "true"
+		}
+		return "false"
 	case []interface{}:
 		var parts []string
 		for _, elem := range val {
@@ -47,6 +52,8 @@ func toString(v Value) string {
 
 func toBool(v Value) bool {
 	switch val := v.(type) {
+	case bool:
+		return val
 	case float64:
 		return val != 0
 	case string:
@@ -139,6 +146,13 @@ func equals(left, right Value) bool {
 		default:
 			return false
 		}
+	case bool:
+		switch r := right.(type) {
+		case bool:
+			return l == r
+		default:
+			return false
+		}
 	case nil:
 		return right == nil
 	default:
@@ -217,4 +231,19 @@ func divide(left, right Value) (Value, error) {
 		return nil, fmt.Errorf("division by zero\n  Hint: You cannot divide by zero - check your expression")
 	}
 	return l / r, nil
+}
+
+func modulo(left, right Value) (Value, error) {
+	l, err := toNumber(left)
+	if err != nil {
+		return nil, fmt.Errorf("cannot get remainder: left operand is not a number (got %T)\n  Hint: Remainder only works with numbers", left)
+	}
+	r, err := toNumber(right)
+	if err != nil {
+		return nil, fmt.Errorf("cannot get remainder: right operand is not a number (got %T)\n  Hint: Remainder only works with numbers", right)
+	}
+	if r == 0 {
+		return nil, fmt.Errorf("division by zero\n  Hint: You cannot get remainder when dividing by zero")
+	}
+	return float64(int64(l) % int64(r)), nil
 }

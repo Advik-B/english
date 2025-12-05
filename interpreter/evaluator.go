@@ -80,6 +80,29 @@ func (e *Environment) DefineFunction(name string, fn *FunctionValue) {
 	e.functions[name] = fn
 }
 
+// GetAllVariables returns a copy of all variables in the current scope (for REPL display)
+func (e *Environment) GetAllVariables() map[string]Value {
+	result := make(map[string]Value)
+	for k, v := range e.variables {
+		result[k] = v
+	}
+	return result
+}
+
+// GetAllFunctions returns a copy of all functions in the current scope (for REPL display)
+func (e *Environment) GetAllFunctions() map[string]*FunctionValue {
+	result := make(map[string]*FunctionValue)
+	for k, v := range e.functions {
+		result[k] = v
+	}
+	return result
+}
+
+// IsConstant returns whether a variable is a constant
+func (e *Environment) IsConstant(name string) bool {
+	return e.constants[name]
+}
+
 // ReturnValue is used to implement return statements
 type ReturnValue struct {
 	Value Value
@@ -130,6 +153,8 @@ func (ev *Evaluator) Eval(node interface{}) (Value, error) {
 		return ev.evalVariableDecl(node)
 	case *Assignment:
 		return ev.evalAssignment(node)
+	case *IndexAssignment:
+		return ev.evalIndexAssignment(node)
 	case *FunctionDecl:
 		return ev.evalFunctionDecl(node)
 	case *CallStatement:
@@ -146,9 +171,13 @@ func (ev *Evaluator) Eval(node interface{}) (Value, error) {
 		return ev.evalForLoop(node)
 	case *ForEachLoop:
 		return ev.evalForEachLoop(node)
+	case *ToggleStatement:
+		return ev.evalToggle(node)
 	case *NumberLiteral:
 		return node.Value, nil
 	case *StringLiteral:
+		return node.Value, nil
+	case *BooleanLiteral:
 		return node.Value, nil
 	case *ListLiteral:
 		return ev.evalListLiteral(node)
@@ -160,6 +189,12 @@ func (ev *Evaluator) Eval(node interface{}) (Value, error) {
 		return ev.evalUnaryExpression(node)
 	case *FunctionCall:
 		return ev.evalFunctionCall(node)
+	case *IndexExpression:
+		return ev.evalIndexExpression(node)
+	case *LengthExpression:
+		return ev.evalLengthExpression(node)
+	case *LocationExpression:
+		return ev.evalLocationExpression(node)
 	default:
 		return nil, fmt.Errorf("unknown node type: %T", node)
 	}
@@ -197,6 +232,117 @@ func (ev *Evaluator) evalAssignment(a *Assignment) (Value, error) {
 	}
 
 	err = ev.env.Set(a.Name, value)
+	return nil, err
+}
+
+func (ev *Evaluator) evalIndexAssignment(ia *IndexAssignment) (Value, error) {
+	// Get the list
+	list, ok := ev.env.Get(ia.ListName)
+	if !ok {
+		return nil, ev.runtimeError(fmt.Sprintf("undefined variable '%s'", ia.ListName))
+	}
+
+	items, ok := list.([]interface{})
+	if !ok {
+		return nil, ev.runtimeError(fmt.Sprintf("cannot index into non-list type %T", list))
+	}
+
+	// Get the index
+	indexVal, err := ev.Eval(ia.Index)
+	if err != nil {
+		return nil, err
+	}
+	index, err := toNumber(indexVal)
+	if err != nil {
+		return nil, ev.runtimeError("index must be a number")
+	}
+	idx := int(index)
+	if idx < 0 || idx >= len(items) {
+		return nil, ev.runtimeError(fmt.Sprintf("index %d out of range for list of length %d", idx, len(items)))
+	}
+
+	// Get the value
+	value, err := ev.Eval(ia.Value)
+	if err != nil {
+		return nil, err
+	}
+
+	// Update the list
+	items[idx] = value
+	return nil, nil
+}
+
+func (ev *Evaluator) evalIndexExpression(ie *IndexExpression) (Value, error) {
+	// Get the list
+	list, err := ev.Eval(ie.List)
+	if err != nil {
+		return nil, err
+	}
+
+	items, ok := list.([]interface{})
+	if !ok {
+		return nil, ev.runtimeError(fmt.Sprintf("cannot index into non-list type %T", list))
+	}
+
+	// Get the index
+	indexVal, err := ev.Eval(ie.Index)
+	if err != nil {
+		return nil, err
+	}
+	index, err := toNumber(indexVal)
+	if err != nil {
+		return nil, ev.runtimeError("index must be a number")
+	}
+	idx := int(index)
+	if idx < 0 || idx >= len(items) {
+		return nil, ev.runtimeError(fmt.Sprintf("index %d out of range for list of length %d", idx, len(items)))
+	}
+
+	return items[idx], nil
+}
+
+func (ev *Evaluator) evalLengthExpression(le *LengthExpression) (Value, error) {
+	list, err := ev.Eval(le.List)
+	if err != nil {
+		return nil, err
+	}
+
+	switch v := list.(type) {
+	case []interface{}:
+		return float64(len(v)), nil
+	case string:
+		return float64(len(v)), nil
+	default:
+		return nil, ev.runtimeError(fmt.Sprintf("cannot get length of %T", list))
+	}
+}
+
+func (ev *Evaluator) evalLocationExpression(loc *LocationExpression) (Value, error) {
+	// Check if variable exists
+	_, ok := ev.env.Get(loc.Name)
+	if !ok {
+		return nil, ev.runtimeError(fmt.Sprintf("undefined variable '%s'", loc.Name))
+	}
+	// Return a unique identifier based on the variable name and environment
+	// This simulates a memory address
+	return fmt.Sprintf("0x%p:%s", ev.env, loc.Name), nil
+}
+
+func (ev *Evaluator) evalToggle(ts *ToggleStatement) (Value, error) {
+	// Get the current value
+	val, ok := ev.env.Get(ts.Name)
+	if !ok {
+		return nil, ev.runtimeError(fmt.Sprintf("undefined variable '%s'", ts.Name))
+	}
+
+	// Check if it's a boolean
+	boolVal, isBool := val.(bool)
+	if !isBool {
+		return nil, ev.runtimeError(fmt.Sprintf("cannot toggle non-boolean variable '%s' (type: %T)", ts.Name, val))
+	}
+
+	// Toggle the value
+	err := ev.env.Set(ts.Name, !boolVal)
 	return nil, err
 }
 
@@ -326,7 +472,9 @@ func (ev *Evaluator) evalForEachLoop(fel *ForEachLoop) (Value, error) {
 
 	var result Value
 	for _, item := range items {
-		ev.env.Define(fel.Item, item, false)
+		// Use Set to update the loop variable each iteration
+		// Set handles both creation and update of variables
+		ev.env.Set(fel.Item, item)
 		val, err := ev.evalStatements(fel.Body)
 		if err != nil {
 			return nil, err
@@ -469,6 +617,8 @@ func (ev *Evaluator) evalBinaryExpression(be *BinaryExpression) (Value, error) {
 		return multiply(left, right)
 	case "/":
 		return divide(left, right)
+	case "%":
+		return modulo(left, right)
 	case "is equal to", "is less than", "is greater than", "is less than or equal to", "is greater than or equal to", "is not equal to":
 		result, err := compare(be.Operator, left, right)
 		return result, err

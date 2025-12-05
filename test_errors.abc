@@ -2,7 +2,7 @@
 
 # This will cause an undefined variable error with suggestion
 Declare myVariable to be 10.
-Say the value of myVarible.  # Typo: myVarible instead of myVariable
+Print the value of myVarible.  # Typo: myVarible instead of myVariable
 
 # This will cause an undefined function error
 Call myFunctoin.  # Typo: myFunctoin

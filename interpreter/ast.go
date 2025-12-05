@@ -136,6 +136,30 @@ type UnaryExpression struct {
 
 func (ue *UnaryExpression) expressionNode() {}
 
+// IndexExpression represents array indexing like list[0] or "the item at position 0 in list"
+type IndexExpression struct {
+	List  Expression
+	Index Expression
+}
+
+func (ie *IndexExpression) expressionNode() {}
+
+// IndexAssignment represents assigning to an array index
+type IndexAssignment struct {
+	ListName string
+	Index    Expression
+	Value    Expression
+}
+
+func (ia *IndexAssignment) statementNode() {}
+
+// LengthExpression represents getting the length of a list
+type LengthExpression struct {
+	List Expression
+}
+
+func (le *LengthExpression) expressionNode() {}
+
 // Return Statement
 
 type ReturnStatement struct {
@@ -151,3 +175,24 @@ type OutputStatement struct {
 }
 
 func (os *OutputStatement) statementNode() {}
+
+// Toggle Statement - toggles a boolean variable
+type ToggleStatement struct {
+	Name string
+}
+
+func (ts *ToggleStatement) statementNode() {}
+
+// Boolean Literal
+type BooleanLiteral struct {
+	Value bool
+}
+
+func (bl *BooleanLiteral) expressionNode() {}
+
+// Location Expression - returns memory address/id of a variable
+type LocationExpression struct {
+	Name string
+}
+
+func (le *LocationExpression) expressionNode() {}

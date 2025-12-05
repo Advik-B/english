@@ -314,7 +314,7 @@ func (m *model) getHelp() string {
 	help += lipgloss.NewStyle().Foreground(lipgloss.Color("86")).Bold(true).Render("Quick Start:") + "\n"
 	help += "  " + commentStyle.Render("# Declare a variable") + "\n"
 	help += "  " + m.highlightSyntax("Declare x to be 5.") + "\n"
-	help += "  " + m.highlightSyntax("Say the value of x.") + "\n"
+	help += "  " + m.highlightSyntax("Print the value of x.") + "\n"
 	help += "\n" + commentStyle.Render("Variables panel shows on the right →")
 	return help
 }
@@ -343,7 +343,7 @@ func (m *model) highlightSyntax(code string) string {
 		"declare": true, "function": true, "that": true, "does": true,
 		"the": true, "following": true, "thats": true, "it": true,
 		"to": true, "be": true, "always": true, "set": true,
-		"call": true, "return": true, "say": true, "if": true,
+		"call": true, "return": true, "print": true, "if": true,
 		"then": true, "otherwise": true, "repeat": true, "while": true,
 		"times": true, "for": true, "each": true, "in": true,
 		"do": true, "takes": true, "and": true, "with": true,

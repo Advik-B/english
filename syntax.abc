@@ -8,7 +8,7 @@ Declare z to always be "hello". # Alternative constant syntax
 # For function declaration
 
 Declare function say_hello that does the following:
-	Say "Hello, World!".
+	Print "Hello, World!".
 thats it.
 
 Set x to be 15. # For assignment
@@ -23,36 +23,36 @@ Set result to be the result of calling add with 5 and 10.
 
 # Loops
 repeat the following 5 times:
-	Say "This will be printed 5 times.".
+	Print "This will be printed 5 times.".
 thats it.
 
 # While loops
 
 repeat the following while x is less than 20:
-	Say "x is still less than 20.".
+	Print "x is still less than 20.".
 	Set x to be x + 1.
 thats it.
 
 # If statements
 
 If x is equal to 20, then
-	Say "x is now 20!".
+	Print "x is now 20!".
 
 otherwise
-	Say "x is not 20 yet.".
+	Print "x is not 20 yet.".
 
 thats it.
 
 # Else if statements
 
 If x is less than 10, then
-	Say "x is less than 10.".
+	Print "x is less than 10.".
 
 otherwise if x is less than 20, then
-	Say "x is between 10 and 19.".
+	Print "x is between 10 and 19.".
 
 otherwise
-	Say "x is 20 or more.".
+	Print "x is 20 or more.".
 	
 thats it.
 
@@ -61,6 +61,6 @@ thats it.
 Declare myList to be [1, 2, 3, 4, 5].
 
 for each item in myList, do the following:
-	Say the value of item.
+	Print the value of item.
 thats it.
 

@@ -2,8 +2,8 @@
 # This program demonstrates Turing completeness by implementing a simple Turing machine
 # that performs binary increment (adds 1 to a binary number)
 
-Say "=== Turing Machine Simulation ===".
-Say "This Turing machine increments a binary number".
+Print "=== Turing Machine Simulation ===".
+Print "This Turing machine increments a binary number".
 
 # Initialize the tape with a binary number (1011 = 11 in decimal)
 # We use 0 and 1, with 2 representing blank
@@ -15,8 +15,8 @@ Declare steps to be 0.
 
 # States: 1=find_right, 2=increment, 3=done
 
-Say "Initial tape position 4:".
-Say the item at position 4 in tape.
+Print "Initial tape position 4:".
+Print the item at position 4 in tape.
 
 # Main Turing machine loop
 repeat the following while running is equal to 1:
@@ -56,13 +56,13 @@ repeat the following while running is equal to 1:
     thats it.
 thats it.
 
-Say "Final result at positions 1-4:".
-Say the item at position 1 in tape.
-Say the item at position 2 in tape.
-Say the item at position 3 in tape.
-Say the item at position 4 in tape.
-Say "Steps taken:".
-Say steps.
-Say "Binary 1011 (11) incremented to 1100 (12)".
-Say "=== Turing Complete! ===".
+Print "Final result at positions 1-4:".
+Print the item at position 1 in tape.
+Print the item at position 2 in tape.
+Print the item at position 3 in tape.
+Print the item at position 4 in tape.
+Print "Steps taken:".
+Print steps.
+Print "Binary 1011 (11) incremented to 1100 (12)".
+Print "=== Turing Complete! ===".
 

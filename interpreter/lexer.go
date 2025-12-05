@@ -115,7 +115,7 @@ var keywords = map[string]TokenType{
 	"set":       TOKEN_SET,
 	"call":      TOKEN_CALL,
 	"return":    TOKEN_RETURN,
-	"say":       TOKEN_SAY,
+	"print":     TOKEN_PRINT,
 	"if":        TOKEN_IF,
 	"then":      TOKEN_THEN,
 	"otherwise": TOKEN_OTHERWISE,

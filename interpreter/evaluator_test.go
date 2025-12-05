@@ -102,27 +102,27 @@ func TestEvaluatorComparisons(t *testing.T) {
 	}{
 		{`Declare x to be 5.
 If x is equal to 5, then
-    Say "yes".
+    Print "yes".
 thats it.`, "yes\n"},
 		{`Declare x to be 5.
 If x is less than 10, then
-    Say "yes".
+    Print "yes".
 thats it.`, "yes\n"},
 		{`Declare x to be 5.
 If x is greater than 3, then
-    Say "yes".
+    Print "yes".
 thats it.`, "yes\n"},
 		{`Declare x to be 5.
 If x is less than or equal to 5, then
-    Say "yes".
+    Print "yes".
 thats it.`, "yes\n"},
 		{`Declare x to be 5.
 If x is greater than or equal to 5, then
-    Say "yes".
+    Print "yes".
 thats it.`, "yes\n"},
 		{`Declare x to be 5.
 If x is not equal to 10, then
-    Say "yes".
+    Print "yes".
 thats it.`, "yes\n"},
 	}
 
@@ -139,9 +139,9 @@ thats it.`, "yes\n"},
 func TestEvaluatorIfElse(t *testing.T) {
 	code := `Declare x to be 5.
 If x is equal to 10, then
-    Say "ten".
+    Print "ten".
 otherwise
-    Say "not ten".
+    Print "not ten".
 thats it.`
 
 	output := captureOutput(func() {
@@ -179,7 +179,7 @@ thats it.`
 func TestEvaluatorForEachLoop(t *testing.T) {
 	code := `Declare myList to be [1, 2, 3].
 for each item in myList, do the following:
-    Say the value of item.
+    Print the value of item.
 thats it.`
 
 	output := captureOutput(func() {
@@ -193,7 +193,7 @@ thats it.`
 
 func TestEvaluatorFunctionDeclarationAndCall(t *testing.T) {
 	code := `Declare function greet that does the following:
-    Say "Hello".
+    Print "Hello".
 thats it.
 Call greet.`
 
@@ -210,7 +210,7 @@ func TestEvaluatorFunctionWithParams(t *testing.T) {
     Return a + b.
 thats it.
 Set result to be the result of calling add with 3 and 7.
-Say the value of result.`
+Print the value of result.`
 
 	output := captureOutput(func() {
 		evaluate(code)
@@ -225,7 +225,7 @@ func TestEvaluatorFunctionReturn(t *testing.T) {
     Return x * 2.
 thats it.
 Set result to be the result of calling double with 5.
-Say the value of result.`
+Print the value of result.`
 
 	output := captureOutput(func() {
 		evaluate(code)
@@ -236,7 +236,7 @@ Say the value of result.`
 }
 
 func TestEvaluatorUndefinedVariable(t *testing.T) {
-	code := "Say the value of undefined."
+	code := "Print the value of undefined."
 	_, err := evaluate(code)
 	if err == nil {
 		t.Fatal("Expected error for undefined variable, got nil")
@@ -295,7 +295,7 @@ func TestEvaluatorListOperations(t *testing.T) {
 
 func TestEvaluatorStringConcatenation(t *testing.T) {
 	code := `Declare x to be "Hello" + " World".
-Say the value of x.`
+Print the value of x.`
 
 	output := captureOutput(func() {
 		evaluate(code)
@@ -307,7 +307,7 @@ Say the value of x.`
 
 func TestEvaluatorStringMultiplication(t *testing.T) {
 	code := `Declare x to be "ab" * 3.
-Say the value of x.`
+Print the value of x.`
 
 	output := captureOutput(func() {
 		evaluate(code)
@@ -321,10 +321,10 @@ func TestEvaluatorNestedScopes(t *testing.T) {
 	code := `Declare x to be 5.
 Declare function change_local that does the following:
     Declare x to be 10.
-    Say the value of x.
+    Print the value of x.
 thats it.
 Call change_local.
-Say the value of x.`
+Print the value of x.`
 
 	output := captureOutput(func() {
 		evaluate(code)
@@ -345,7 +345,7 @@ func TestEvaluatorRecursion(t *testing.T) {
     thats it.
 thats it.
 Set result to be the result of calling factorial with 5.
-Say the value of result.`
+Print the value of result.`
 
 	output := captureOutput(func() {
 		evaluate(code)
@@ -373,7 +373,7 @@ func TestEvaluatorCaseInsensitiveKeywords(t *testing.T) {
 func TestEvaluatorCaseInsensitiveComparisons(t *testing.T) {
 	code := `Declare x to be 5.
 IF x IS EQUAL TO 5, THEN
-    Say "yes".
+    Print "yes".
 thats it.`
 
 	output := captureOutput(func() {
@@ -389,12 +389,12 @@ tests := []struct {
 code     string
 expected string
 }{
-{`Say the remainder of 17 divided by 5.`, "2\n"},
-{`Say the remainder of 10 / 3.`, "1\n"},
-{`Say the remainder of 100 divided by 7.`, "2\n"},
+{`Print the remainder of 17 divided by 5.`, "2\n"},
+{`Print the remainder of 10 / 3.`, "1\n"},
+{`Print the remainder of 100 divided by 7.`, "2\n"},
 {`Declare x to be 15.
 Declare y to be 4.
-Say the remainder of x divided by y.`, "3\n"},
+Print the remainder of x divided by y.`, "3\n"},
 }
 
 for _, test := range tests {

@@ -15,7 +15,7 @@ func TestTokenTypeString(t *testing.T) {
 		{TOKEN_DECLARE, "DECLARE"},
 		{TOKEN_FUNCTION, "FUNCTION"},
 		{TOKEN_SET, "SET"},
-		{TOKEN_SAY, "SAY"},
+		{TOKEN_PRINT, "PRINT"},
 		{TOKEN_IF, "IF"},
 		{TOKEN_THEN, "THEN"},
 		{TOKEN_OTHERWISE, "OTHERWISE"},

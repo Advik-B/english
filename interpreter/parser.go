@@ -98,7 +98,7 @@ func (p *Parser) parseStatement() (Statement, error) {
 		return p.parseRepeat()
 	case TOKEN_FOR:
 		return p.parseForEach()
-	case TOKEN_SAY:
+	case TOKEN_PRINT:
 		return p.parseOutput()
 	case TOKEN_RETURN:
 		return p.parseReturn()
@@ -106,9 +106,9 @@ func (p *Parser) parseStatement() (Statement, error) {
 		suggestion := ""
 		switch p.curToken.Type {
 		case TOKEN_IDENTIFIER:
-			suggestion = "\n  Hint: To use a variable, you need 'Set', 'Say', or another statement keyword"
+			suggestion = "\n  Hint: To use a variable, you need 'Set', 'Print', or another statement keyword"
 		case TOKEN_NUMBER, TOKEN_STRING:
-			suggestion = "\n  Hint: Literal values must be part of a statement (e.g., 'Say \"text\".' or 'Declare x to be 5.')"
+			suggestion = "\n  Hint: Literal values must be part of a statement (e.g., 'Print \"text\".' or 'Declare x to be 5.')"
 		case TOKEN_EOF:
 			suggestion = "\n  Hint: Unexpected end of file - check if you have unclosed blocks"
 		}
@@ -690,7 +690,7 @@ func (p *Parser) parseForEach() (Statement, error) {
 }
 
 func (p *Parser) parseOutput() (Statement, error) {
-	if err := p.expectToken(TOKEN_SAY); err != nil {
+	if err := p.expectToken(TOKEN_PRINT); err != nil {
 		return nil, err
 	}
 	p.nextToken()

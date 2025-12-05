@@ -72,7 +72,7 @@ func TestParserAssignment(t *testing.T) {
 
 func TestParserFunctionDeclarationWithoutParams(t *testing.T) {
 	input := `Declare function greet that does the following:
-    Say "Hello".
+    Print "Hello".
 thats it.`
 
 	program, err := parse(input)
@@ -128,7 +128,7 @@ thats it.`
 
 func TestParserIfStatement(t *testing.T) {
 	input := `If x is equal to 5, then
-    Say "yes".
+    Print "yes".
 thats it.`
 
 	program, err := parse(input)
@@ -152,9 +152,9 @@ thats it.`
 
 func TestParserIfElseStatement(t *testing.T) {
 	input := `If x is equal to 5, then
-    Say "yes".
+    Print "yes".
 otherwise
-    Say "no".
+    Print "no".
 thats it.`
 
 	program, err := parse(input)
@@ -178,7 +178,7 @@ thats it.`
 
 func TestParserWhileLoop(t *testing.T) {
 	input := `repeat the following while x is less than 10:
-    Say "loop".
+    Print "loop".
 thats it.`
 
 	program, err := parse(input)
@@ -202,7 +202,7 @@ thats it.`
 
 func TestParserForLoop(t *testing.T) {
 	input := `repeat the following 5 times:
-    Say "loop".
+    Print "loop".
 thats it.`
 
 	program, err := parse(input)
@@ -226,7 +226,7 @@ thats it.`
 
 func TestParserForEachLoop(t *testing.T) {
 	input := `for each item in myList, do the following:
-    Say the value of item.
+    Print the value of item.
 thats it.`
 
 	program, err := parse(input)
@@ -250,9 +250,9 @@ thats it.`
 
 func TestParserOutputStatement(t *testing.T) {
 	tests := []string{
-		`Say "Hello".`,
-		`Say 42.`,
-		`Say the value of x.`,
+		`Print "Hello".`,
+		`Print 42.`,
+		`Print the value of x.`,
 	}
 
 	for _, input := range tests {

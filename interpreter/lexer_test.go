@@ -93,7 +93,7 @@ func TestLexerKeywords(t *testing.T) {
 		{"Declare", TOKEN_DECLARE},
 		{"function", TOKEN_FUNCTION},
 		{"set", TOKEN_SET},
-		{"say", TOKEN_SAY},
+		{"print", TOKEN_PRINT},
 		{"if", TOKEN_IF},
 		{"then", TOKEN_THEN},
 		{"otherwise", TOKEN_OTHERWISE},

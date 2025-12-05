@@ -28,7 +28,7 @@ const (
 	TOKEN_SET
 	TOKEN_CALL
 	TOKEN_RETURN
-	TOKEN_SAY
+	TOKEN_PRINT
 	TOKEN_IF
 	TOKEN_THEN
 	TOKEN_OTHERWISE
@@ -125,8 +125,8 @@ func (t TokenType) String() string {
 		return "CALL"
 	case TOKEN_RETURN:
 		return "RETURN"
-	case TOKEN_SAY:
-		return "SAY"
+	case TOKEN_PRINT:
+		return "PRINT"
 	case TOKEN_IF:
 		return "IF"
 	case TOKEN_THEN:

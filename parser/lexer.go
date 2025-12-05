@@ -1,6 +1,8 @@
-package interpreter
+// Package parser provides the lexer and parser for the English programming language.
+package parser
 
 import (
+	"english/token"
 	"strings"
 	"unicode"
 )
@@ -15,6 +17,7 @@ type Lexer struct {
 	ch           byte
 }
 
+// NewLexer creates a new lexer for the given input
 func NewLexer(input string) *Lexer {
 	l := &Lexer{input: input, line: 1, col: 0}
 	l.readChar()
@@ -41,15 +44,6 @@ func (l *Lexer) peekChar() byte {
 		return 0
 	}
 	return l.input[l.readPosition]
-}
-
-func (l *Lexer) peekWord() string {
-	start := l.readPosition
-	end := start
-	for end < len(l.input) && (unicode.IsLetter(rune(l.input[end])) || unicode.IsDigit(rune(l.input[end])) || l.input[end] == '_') {
-		end++
-	}
-	return l.input[start:end]
 }
 
 func (l *Lexer) skipWhitespace() {
@@ -100,60 +94,61 @@ func (l *Lexer) readIdentifier() string {
 	return l.input[start:l.position]
 }
 
-var keywords = map[string]TokenType{
-	"declare":   TOKEN_DECLARE,
-	"function":  TOKEN_FUNCTION,
-	"that":      TOKEN_THAT,
-	"does":      TOKEN_DOES,
-	"the":       TOKEN_THE,
-	"following": TOKEN_FOLLOWING,
-	"thats":     TOKEN_THATS,
-	"it":        TOKEN_IT,
-	"to":        TOKEN_TO,
-	"be":        TOKEN_BE,
-	"always":    TOKEN_ALWAYS,
-	"set":       TOKEN_SET,
-	"call":      TOKEN_CALL,
-	"return":    TOKEN_RETURN,
-	"print":     TOKEN_PRINT,
-	"if":        TOKEN_IF,
-	"then":      TOKEN_THEN,
-	"otherwise": TOKEN_OTHERWISE,
-	"repeat":    TOKEN_REPEAT,
-	"while":     TOKEN_WHILE,
-	"times":     TOKEN_TIMES,
-	"for":       TOKEN_FOR,
-	"each":      TOKEN_EACH,
-	"in":        TOKEN_IN,
-	"do":        TOKEN_DO,
-	"takes":     TOKEN_TAKES,
-	"and":       TOKEN_AND,
-	"with":      TOKEN_WITH,
-	"of":        TOKEN_OF,
-	"calling":   TOKEN_CALLING,
-	"value":     TOKEN_VALUE,
-	"item":      TOKEN_ITEM,
-	"at":        TOKEN_AT,
-	"position":  TOKEN_POSITION,
-	"length":    TOKEN_LENGTH,
-	"remainder": TOKEN_REMAINDER,
-	"divided":   TOKEN_DIVIDED,
-	"by":        TOKEN_BY,
-	"true":      TOKEN_TRUE,
-	"false":     TOKEN_FALSE,
-	"toggle":    TOKEN_TOGGLE,
-	"location":  TOKEN_LOCATION,
+// keywords maps lowercase keywords to their token types
+var keywords = map[string]token.Type{
+	"declare":   token.DECLARE,
+	"function":  token.FUNCTION,
+	"that":      token.THAT,
+	"does":      token.DOES,
+	"the":       token.THE,
+	"following": token.FOLLOWING,
+	"thats":     token.THATS,
+	"it":        token.IT,
+	"to":        token.TO,
+	"be":        token.BE,
+	"always":    token.ALWAYS,
+	"set":       token.SET,
+	"call":      token.CALL,
+	"return":    token.RETURN,
+	"print":     token.PRINT,
+	"if":        token.IF,
+	"then":      token.THEN,
+	"otherwise": token.OTHERWISE,
+	"repeat":    token.REPEAT,
+	"while":     token.WHILE,
+	"times":     token.TIMES,
+	"for":       token.FOR,
+	"each":      token.EACH,
+	"in":        token.IN,
+	"do":        token.DO,
+	"takes":     token.TAKES,
+	"and":       token.AND,
+	"with":      token.WITH,
+	"of":        token.OF,
+	"calling":   token.CALLING,
+	"value":     token.VALUE,
+	"item":      token.ITEM,
+	"at":        token.AT,
+	"position":  token.POSITION,
+	"length":    token.LENGTH,
+	"remainder": token.REMAINDER,
+	"divided":   token.DIVIDED,
+	"by":        token.BY,
+	"true":      token.TRUE,
+	"false":     token.FALSE,
+	"toggle":    token.TOGGLE,
+	"location":  token.LOCATION,
 }
 
-func (l *Lexer) lookupKeyword(word string) TokenType {
+func (l *Lexer) lookupKeyword(word string) token.Type {
 	if tokenType, ok := keywords[strings.ToLower(word)]; ok {
 		return tokenType
 	}
-	return TOKEN_IDENTIFIER
+	return token.IDENTIFIER
 }
 
-// NextToken returns the next token
-func (l *Lexer) NextToken() Token {
+// NextToken returns the next token from the input
+func (l *Lexer) NextToken() token.Token {
 	l.skipWhitespace()
 	l.skipComment()
 	l.skipWhitespace()
@@ -162,68 +157,68 @@ func (l *Lexer) NextToken() Token {
 	col := l.col
 
 	if l.ch == 0 {
-		return Token{Type: TOKEN_EOF, Line: line, Col: col}
+		return token.Token{Type: token.EOF, Line: line, Col: col}
 	}
 
 	// Check for multi-word comparison operators (case-insensitive)
-	if (l.ch == 'i' || l.ch == 'I') && l.position+1 < len(l.input) && 
+	if (l.ch == 'i' || l.ch == 'I') && l.position+1 < len(l.input) &&
 		strings.ToLower(l.input[l.position:l.position+2]) == "is" {
 		return l.tryMultiWordComparison()
 	}
 
-	var tok Token
+	var tok token.Token
 
 	switch l.ch {
 	case '.':
-		tok = Token{Type: TOKEN_PERIOD, Value: ".", Line: line, Col: col}
+		tok = token.Token{Type: token.PERIOD, Value: ".", Line: line, Col: col}
 		l.readChar()
 	case ',':
-		tok = Token{Type: TOKEN_COMMA, Value: ",", Line: line, Col: col}
+		tok = token.Token{Type: token.COMMA, Value: ",", Line: line, Col: col}
 		l.readChar()
 	case ':':
-		tok = Token{Type: TOKEN_COLON, Value: ":", Line: line, Col: col}
+		tok = token.Token{Type: token.COLON, Value: ":", Line: line, Col: col}
 		l.readChar()
 	case '(':
-		tok = Token{Type: TOKEN_LPAREN, Value: "(", Line: line, Col: col}
+		tok = token.Token{Type: token.LPAREN, Value: "(", Line: line, Col: col}
 		l.readChar()
 	case ')':
-		tok = Token{Type: TOKEN_RPAREN, Value: ")", Line: line, Col: col}
+		tok = token.Token{Type: token.RPAREN, Value: ")", Line: line, Col: col}
 		l.readChar()
 	case '[':
-		tok = Token{Type: TOKEN_LBRACKET, Value: "[", Line: line, Col: col}
+		tok = token.Token{Type: token.LBRACKET, Value: "[", Line: line, Col: col}
 		l.readChar()
 	case ']':
-		tok = Token{Type: TOKEN_RBRACKET, Value: "]", Line: line, Col: col}
+		tok = token.Token{Type: token.RBRACKET, Value: "]", Line: line, Col: col}
 		l.readChar()
 	case '+':
-		tok = Token{Type: TOKEN_PLUS, Value: "+", Line: line, Col: col}
+		tok = token.Token{Type: token.PLUS, Value: "+", Line: line, Col: col}
 		l.readChar()
 	case '-':
-		tok = Token{Type: TOKEN_MINUS, Value: "-", Line: line, Col: col}
+		tok = token.Token{Type: token.MINUS, Value: "-", Line: line, Col: col}
 		l.readChar()
 	case '*':
-		tok = Token{Type: TOKEN_STAR, Value: "*", Line: line, Col: col}
+		tok = token.Token{Type: token.STAR, Value: "*", Line: line, Col: col}
 		l.readChar()
 	case '/':
-		tok = Token{Type: TOKEN_SLASH, Value: "/", Line: line, Col: col}
+		tok = token.Token{Type: token.SLASH, Value: "/", Line: line, Col: col}
 		l.readChar()
 	case '"', '\'':
 		quote := l.ch
 		str := l.readString(quote)
-		tok = Token{Type: TOKEN_STRING, Value: str, Line: line, Col: col}
+		tok = token.Token{Type: token.STRING, Value: str, Line: line, Col: col}
 	case '\n':
-		tok = Token{Type: TOKEN_NEWLINE, Value: "\n", Line: line, Col: col}
+		tok = token.Token{Type: token.NEWLINE, Value: "\n", Line: line, Col: col}
 		l.readChar()
 	default:
 		if unicode.IsDigit(rune(l.ch)) {
 			num := l.readNumber()
-			return Token{Type: TOKEN_NUMBER, Value: num, Line: line, Col: col}
+			return token.Token{Type: token.NUMBER, Value: num, Line: line, Col: col}
 		} else if unicode.IsLetter(rune(l.ch)) || l.ch == '_' {
 			ident := l.readIdentifier()
 			tokenType := l.lookupKeyword(ident)
-			return Token{Type: tokenType, Value: ident, Line: line, Col: col}
+			return token.Token{Type: tokenType, Value: ident, Line: line, Col: col}
 		}
-		tok = Token{Type: TOKEN_ERROR, Value: string(l.ch), Line: line, Col: col}
+		tok = token.Token{Type: token.ERROR, Value: string(l.ch), Line: line, Col: col}
 		l.readChar()
 	}
 
@@ -231,11 +226,11 @@ func (l *Lexer) NextToken() Token {
 }
 
 // tryMultiWordComparison handles multi-word operators like "is equal to"
-func (l *Lexer) tryMultiWordComparison() Token {
+func (l *Lexer) tryMultiWordComparison() token.Token {
 	line := l.line
 	col := l.col
 
-	// Read "is" and following words
+	// Save current state for potential rollback
 	savePos := l.position
 	saveReadPos := l.readPosition
 	saveLine := l.line
@@ -245,7 +240,7 @@ func (l *Lexer) tryMultiWordComparison() Token {
 	// Try to read the full operator - read words one at a time and check for valid phrases
 	words := []string{}
 	bestMatch := ""
-	bestMatchType := TOKEN_ERROR
+	bestMatchType := token.ERROR
 	bestMatchPos := l.position
 	bestMatchReadPos := l.readPosition
 	bestMatchLine := l.line
@@ -263,26 +258,26 @@ func (l *Lexer) tryMultiWordComparison() Token {
 		phrase := strings.Join(words, " ")
 
 		// Check if current phrase matches a comparison operator
-		var tokenType TokenType
+		var tokenType token.Type
 		switch phrase {
 		case "is equal to":
-			tokenType = TOKEN_IS_EQUAL_TO
+			tokenType = token.IS_EQUAL_TO
 		case "is less than":
-			tokenType = TOKEN_IS_LESS_THAN
+			tokenType = token.IS_LESS_THAN
 		case "is greater than":
-			tokenType = TOKEN_IS_GREATER_THAN
+			tokenType = token.IS_GREATER_THAN
 		case "is less than or equal to":
-			tokenType = TOKEN_IS_LESS_EQUAL
+			tokenType = token.IS_LESS_EQUAL
 		case "is greater than or equal to":
-			tokenType = TOKEN_IS_GREATER_EQUAL
+			tokenType = token.IS_GREATER_EQUAL
 		case "is not equal to":
-			tokenType = TOKEN_IS_NOT_EQUAL
+			tokenType = token.IS_NOT_EQUAL
 		default:
-			tokenType = TOKEN_ERROR
+			tokenType = token.ERROR
 		}
 
 		// If we found a match, save it (we want the longest match)
-		if tokenType != TOKEN_ERROR {
+		if tokenType != token.ERROR {
 			bestMatch = phrase
 			bestMatchType = tokenType
 			bestMatchPos = l.position
@@ -299,14 +294,14 @@ func (l *Lexer) tryMultiWordComparison() Token {
 	}
 
 	// If we found a valid comparison operator, use it
-	if bestMatchType != TOKEN_ERROR {
+	if bestMatchType != token.ERROR {
 		// Restore position to after the matched phrase
 		l.position = bestMatchPos
 		l.readPosition = bestMatchReadPos
 		l.line = bestMatchLine
 		l.col = bestMatchCol
 		l.ch = bestMatchCh
-		return Token{Type: bestMatchType, Value: bestMatch, Line: line, Col: col}
+		return token.Token{Type: bestMatchType, Value: bestMatch, Line: line, Col: col}
 	}
 
 	// Restore position if not a comparison operator
@@ -316,18 +311,18 @@ func (l *Lexer) tryMultiWordComparison() Token {
 	l.col = saveCol
 	l.ch = saveCh
 	word := l.readIdentifier()
-	return Token{Type: l.lookupKeyword(word), Value: word, Line: line, Col: col}
+	return token.Token{Type: l.lookupKeyword(word), Value: word, Line: line, Col: col}
 }
 
 // TokenizeAll returns all tokens from the input
-func (l *Lexer) TokenizeAll() []Token {
-	var tokens []Token
+func (l *Lexer) TokenizeAll() []token.Token {
+	var tokens []token.Token
 	for {
 		tok := l.NextToken()
-		if tok.Type != TOKEN_NEWLINE { // Skip newlines for now
+		if tok.Type != token.NEWLINE { // Skip newlines for now
 			tokens = append(tokens, tok)
 		}
-		if tok.Type == TOKEN_EOF {
+		if tok.Type == token.EOF {
 			break
 		}
 	}

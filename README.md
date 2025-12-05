@@ -10,6 +10,7 @@ A programming language interpreter with natural English syntax, built using Go w
 - **Stack Traces**: Full call stack information for debugging runtime errors
 - **Interactive REPL**: Beautiful terminal UI with syntax highlighting powered by Bubble Tea
 - **Flexible Syntax**: Multiple ways to express the same thing (e.g., `to be always` or `to always be`)
+- **Bytecode Compilation**: Compile source files to binary format for faster loading
 
 ## 🚀 Quick Start
 
@@ -31,12 +32,40 @@ go build -o english .
 # or simply
 ./english program.abc
 
+# Compile to bytecode (.101 format)
+./english compile program.abc           # Creates program.101
+./english compile program.abc -o out.101  # Custom output name
+
+# Run bytecode directly (no parsing needed)
+./english run program.101
+
 # Show version
 ./english version
 
 # Show help
 ./english --help
 ```
+
+## 📦 Bytecode Format
+
+The English interpreter supports compiling source files to a binary bytecode format (`.101` files). This format:
+
+- **Faster Loading**: No parsing required - the AST is serialized directly
+- **Smaller Distribution**: Binary format is typically smaller than source
+- **File Extension**: `.101` (because human-readable is `.abc`)
+
+```bash
+# Compile source to bytecode
+./english compile myprogram.abc
+
+# Run the compiled bytecode
+./english run myprogram.101
+```
+
+The bytecode format uses a protobuf-like binary serialization of the AST, with:
+- Magic bytes (`0x10, 0x1E, 0x4E, 0x47`) for file identification
+- Version byte for format compatibility
+- Binary-encoded AST nodes with type tags
 
 ## 📖 Language Guide
 
@@ -178,16 +207,25 @@ The interactive REPL (Read-Eval-Print Loop) features:
 ├── cmd/
 │   ├── root.go          # Cobra CLI setup with subcommands
 │   └── repl.go          # Bubble Tea REPL implementation
-├── interpreter/
-│   ├── tokens.go        # Token type definitions
-│   ├── lexer.go         # Lexical analyzer (tokenizer)
+├── token/
+│   ├── token.go         # Token type definitions
+│   └── token_test.go    # Token tests
+├── ast/
 │   ├── ast.go           # Abstract Syntax Tree node types
+│   └── ast_test.go      # AST tests
+├── parser/
+│   ├── lexer.go         # Lexical analyzer (tokenizer)
 │   ├── parser.go        # Recursive descent parser
-│   ├── evaluator.go     # Tree-walking interpreter with stack traces
-│   └── builtins.go      # Built-in functions and value system
-├── Makefile             # Build automation
+│   └── parser_test.go   # Lexer and parser tests
+├── vm/
+│   ├── vm.go            # Virtual machine (evaluator) and runtime
+│   └── vm_test.go       # VM and evaluator tests
+├── bytecode/
+│   ├── bytecode.go      # Binary serialization of AST
+│   └── bytecode_test.go # Bytecode tests
 ├── go.mod               # Go module definition
-└── *.abc                # Example/test source files
+├── *.abc                # Example source files
+└── *.101                # Compiled bytecode files
 ```
 
 ## 🛠️ Development
@@ -212,11 +250,27 @@ make clean
 ### Testing
 
 ```bash
+# Run all tests
+go test ./...
+
+# Run tests with verbose output
+go test ./... -v
+
+# Run tests for specific package
+go test ./token/... -v
+go test ./ast/... -v  
+go test ./parser/... -v
+go test ./vm/... -v
+go test ./bytecode/... -v
+
 # Run example programs
-./english syntax.abc
-./english test_simple.abc
-./english test_case_insensitive.abc
-./english test_errors.abc
+./english run syntax.abc
+./english run test_simple.abc
+./english run turing_machine.abc
+
+# Compile and run bytecode
+./english compile syntax.abc
+./english run syntax.101
 ```
 
 ## 📦 Dependencies

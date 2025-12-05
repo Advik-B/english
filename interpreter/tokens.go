@@ -43,7 +43,6 @@ const (
 	TOKEN_AND
 	TOKEN_WITH
 	TOKEN_THE
-	TOKEN_RESULT
 	TOKEN_OF
 	TOKEN_CALLING
 	TOKEN_VALUE
@@ -149,8 +148,6 @@ func (t TokenType) String() string {
 		return "WITH"
 	case TOKEN_THE:
 		return "THE"
-	case TOKEN_RESULT:
-		return "RESULT"
 	case TOKEN_OF:
 		return "OF"
 	case TOKEN_CALLING:

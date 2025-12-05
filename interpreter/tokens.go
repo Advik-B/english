@@ -46,6 +46,10 @@ const (
 	TOKEN_OF
 	TOKEN_CALLING
 	TOKEN_VALUE
+	TOKEN_ITEM
+	TOKEN_AT
+	TOKEN_POSITION
+	TOKEN_LENGTH
 
 	// Operators and Punctuation
 	TOKEN_PERIOD
@@ -154,6 +158,14 @@ func (t TokenType) String() string {
 		return "CALLING"
 	case TOKEN_VALUE:
 		return "VALUE"
+	case TOKEN_ITEM:
+		return "ITEM"
+	case TOKEN_AT:
+		return "AT"
+	case TOKEN_POSITION:
+		return "POSITION"
+	case TOKEN_LENGTH:
+		return "LENGTH"
 	case TOKEN_PERIOD:
 		return "PERIOD"
 	case TOKEN_COMMA:

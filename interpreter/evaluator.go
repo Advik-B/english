@@ -130,6 +130,8 @@ func (ev *Evaluator) Eval(node interface{}) (Value, error) {
 		return ev.evalVariableDecl(node)
 	case *Assignment:
 		return ev.evalAssignment(node)
+	case *IndexAssignment:
+		return ev.evalIndexAssignment(node)
 	case *FunctionDecl:
 		return ev.evalFunctionDecl(node)
 	case *CallStatement:
@@ -160,6 +162,10 @@ func (ev *Evaluator) Eval(node interface{}) (Value, error) {
 		return ev.evalUnaryExpression(node)
 	case *FunctionCall:
 		return ev.evalFunctionCall(node)
+	case *IndexExpression:
+		return ev.evalIndexExpression(node)
+	case *LengthExpression:
+		return ev.evalLengthExpression(node)
 	default:
 		return nil, fmt.Errorf("unknown node type: %T", node)
 	}
@@ -198,6 +204,88 @@ func (ev *Evaluator) evalAssignment(a *Assignment) (Value, error) {
 
 	err = ev.env.Set(a.Name, value)
 	return nil, err
+}
+
+func (ev *Evaluator) evalIndexAssignment(ia *IndexAssignment) (Value, error) {
+	// Get the list
+	list, ok := ev.env.Get(ia.ListName)
+	if !ok {
+		return nil, ev.runtimeError(fmt.Sprintf("undefined variable '%s'", ia.ListName))
+	}
+
+	items, ok := list.([]interface{})
+	if !ok {
+		return nil, ev.runtimeError(fmt.Sprintf("cannot index into non-list type %T", list))
+	}
+
+	// Get the index
+	indexVal, err := ev.Eval(ia.Index)
+	if err != nil {
+		return nil, err
+	}
+	index, err := toNumber(indexVal)
+	if err != nil {
+		return nil, ev.runtimeError("index must be a number")
+	}
+	idx := int(index)
+	if idx < 0 || idx >= len(items) {
+		return nil, ev.runtimeError(fmt.Sprintf("index %d out of range for list of length %d", idx, len(items)))
+	}
+
+	// Get the value
+	value, err := ev.Eval(ia.Value)
+	if err != nil {
+		return nil, err
+	}
+
+	// Update the list
+	items[idx] = value
+	return nil, nil
+}
+
+func (ev *Evaluator) evalIndexExpression(ie *IndexExpression) (Value, error) {
+	// Get the list
+	list, err := ev.Eval(ie.List)
+	if err != nil {
+		return nil, err
+	}
+
+	items, ok := list.([]interface{})
+	if !ok {
+		return nil, ev.runtimeError(fmt.Sprintf("cannot index into non-list type %T", list))
+	}
+
+	// Get the index
+	indexVal, err := ev.Eval(ie.Index)
+	if err != nil {
+		return nil, err
+	}
+	index, err := toNumber(indexVal)
+	if err != nil {
+		return nil, ev.runtimeError("index must be a number")
+	}
+	idx := int(index)
+	if idx < 0 || idx >= len(items) {
+		return nil, ev.runtimeError(fmt.Sprintf("index %d out of range for list of length %d", idx, len(items)))
+	}
+
+	return items[idx], nil
+}
+
+func (ev *Evaluator) evalLengthExpression(le *LengthExpression) (Value, error) {
+	list, err := ev.Eval(le.List)
+	if err != nil {
+		return nil, err
+	}
+
+	switch v := list.(type) {
+	case []interface{}:
+		return float64(len(v)), nil
+	case string:
+		return float64(len(v)), nil
+	default:
+		return nil, ev.runtimeError(fmt.Sprintf("cannot get length of %T", list))
+	}
 }
 
 func (ev *Evaluator) evalFunctionDecl(fd *FunctionDecl) (Value, error) {

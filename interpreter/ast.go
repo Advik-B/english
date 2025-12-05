@@ -136,6 +136,30 @@ type UnaryExpression struct {
 
 func (ue *UnaryExpression) expressionNode() {}
 
+// IndexExpression represents array indexing like list[0] or "the item at position 0 in list"
+type IndexExpression struct {
+	List  Expression
+	Index Expression
+}
+
+func (ie *IndexExpression) expressionNode() {}
+
+// IndexAssignment represents assigning to an array index
+type IndexAssignment struct {
+	ListName string
+	Index    Expression
+	Value    Expression
+}
+
+func (ia *IndexAssignment) statementNode() {}
+
+// LengthExpression represents getting the length of a list
+type LengthExpression struct {
+	List Expression
+}
+
+func (le *LengthExpression) expressionNode() {}
+
 // Return Statement
 
 type ReturnStatement struct {

@@ -582,6 +582,8 @@ func (ev *Evaluator) evalBinaryExpression(be *BinaryExpression) (Value, error) {
 		return multiply(left, right)
 	case "/":
 		return divide(left, right)
+	case "%":
+		return modulo(left, right)
 	case "is equal to", "is less than", "is greater than", "is less than or equal to", "is greater than or equal to", "is not equal to":
 		result, err := compare(be.Operator, left, right)
 		return result, err

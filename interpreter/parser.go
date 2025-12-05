@@ -846,13 +846,16 @@ func (p *Parser) parsePrimary() (Expression, error) {
 		return p.parseList()
 
 	case TOKEN_THE:
-		// Handle "the item at position X in Y" or "the length of X"
+		// Handle "the item at position X in Y" or "the length of X" or "the remainder of X divided by Y"
 		p.nextToken()
 		if p.curToken.Type == TOKEN_ITEM {
 			return p.parseIndexExpression()
 		}
 		if p.curToken.Type == TOKEN_LENGTH {
 			return p.parseLengthExpression()
+		}
+		if p.curToken.Type == TOKEN_REMAINDER {
+			return p.parseRemainderExpression()
 		}
 		// Fall back to treating "the" as part of other constructs
 		// Put back THE token context - this is for "the value of" pattern
@@ -997,6 +1000,51 @@ func (p *Parser) parseLengthExpression() (Expression, error) {
 
 	return &LengthExpression{
 		List: list,
+	}, nil
+}
+
+// parseRemainderExpression parses "remainder of X divided by Y" or "remainder of X / Y"
+func (p *Parser) parseRemainderExpression() (Expression, error) {
+	// Already consumed "the", now at "remainder"
+	if err := p.expectToken(TOKEN_REMAINDER); err != nil {
+		return nil, err
+	}
+	p.nextToken()
+
+	if err := p.expectToken(TOKEN_OF); err != nil {
+		return nil, err
+	}
+	p.nextToken()
+
+	// Parse the dividend (left operand)
+	left, err := p.parsePrimary()
+	if err != nil {
+		return nil, err
+	}
+
+	// Expect "divided by" or "/"
+	if p.curToken.Type == TOKEN_DIVIDED {
+		p.nextToken()
+		if err := p.expectToken(TOKEN_BY); err != nil {
+			return nil, err
+		}
+		p.nextToken()
+	} else if p.curToken.Type == TOKEN_SLASH {
+		p.nextToken()
+	} else {
+		return nil, fmt.Errorf("expected 'divided by' or '/' after remainder operand, got %v", p.curToken.Type)
+	}
+
+	// Parse the divisor (right operand)
+	right, err := p.parsePrimary()
+	if err != nil {
+		return nil, err
+	}
+
+	return &BinaryExpression{
+		Left:     left,
+		Operator: "%",
+		Right:    right,
 	}, nil
 }
 

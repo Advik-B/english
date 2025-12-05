@@ -50,6 +50,9 @@ const (
 	TOKEN_AT
 	TOKEN_POSITION
 	TOKEN_LENGTH
+	TOKEN_REMAINDER
+	TOKEN_DIVIDED
+	TOKEN_BY
 
 	// Operators and Punctuation
 	TOKEN_PERIOD
@@ -166,6 +169,12 @@ func (t TokenType) String() string {
 		return "POSITION"
 	case TOKEN_LENGTH:
 		return "LENGTH"
+	case TOKEN_REMAINDER:
+		return "REMAINDER"
+	case TOKEN_DIVIDED:
+		return "DIVIDED"
+	case TOKEN_BY:
+		return "BY"
 	case TOKEN_PERIOD:
 		return "PERIOD"
 	case TOKEN_COMMA:

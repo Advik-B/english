@@ -136,6 +136,9 @@ var keywords = map[string]TokenType{
 	"at":        TOKEN_AT,
 	"position":  TOKEN_POSITION,
 	"length":    TOKEN_LENGTH,
+	"remainder": TOKEN_REMAINDER,
+	"divided":   TOKEN_DIVIDED,
+	"by":        TOKEN_BY,
 }
 
 func (l *Lexer) lookupKeyword(word string) TokenType {

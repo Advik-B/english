@@ -49,6 +49,20 @@ Declare pi to always be 3.14159.  # Constant (immutable)
 Set x to 10.
 ```
 
+### Arithmetic
+
+```english
+# Basic operations
+Declare sum to be 5 + 3.
+Declare difference to be 10 - 4.
+Declare product to be 6 * 7.
+Declare quotient to be 20 / 4.
+
+# Remainder (modulo)
+Say the remainder of 17 divided by 5.   # Outputs: 2
+Say the remainder of 10 / 3.            # Alternative syntax
+```
+
 ### Output
 
 ```english

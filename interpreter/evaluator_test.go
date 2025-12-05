@@ -383,3 +383,26 @@ thats it.`
 		t.Errorf("Expected 'yes', got %q", output)
 	}
 }
+
+func TestEvaluatorRemainder(t *testing.T) {
+tests := []struct {
+code     string
+expected string
+}{
+{`Say the remainder of 17 divided by 5.`, "2\n"},
+{`Say the remainder of 10 / 3.`, "1\n"},
+{`Say the remainder of 100 divided by 7.`, "2\n"},
+{`Declare x to be 15.
+Declare y to be 4.
+Say the remainder of x divided by y.`, "3\n"},
+}
+
+for _, test := range tests {
+output := captureOutput(func() {
+evaluate(test.code)
+})
+if output != test.expected {
+t.Errorf("Expected %q, got %q", test.expected, output)
+}
+}
+}

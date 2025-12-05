@@ -220,3 +220,18 @@ func divide(left, right Value) (Value, error) {
 	}
 	return l / r, nil
 }
+
+func modulo(left, right Value) (Value, error) {
+	l, err := toNumber(left)
+	if err != nil {
+		return nil, fmt.Errorf("cannot get remainder: left operand is not a number (got %T)\n  Hint: Remainder only works with numbers", left)
+	}
+	r, err := toNumber(right)
+	if err != nil {
+		return nil, fmt.Errorf("cannot get remainder: right operand is not a number (got %T)\n  Hint: Remainder only works with numbers", right)
+	}
+	if r == 0 {
+		return nil, fmt.Errorf("division by zero\n  Hint: You cannot get remainder when dividing by zero")
+	}
+	return float64(int64(l) % int64(r)), nil
+}

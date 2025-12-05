@@ -3,6 +3,7 @@ package cmd
 import (
 	"english/interpreter"
 	"fmt"
+	"sort"
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -48,6 +49,39 @@ var (
 
 	helpStyle = lipgloss.NewStyle().
 			Foreground(lipgloss.Color("240"))
+
+	// Panel styles for variable display
+	panelTitleStyle = lipgloss.NewStyle().
+			Bold(true).
+			Foreground(lipgloss.Color("212")).
+			Background(lipgloss.Color("236")).
+			Padding(0, 1).
+			MarginBottom(1)
+
+	panelBorderStyle = lipgloss.NewStyle().
+				Border(lipgloss.RoundedBorder()).
+				BorderForeground(lipgloss.Color("62")).
+				Padding(0, 1)
+
+	varNameStyle = lipgloss.NewStyle().
+			Foreground(lipgloss.Color("214")).
+			Bold(true)
+
+	varValueStyle = lipgloss.NewStyle().
+			Foreground(lipgloss.Color("251"))
+
+	constStyle = lipgloss.NewStyle().
+			Foreground(lipgloss.Color("141")).
+			Italic(true)
+
+	funcStyle = lipgloss.NewStyle().
+			Foreground(lipgloss.Color("117"))
+)
+
+// Display constants for value formatting
+const (
+	maxValueDisplayLength = 20
+	maxArrayDisplayItems  = 3
 )
 
 func getWelcomeMessage() string {
@@ -208,6 +242,8 @@ func (m *model) handleCommand(cmd string) string {
 		m.output = []string{}
 		m.history = []string{}
 		return ""
+	case ":vars", ":v":
+		return m.listVariables()
 	case ":exit", ":quit", ":q":
 		m.quitting = true
 		return "Goodbye!"
@@ -216,15 +252,70 @@ func (m *model) handleCommand(cmd string) string {
 	}
 }
 
+func (m *model) listVariables() string {
+	vars := m.env.GetAllVariables()
+	funcs := m.env.GetAllFunctions()
+
+	if len(vars) == 0 && len(funcs) == 0 {
+		return commentStyle.Render("No variables or functions defined yet.")
+	}
+
+	var result strings.Builder
+	result.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color("86")).Bold(true).Render("📦 Current State:") + "\n\n")
+
+	// Variables
+	if len(vars) > 0 {
+		varNames := make([]string, 0, len(vars))
+		for name := range vars {
+			varNames = append(varNames, name)
+		}
+		sort.Strings(varNames)
+
+		result.WriteString(lipgloss.NewStyle().Bold(true).Render("Variables:") + "\n")
+		for _, name := range varNames {
+			val := vars[name]
+			valStr := formatValue(val)
+			if m.env.IsConstant(name) {
+				result.WriteString("  " + constStyle.Render("const ") + varNameStyle.Render(name) + " = " + varValueStyle.Render(valStr) + "\n")
+			} else {
+				result.WriteString("  " + varNameStyle.Render(name) + " = " + varValueStyle.Render(valStr) + "\n")
+			}
+		}
+	}
+
+	// Functions
+	if len(funcs) > 0 {
+		funcNames := make([]string, 0, len(funcs))
+		for name := range funcs {
+			funcNames = append(funcNames, name)
+		}
+		sort.Strings(funcNames)
+
+		if len(vars) > 0 {
+			result.WriteString("\n")
+		}
+		result.WriteString(lipgloss.NewStyle().Bold(true).Render("Functions:") + "\n")
+		for _, name := range funcNames {
+			fn := funcs[name]
+			params := strings.Join(fn.Parameters, ", ")
+			result.WriteString("  " + funcStyle.Render("ƒ "+name) + "(" + params + ")\n")
+		}
+	}
+
+	return result.String()
+}
+
 func (m *model) getHelp() string {
 	help := lipgloss.NewStyle().Foreground(lipgloss.Color("86")).Bold(true).Render("Available Commands:") + "\n"
 	help += "  " + successStyle.Render(":help") + "   - Show this help\n"
+	help += "  " + successStyle.Render(":vars") + "   - List all variables and functions\n"
 	help += "  " + successStyle.Render(":clear") + "  - Clear the screen\n"
 	help += "  " + successStyle.Render(":exit") + "   - Exit REPL\n\n"
 	help += lipgloss.NewStyle().Foreground(lipgloss.Color("86")).Bold(true).Render("Quick Start:") + "\n"
 	help += "  " + commentStyle.Render("# Declare a variable") + "\n"
 	help += "  " + m.highlightSyntax("Declare x to be 5.") + "\n"
 	help += "  " + m.highlightSyntax("Say the value of x.") + "\n"
+	help += "\n" + commentStyle.Render("Variables panel shows on the right →")
 	return help
 }
 
@@ -278,6 +369,102 @@ func (m *model) highlightSyntax(code string) string {
 	return strings.Join(result, " ")
 }
 
+// renderVariablesPanel creates the right-side panel showing variables and functions
+func (m model) renderVariablesPanel(height int) string {
+	var content strings.Builder
+
+	// Get variables and functions
+	vars := m.env.GetAllVariables()
+	funcs := m.env.GetAllFunctions()
+
+	// Panel title
+	content.WriteString(panelTitleStyle.Render("📦 Variables & Functions") + "\n\n")
+
+	// Sort variable names for consistent display
+	varNames := make([]string, 0, len(vars))
+	for name := range vars {
+		varNames = append(varNames, name)
+	}
+	sort.Strings(varNames)
+
+	// Display variables
+	if len(varNames) > 0 {
+		content.WriteString(lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("86")).Render("Variables:") + "\n")
+		for _, name := range varNames {
+			val := vars[name]
+			valStr := formatValue(val)
+			// Truncate long values
+			if len(valStr) > maxValueDisplayLength {
+				valStr = valStr[:maxValueDisplayLength-3] + "..."
+			}
+			if m.env.IsConstant(name) {
+				content.WriteString("  " + constStyle.Render("const ") + varNameStyle.Render(name) + " = " + varValueStyle.Render(valStr) + "\n")
+			} else {
+				content.WriteString("  " + varNameStyle.Render(name) + " = " + varValueStyle.Render(valStr) + "\n")
+			}
+		}
+		content.WriteString("\n")
+	}
+
+	// Sort function names
+	funcNames := make([]string, 0, len(funcs))
+	for name := range funcs {
+		funcNames = append(funcNames, name)
+	}
+	sort.Strings(funcNames)
+
+	// Display functions
+	if len(funcNames) > 0 {
+		content.WriteString(lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("117")).Render("Functions:") + "\n")
+		for _, name := range funcNames {
+			fn := funcs[name]
+			params := strings.Join(fn.Parameters, ", ")
+			content.WriteString("  " + funcStyle.Render("ƒ "+name) + "(" + params + ")\n")
+		}
+	}
+
+	if len(varNames) == 0 && len(funcNames) == 0 {
+		content.WriteString(commentStyle.Render("  No variables yet.\n  Try: Declare x to be 5."))
+	}
+
+	// Create the panel with border
+	panelContent := content.String()
+	panel := panelBorderStyle.Width(28).Height(height - 4).Render(panelContent)
+
+	return panel
+}
+
+// formatValue converts a Value to a display string
+func formatValue(v interpreter.Value) string {
+	switch val := v.(type) {
+	case float64:
+		if val == float64(int64(val)) {
+			return fmt.Sprintf("%d", int64(val))
+		}
+		return fmt.Sprintf("%.4g", val)
+	case string:
+		return fmt.Sprintf("\"%s\"", val)
+	case []interface{}:
+		if len(val) > maxArrayDisplayItems {
+			return fmt.Sprintf("[%d items]", len(val))
+		}
+		parts := make([]string, len(val))
+		for i, item := range val {
+			parts[i] = formatValue(item)
+		}
+		return "[" + strings.Join(parts, ", ") + "]"
+	case bool:
+		if val {
+			return "true"
+		}
+		return "false"
+	case nil:
+		return "nil"
+	default:
+		return fmt.Sprintf("%v", val)
+	}
+}
+
 func (m model) View() string {
 	if m.quitting {
 		return lipgloss.NewStyle().
@@ -286,22 +473,32 @@ func (m model) View() string {
 			Render("\n✨ Goodbye! Happy coding!\n\n")
 	}
 
-	var s strings.Builder
+	// Calculate panel widths
+	panelWidth := 32
+	mainWidth := m.width - panelWidth - 3
+	if mainWidth < 40 {
+		mainWidth = 40
+	}
+
+	var mainContent strings.Builder
 
 	// Title
 	title := titleStyle.Render(" English Language Interpreter v1.0.0 ")
-	s.WriteString(title + "\n")
-	s.WriteString(helpStyle.Render("Type :help for commands, Ctrl+C to exit") + "\n\n")
+	mainContent.WriteString(title + "\n")
+	mainContent.WriteString(helpStyle.Render("Type :help for commands, Ctrl+C to exit") + "\n\n")
 
 	// Output history
-	maxLines := m.height - 6
+	maxLines := m.height - 8
+	if maxLines < 5 {
+		maxLines = 5
+	}
 	if len(m.output) > maxLines {
 		for _, line := range m.output[len(m.output)-maxLines:] {
-			s.WriteString(line + "\n")
+			mainContent.WriteString(line + "\n")
 		}
 	} else {
 		for _, line := range m.output {
-			s.WriteString(line + "\n")
+			mainContent.WriteString(line + "\n")
 		}
 	}
 
@@ -316,16 +513,23 @@ func (m model) View() string {
 	// Input with cursor
 	inputDisplay := m.input
 	if m.cursorPos < len(m.input) {
-		inputDisplay = m.input[:m.cursorPos] + 
-			lipgloss.NewStyle().Reverse(true).Render(string(m.input[m.cursorPos])) + 
+		inputDisplay = m.input[:m.cursorPos] +
+			lipgloss.NewStyle().Reverse(true).Render(string(m.input[m.cursorPos])) +
 			m.input[m.cursorPos+1:]
 	} else {
 		inputDisplay = m.input + lipgloss.NewStyle().Reverse(true).Render(" ")
 	}
 
-	s.WriteString("\n" + prompt + inputDisplay)
+	mainContent.WriteString("\n" + prompt + inputDisplay)
 
-	return s.String()
+	// Create the main content panel
+	mainPanel := lipgloss.NewStyle().Width(mainWidth).Render(mainContent.String())
+
+	// Create the variables panel
+	varPanel := m.renderVariablesPanel(m.height)
+
+	// Join panels horizontally
+	return lipgloss.JoinHorizontal(lipgloss.Top, mainPanel, "  ", varPanel)
 }
 
 func StartREPL() {

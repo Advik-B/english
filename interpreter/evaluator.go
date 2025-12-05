@@ -80,6 +80,29 @@ func (e *Environment) DefineFunction(name string, fn *FunctionValue) {
 	e.functions[name] = fn
 }
 
+// GetAllVariables returns a copy of all variables in the current scope (for REPL display)
+func (e *Environment) GetAllVariables() map[string]Value {
+	result := make(map[string]Value)
+	for k, v := range e.variables {
+		result[k] = v
+	}
+	return result
+}
+
+// GetAllFunctions returns a copy of all functions in the current scope (for REPL display)
+func (e *Environment) GetAllFunctions() map[string]*FunctionValue {
+	result := make(map[string]*FunctionValue)
+	for k, v := range e.functions {
+		result[k] = v
+	}
+	return result
+}
+
+// IsConstant returns whether a variable is a constant
+func (e *Environment) IsConstant(name string) bool {
+	return e.constants[name]
+}
+
 // ReturnValue is used to implement return statements
 type ReturnValue struct {
 	Value Value

@@ -1,4 +1,6 @@
-package interpreter
+// DEPRECATED: This file has been moved to interpreter/builtins.go
+// This file should be deleted
+package deleted
 
 import (
 	"fmt"

@@ -1,4 +1,6 @@
-package interpreter
+// DEPRECATED: This file has been moved to interpreter/ast.go
+// This file should be deleted
+package deleted
 
 // Statement is the interface for all statement nodes
 type Statement interface {

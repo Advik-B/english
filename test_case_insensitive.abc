@@ -4,28 +4,29 @@ DECLARE x TO BE 5.
 declare y to be ALWAYS 10.
 
 SAY "Testing case insensitivity...".
-print the value of x.
-Print THE VALUE OF y.
+say the value of x.
+Say THE VALUE OF y.
 
 SET x TO BE 20.
-print "x is now:".
-SAY the value of x.
+say "x is now:".
+SAY the value of X.
 
 # Mixed case function
 DECLARE FUNCTION greet THAT TAKES name AND DOES THE FOLLOWING:
-    print "Hello, ".
+    say "Hello, ".
     SAY the value of name.
 THATS IT.
 
+call greet.
 SET result TO BE the result of CALLING greet WITH "World".
 
 # Test loops
 REPEAT the following 3 TIMES:
-    Print "Loop iteration".
+    Say "Loop iteration".
 THATS it.
 
 IF x IS EQUAL TO 20, THEN
-    print "x equals 20!".
+    say "x equals 20!".
 OTHERWISE
     SAY "x is not 20".
 thats IT.

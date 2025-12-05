@@ -1,4 +1,6 @@
-package interpreter
+// DEPRECATED: This file has been moved to interpreter/tokens.go
+// This file should be deleted
+package deleted
 
 // TokenType represents different token types in the English language
 type TokenType int

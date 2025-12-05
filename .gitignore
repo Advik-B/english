@@ -5,6 +5,9 @@ english
 *.so
 *.dylib
 
+# Compiled bytecode files
+*.101
+
 # Test binary
 *.test
 

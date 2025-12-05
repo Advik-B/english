@@ -12,6 +12,14 @@ import (
 	"sync"
 )
 
+// Language-specific formatting constants
+const (
+	blockEndKeyword     = "thats it"
+	elseKeyword         = "otherwise"
+	blockStartSuffix    = ":"
+	thenSuffix          = ", then"
+)
+
 // Server represents the LSP server
 type Server struct {
 	reader   *bufio.Reader
@@ -193,7 +201,10 @@ func (s *Server) handleMessage(msg json.RawMessage) {
 		} else {
 			// It's a notification (no ID)
 			var notification NotificationMessage
-			json.Unmarshal(msg, &notification)
+			if err := json.Unmarshal(msg, &notification); err != nil {
+				s.logger.Printf("Error parsing notification: %v", err)
+				return
+			}
 			s.handleNotification(notification)
 		}
 		return
@@ -311,7 +322,11 @@ func (s *Server) sendError(id interface{}, code int, message string) {
 
 // sendNotification sends a notification to the client
 func (s *Server) sendNotification(method string, params interface{}) {
-	paramsJSON, _ := json.Marshal(params)
+	paramsJSON, err := json.Marshal(params)
+	if err != nil {
+		s.logger.Printf("Error marshaling notification params: %v", err)
+		return
+	}
 	notif := NotificationMessage{
 		Message: Message{JSONRPC: "2.0"},
 		Method:  method,
@@ -651,10 +666,11 @@ func (s *Server) formatDocument(doc *Document, options FormattingOptions) string
 
 	for i, line := range lines {
 		trimmed := strings.TrimSpace(line)
+		lowerTrimmed := strings.ToLower(trimmed)
 
 		// Decrease indent for closing statements
-		if strings.HasPrefix(strings.ToLower(trimmed), "thats it") ||
-			strings.HasPrefix(strings.ToLower(trimmed), "otherwise") {
+		if strings.HasPrefix(lowerTrimmed, blockEndKeyword) ||
+			strings.HasPrefix(lowerTrimmed, elseKeyword) {
 			if indentLevel > 0 {
 				indentLevel--
 			}
@@ -671,10 +687,9 @@ func (s *Server) formatDocument(doc *Document, options FormattingOptions) string
 		}
 
 		// Increase indent for block-opening statements
-		lowerTrimmed := strings.ToLower(trimmed)
-		if strings.HasSuffix(lowerTrimmed, ":") ||
-			strings.HasSuffix(lowerTrimmed, ", then") ||
-			(strings.HasPrefix(lowerTrimmed, "otherwise") && !strings.HasSuffix(lowerTrimmed, ".")) {
+		if strings.HasSuffix(lowerTrimmed, blockStartSuffix) ||
+			strings.HasSuffix(lowerTrimmed, thenSuffix) ||
+			(strings.HasPrefix(lowerTrimmed, elseKeyword) && !strings.HasSuffix(lowerTrimmed, ".")) {
 			indentLevel++
 		}
 	}

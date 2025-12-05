@@ -404,12 +404,19 @@ func (a *Analyzer) createFunctionSymbol(f *ast.FunctionDecl, doc *Document) *Sym
 }
 
 // findIdentifierRange finds the range of an identifier in the document
+// It searches for a whole-word match of the identifier name.
 func (a *Analyzer) findIdentifierRange(name string, doc *Document) Range {
-	// Simple search - find the identifier in the document
 	for lineNum, line := range doc.Lines {
-		idx := strings.Index(line, name)
-		if idx != -1 {
-			// Make sure it's a whole word match
+		// Search for all occurrences on this line
+		searchStart := 0
+		for {
+			idx := strings.Index(line[searchStart:], name)
+			if idx == -1 {
+				break
+			}
+			idx += searchStart // Adjust for search offset
+			
+			// Check for whole word match
 			before := idx == 0 || !isWordChar(line[idx-1])
 			after := idx+len(name) >= len(line) || !isWordChar(line[idx+len(name)])
 			if before && after {
@@ -418,6 +425,9 @@ func (a *Analyzer) findIdentifierRange(name string, doc *Document) Range {
 					End:   Position{Line: lineNum, Character: idx + len(name)},
 				}
 			}
+			
+			// Move past this occurrence
+			searchStart = idx + 1
 		}
 	}
 	return Range{}
@@ -432,11 +442,9 @@ func (a *Analyzer) exprToString(expr ast.Expression) string {
 	switch e := expr.(type) {
 	case *ast.NumberLiteral:
 		if e.Value == float64(int64(e.Value)) {
-			return strings.TrimSuffix(strings.TrimSuffix(
-				strings.TrimSuffix(string(rune(int64(e.Value)+'0')), "0"),
-				"."), "0")
+			return fmt.Sprintf("%d", int64(e.Value))
 		}
-		return "number"
+		return fmt.Sprintf("%g", e.Value)
 	case *ast.StringLiteral:
 		return `"` + e.Value + `"`
 	case *ast.BooleanLiteral:

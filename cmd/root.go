@@ -1,7 +1,8 @@
 package cmd
 
 import (
-	"english/interpreter"
+	"english/parser"
+	"english/vm"
 	"fmt"
 	"os"
 
@@ -69,18 +70,18 @@ func RunFile(filename string) {
 		os.Exit(1)
 	}
 
-	env := interpreter.NewEnvironment()
-	lexer := interpreter.NewLexer(string(content))
+	env := vm.NewEnvironment()
+	lexer := parser.NewLexer(string(content))
 	tokens := lexer.TokenizeAll()
 
-	parser := interpreter.NewParser(tokens)
-	program, err := parser.Parse()
+	p := parser.NewParser(tokens)
+	program, err := p.Parse()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Parse error: %v\n", err)
 		os.Exit(1)
 	}
 
-	evaluator := interpreter.NewEvaluator(env)
+	evaluator := vm.NewEvaluator(env)
 	_, err = evaluator.Eval(program)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Runtime error: %v\n", err)

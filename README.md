@@ -178,14 +178,19 @@ The interactive REPL (Read-Eval-Print Loop) features:
 ├── cmd/
 │   ├── root.go          # Cobra CLI setup with subcommands
 │   └── repl.go          # Bubble Tea REPL implementation
-├── interpreter/
-│   ├── tokens.go        # Token type definitions
-│   ├── lexer.go         # Lexical analyzer (tokenizer)
+├── token/
+│   ├── token.go         # Token type definitions
+│   └── token_test.go    # Token tests
+├── ast/
 │   ├── ast.go           # Abstract Syntax Tree node types
+│   └── ast_test.go      # AST tests
+├── parser/
+│   ├── lexer.go         # Lexical analyzer (tokenizer)
 │   ├── parser.go        # Recursive descent parser
-│   ├── evaluator.go     # Tree-walking interpreter with stack traces
-│   └── builtins.go      # Built-in functions and value system
-├── Makefile             # Build automation
+│   └── parser_test.go   # Lexer and parser tests
+├── vm/
+│   ├── vm.go            # Virtual machine (evaluator) and runtime
+│   └── vm_test.go       # VM and evaluator tests
 ├── go.mod               # Go module definition
 └── *.abc                # Example/test source files
 ```
@@ -212,11 +217,22 @@ make clean
 ### Testing
 
 ```bash
+# Run all tests
+go test ./...
+
+# Run tests with verbose output
+go test ./... -v
+
+# Run tests for specific package
+go test ./token/... -v
+go test ./ast/... -v  
+go test ./parser/... -v
+go test ./vm/... -v
+
 # Run example programs
-./english syntax.abc
-./english test_simple.abc
-./english test_case_insensitive.abc
-./english test_errors.abc
+./english run syntax.abc
+./english run test_simple.abc
+./english run turing_machine.abc
 ```
 
 ## 📦 Dependencies

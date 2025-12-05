@@ -1,7 +1,8 @@
 package cmd
 
 import (
-	"english/interpreter"
+	"english/parser"
+	"english/vm"
 	"fmt"
 	"sort"
 	"strings"
@@ -97,8 +98,8 @@ type model struct {
 	output      []string
 	multiline   bool
 	buffer      []string
-	env         *interpreter.Environment
-	evaluator   *interpreter.Evaluator
+	env         *vm.Environment
+	evaluator   *vm.Evaluator
 	cursorPos   int
 	width       int
 	height      int
@@ -106,7 +107,7 @@ type model struct {
 }
 
 func initialModel() model {
-	env := interpreter.NewEnvironment()
+	env := vm.NewEnvironment()
 	return model{
 		input:     "",
 		history:   []string{},
@@ -114,7 +115,7 @@ func initialModel() model {
 		multiline: false,
 		buffer:    []string{},
 		env:       env,
-		evaluator: interpreter.NewEvaluator(env),
+		evaluator: vm.NewEvaluator(env),
 		cursorPos: 0,
 	}
 }
@@ -320,11 +321,11 @@ func (m *model) getHelp() string {
 }
 
 func (m model) executeCode(code string) (string, error) {
-	lexer := interpreter.NewLexer(code)
+	lexer := parser.NewLexer(code)
 	tokens := lexer.TokenizeAll()
 
-	parser := interpreter.NewParser(tokens)
-	program, err := parser.Parse()
+	p := parser.NewParser(tokens)
+	program, err := p.Parse()
 	if err != nil {
 		return "", fmt.Errorf("parse error: %v", err)
 	}
@@ -436,7 +437,7 @@ func (m model) renderVariablesPanel(height int) string {
 }
 
 // formatValue converts a Value to a display string
-func formatValue(v interpreter.Value) string {
+func formatValue(v vm.Value) string {
 	switch val := v.(type) {
 	case float64:
 		if val == float64(int64(val)) {

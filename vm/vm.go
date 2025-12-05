@@ -1,106 +1,22 @@
-package interpreter
+// Package vm provides the virtual machine (evaluator) for the English programming language.
+package vm
 
 import (
+	"english/ast"
 	"fmt"
+	"strconv"
 	"strings"
 )
 
-// Environment represents a scope for variables and functions
-type Environment struct {
-	variables map[string]Value
-	constants map[string]bool
-	functions map[string]*FunctionValue
-	parent    *Environment
-}
+// Value represents a runtime value in the interpreter
+type Value interface{}
 
-func NewEnvironment() *Environment {
-	return &Environment{
-		variables: make(map[string]Value),
-		constants: make(map[string]bool),
-		functions: make(map[string]*FunctionValue),
-	}
-}
-
-func (e *Environment) NewChild() *Environment {
-	return &Environment{
-		variables: make(map[string]Value),
-		constants: make(map[string]bool),
-		functions: make(map[string]*FunctionValue),
-		parent:    e,
-	}
-}
-
-func (e *Environment) Get(name string) (Value, bool) {
-	if val, ok := e.variables[name]; ok {
-		return val, ok
-	}
-	if e.parent != nil {
-		return e.parent.Get(name)
-	}
-	return nil, false
-}
-
-func (e *Environment) Set(name string, value Value) error {
-	if e.constants[name] {
-		return fmt.Errorf("cannot reassign constant '%s'\n  Hint: Constants are declared with 'to be always' or 'to always be'", name)
-	}
-	if _, exists := e.variables[name]; exists {
-		e.variables[name] = value
-		return nil
-	}
-	if e.parent != nil {
-		if _, exists := e.parent.variables[name]; exists {
-			return e.parent.Set(name, value)
-		}
-	}
-	e.variables[name] = value
-	return nil
-}
-
-func (e *Environment) Define(name string, value Value, isConstant bool) error {
-	if _, exists := e.variables[name]; exists {
-		return fmt.Errorf("variable %s already defined", name)
-	}
-	e.variables[name] = value
-	e.constants[name] = isConstant
-	return nil
-}
-
-func (e *Environment) GetFunction(name string) (*FunctionValue, bool) {
-	if fn, ok := e.functions[name]; ok {
-		return fn, ok
-	}
-	if e.parent != nil {
-		return e.parent.GetFunction(name)
-	}
-	return nil, false
-}
-
-func (e *Environment) DefineFunction(name string, fn *FunctionValue) {
-	e.functions[name] = fn
-}
-
-// GetAllVariables returns a copy of all variables in the current scope (for REPL display)
-func (e *Environment) GetAllVariables() map[string]Value {
-	result := make(map[string]Value)
-	for k, v := range e.variables {
-		result[k] = v
-	}
-	return result
-}
-
-// GetAllFunctions returns a copy of all functions in the current scope (for REPL display)
-func (e *Environment) GetAllFunctions() map[string]*FunctionValue {
-	result := make(map[string]*FunctionValue)
-	for k, v := range e.functions {
-		result[k] = v
-	}
-	return result
-}
-
-// IsConstant returns whether a variable is a constant
-func (e *Environment) IsConstant(name string) bool {
-	return e.constants[name]
+// FunctionValue represents a user-defined function
+type FunctionValue struct {
+	Name       string
+	Parameters []string
+	Body       []ast.Statement
+	Closure    *Environment
 }
 
 // ReturnValue is used to implement return statements
@@ -125,12 +41,118 @@ func (e *RuntimeError) Error() string {
 	return result
 }
 
+// Environment represents a scope for variables and functions
+type Environment struct {
+	variables map[string]Value
+	constants map[string]bool
+	functions map[string]*FunctionValue
+	parent    *Environment
+}
+
+// NewEnvironment creates a new environment
+func NewEnvironment() *Environment {
+	return &Environment{
+		variables: make(map[string]Value),
+		constants: make(map[string]bool),
+		functions: make(map[string]*FunctionValue),
+	}
+}
+
+// NewChild creates a child environment
+func (e *Environment) NewChild() *Environment {
+	return &Environment{
+		variables: make(map[string]Value),
+		constants: make(map[string]bool),
+		functions: make(map[string]*FunctionValue),
+		parent:    e,
+	}
+}
+
+// Get retrieves a variable from the environment
+func (e *Environment) Get(name string) (Value, bool) {
+	if val, ok := e.variables[name]; ok {
+		return val, ok
+	}
+	if e.parent != nil {
+		return e.parent.Get(name)
+	}
+	return nil, false
+}
+
+// Set assigns a value to a variable
+func (e *Environment) Set(name string, value Value) error {
+	if e.constants[name] {
+		return fmt.Errorf("cannot reassign constant '%s'\n  Hint: Constants are declared with 'to be always' or 'to always be'", name)
+	}
+	if _, exists := e.variables[name]; exists {
+		e.variables[name] = value
+		return nil
+	}
+	if e.parent != nil {
+		if _, exists := e.parent.variables[name]; exists {
+			return e.parent.Set(name, value)
+		}
+	}
+	e.variables[name] = value
+	return nil
+}
+
+// Define declares a new variable
+func (e *Environment) Define(name string, value Value, isConstant bool) error {
+	if _, exists := e.variables[name]; exists {
+		return fmt.Errorf("variable %s already defined", name)
+	}
+	e.variables[name] = value
+	e.constants[name] = isConstant
+	return nil
+}
+
+// GetFunction retrieves a function from the environment
+func (e *Environment) GetFunction(name string) (*FunctionValue, bool) {
+	if fn, ok := e.functions[name]; ok {
+		return fn, ok
+	}
+	if e.parent != nil {
+		return e.parent.GetFunction(name)
+	}
+	return nil, false
+}
+
+// DefineFunction declares a new function
+func (e *Environment) DefineFunction(name string, fn *FunctionValue) {
+	e.functions[name] = fn
+}
+
+// GetAllVariables returns a copy of all variables in the current scope
+func (e *Environment) GetAllVariables() map[string]Value {
+	result := make(map[string]Value)
+	for k, v := range e.variables {
+		result[k] = v
+	}
+	return result
+}
+
+// GetAllFunctions returns a copy of all functions in the current scope
+func (e *Environment) GetAllFunctions() map[string]*FunctionValue {
+	result := make(map[string]*FunctionValue)
+	for k, v := range e.functions {
+		result[k] = v
+	}
+	return result
+}
+
+// IsConstant returns whether a variable is a constant
+func (e *Environment) IsConstant(name string) bool {
+	return e.constants[name]
+}
+
 // Evaluator executes the AST
 type Evaluator struct {
 	env       *Environment
 	callStack []string
 }
 
+// NewEvaluator creates a new evaluator with the given environment
 func NewEvaluator(env *Environment) *Evaluator {
 	return &Evaluator{
 		env:       env,
@@ -145,62 +167,63 @@ func (ev *Evaluator) runtimeError(message string) error {
 	}
 }
 
+// Eval evaluates an AST node
 func (ev *Evaluator) Eval(node interface{}) (Value, error) {
 	switch node := node.(type) {
-	case *Program:
+	case *ast.Program:
 		return ev.evalProgram(node)
-	case *VariableDecl:
+	case *ast.VariableDecl:
 		return ev.evalVariableDecl(node)
-	case *Assignment:
+	case *ast.Assignment:
 		return ev.evalAssignment(node)
-	case *IndexAssignment:
+	case *ast.IndexAssignment:
 		return ev.evalIndexAssignment(node)
-	case *FunctionDecl:
+	case *ast.FunctionDecl:
 		return ev.evalFunctionDecl(node)
-	case *CallStatement:
+	case *ast.CallStatement:
 		return ev.evalCallStatement(node)
-	case *OutputStatement:
+	case *ast.OutputStatement:
 		return ev.evalOutput(node)
-	case *ReturnStatement:
+	case *ast.ReturnStatement:
 		return ev.evalReturn(node)
-	case *IfStatement:
+	case *ast.IfStatement:
 		return ev.evalIfStatement(node)
-	case *WhileLoop:
+	case *ast.WhileLoop:
 		return ev.evalWhileLoop(node)
-	case *ForLoop:
+	case *ast.ForLoop:
 		return ev.evalForLoop(node)
-	case *ForEachLoop:
+	case *ast.ForEachLoop:
 		return ev.evalForEachLoop(node)
-	case *ToggleStatement:
+	case *ast.ToggleStatement:
 		return ev.evalToggle(node)
-	case *NumberLiteral:
+	case *ast.NumberLiteral:
 		return node.Value, nil
-	case *StringLiteral:
+	case *ast.StringLiteral:
 		return node.Value, nil
-	case *BooleanLiteral:
+	case *ast.BooleanLiteral:
 		return node.Value, nil
-	case *ListLiteral:
+	case *ast.ListLiteral:
 		return ev.evalListLiteral(node)
-	case *Identifier:
+	case *ast.Identifier:
 		return ev.evalIdentifier(node)
-	case *BinaryExpression:
+	case *ast.BinaryExpression:
 		return ev.evalBinaryExpression(node)
-	case *UnaryExpression:
+	case *ast.UnaryExpression:
 		return ev.evalUnaryExpression(node)
-	case *FunctionCall:
+	case *ast.FunctionCall:
 		return ev.evalFunctionCall(node)
-	case *IndexExpression:
+	case *ast.IndexExpression:
 		return ev.evalIndexExpression(node)
-	case *LengthExpression:
+	case *ast.LengthExpression:
 		return ev.evalLengthExpression(node)
-	case *LocationExpression:
+	case *ast.LocationExpression:
 		return ev.evalLocationExpression(node)
 	default:
 		return nil, fmt.Errorf("unknown node type: %T", node)
 	}
 }
 
-func (ev *Evaluator) evalProgram(prog *Program) (Value, error) {
+func (ev *Evaluator) evalProgram(prog *ast.Program) (Value, error) {
 	var result Value
 	for _, stmt := range prog.Statements {
 		val, err := ev.Eval(stmt)
@@ -215,7 +238,7 @@ func (ev *Evaluator) evalProgram(prog *Program) (Value, error) {
 	return result, nil
 }
 
-func (ev *Evaluator) evalVariableDecl(vd *VariableDecl) (Value, error) {
+func (ev *Evaluator) evalVariableDecl(vd *ast.VariableDecl) (Value, error) {
 	value, err := ev.Eval(vd.Value)
 	if err != nil {
 		return nil, err
@@ -225,7 +248,7 @@ func (ev *Evaluator) evalVariableDecl(vd *VariableDecl) (Value, error) {
 	return nil, err
 }
 
-func (ev *Evaluator) evalAssignment(a *Assignment) (Value, error) {
+func (ev *Evaluator) evalAssignment(a *ast.Assignment) (Value, error) {
 	value, err := ev.Eval(a.Value)
 	if err != nil {
 		return nil, err
@@ -235,7 +258,7 @@ func (ev *Evaluator) evalAssignment(a *Assignment) (Value, error) {
 	return nil, err
 }
 
-func (ev *Evaluator) evalIndexAssignment(ia *IndexAssignment) (Value, error) {
+func (ev *Evaluator) evalIndexAssignment(ia *ast.IndexAssignment) (Value, error) {
 	// Get the list
 	list, ok := ev.env.Get(ia.ListName)
 	if !ok {
@@ -252,7 +275,7 @@ func (ev *Evaluator) evalIndexAssignment(ia *IndexAssignment) (Value, error) {
 	if err != nil {
 		return nil, err
 	}
-	index, err := toNumber(indexVal)
+	index, err := ToNumber(indexVal)
 	if err != nil {
 		return nil, ev.runtimeError("index must be a number")
 	}
@@ -272,7 +295,7 @@ func (ev *Evaluator) evalIndexAssignment(ia *IndexAssignment) (Value, error) {
 	return nil, nil
 }
 
-func (ev *Evaluator) evalIndexExpression(ie *IndexExpression) (Value, error) {
+func (ev *Evaluator) evalIndexExpression(ie *ast.IndexExpression) (Value, error) {
 	// Get the list
 	list, err := ev.Eval(ie.List)
 	if err != nil {
@@ -289,7 +312,7 @@ func (ev *Evaluator) evalIndexExpression(ie *IndexExpression) (Value, error) {
 	if err != nil {
 		return nil, err
 	}
-	index, err := toNumber(indexVal)
+	index, err := ToNumber(indexVal)
 	if err != nil {
 		return nil, ev.runtimeError("index must be a number")
 	}
@@ -301,7 +324,7 @@ func (ev *Evaluator) evalIndexExpression(ie *IndexExpression) (Value, error) {
 	return items[idx], nil
 }
 
-func (ev *Evaluator) evalLengthExpression(le *LengthExpression) (Value, error) {
+func (ev *Evaluator) evalLengthExpression(le *ast.LengthExpression) (Value, error) {
 	list, err := ev.Eval(le.List)
 	if err != nil {
 		return nil, err
@@ -317,18 +340,17 @@ func (ev *Evaluator) evalLengthExpression(le *LengthExpression) (Value, error) {
 	}
 }
 
-func (ev *Evaluator) evalLocationExpression(loc *LocationExpression) (Value, error) {
+func (ev *Evaluator) evalLocationExpression(loc *ast.LocationExpression) (Value, error) {
 	// Check if variable exists
 	_, ok := ev.env.Get(loc.Name)
 	if !ok {
 		return nil, ev.runtimeError(fmt.Sprintf("undefined variable '%s'", loc.Name))
 	}
 	// Return a unique identifier based on the variable name and environment
-	// This simulates a memory address
 	return fmt.Sprintf("0x%p:%s", ev.env, loc.Name), nil
 }
 
-func (ev *Evaluator) evalToggle(ts *ToggleStatement) (Value, error) {
+func (ev *Evaluator) evalToggle(ts *ast.ToggleStatement) (Value, error) {
 	// Get the current value
 	val, ok := ev.env.Get(ts.Name)
 	if !ok {
@@ -346,7 +368,7 @@ func (ev *Evaluator) evalToggle(ts *ToggleStatement) (Value, error) {
 	return nil, err
 }
 
-func (ev *Evaluator) evalFunctionDecl(fd *FunctionDecl) (Value, error) {
+func (ev *Evaluator) evalFunctionDecl(fd *ast.FunctionDecl) (Value, error) {
 	fn := &FunctionValue{
 		Name:       fd.Name,
 		Parameters: fd.Parameters,
@@ -357,21 +379,21 @@ func (ev *Evaluator) evalFunctionDecl(fd *FunctionDecl) (Value, error) {
 	return nil, nil
 }
 
-func (ev *Evaluator) evalCallStatement(cs *CallStatement) (Value, error) {
+func (ev *Evaluator) evalCallStatement(cs *ast.CallStatement) (Value, error) {
 	_, err := ev.evalFunctionCall(cs.FunctionCall)
 	return nil, err
 }
 
-func (ev *Evaluator) evalOutput(os *OutputStatement) (Value, error) {
+func (ev *Evaluator) evalOutput(os *ast.OutputStatement) (Value, error) {
 	value, err := ev.Eval(os.Value)
 	if err != nil {
 		return nil, err
 	}
-	fmt.Println(toString(value))
+	fmt.Println(ToString(value))
 	return nil, nil
 }
 
-func (ev *Evaluator) evalReturn(rs *ReturnStatement) (Value, error) {
+func (ev *Evaluator) evalReturn(rs *ast.ReturnStatement) (Value, error) {
 	value, err := ev.Eval(rs.Value)
 	if err != nil {
 		return nil, err
@@ -379,13 +401,13 @@ func (ev *Evaluator) evalReturn(rs *ReturnStatement) (Value, error) {
 	return &ReturnValue{Value: value}, nil
 }
 
-func (ev *Evaluator) evalIfStatement(is *IfStatement) (Value, error) {
+func (ev *Evaluator) evalIfStatement(is *ast.IfStatement) (Value, error) {
 	cond, err := ev.Eval(is.Condition)
 	if err != nil {
 		return nil, err
 	}
 
-	if toBool(cond) {
+	if ToBool(cond) {
 		return ev.evalStatements(is.Then)
 	}
 
@@ -394,7 +416,7 @@ func (ev *Evaluator) evalIfStatement(is *IfStatement) (Value, error) {
 		if err != nil {
 			return nil, err
 		}
-		if toBool(cond) {
+		if ToBool(cond) {
 			return ev.evalStatements(eif.Body)
 		}
 	}
@@ -406,14 +428,14 @@ func (ev *Evaluator) evalIfStatement(is *IfStatement) (Value, error) {
 	return nil, nil
 }
 
-func (ev *Evaluator) evalWhileLoop(wl *WhileLoop) (Value, error) {
+func (ev *Evaluator) evalWhileLoop(wl *ast.WhileLoop) (Value, error) {
 	var result Value
 	for {
 		cond, err := ev.Eval(wl.Condition)
 		if err != nil {
 			return nil, err
 		}
-		if !toBool(cond) {
+		if !ToBool(cond) {
 			break
 		}
 
@@ -429,13 +451,13 @@ func (ev *Evaluator) evalWhileLoop(wl *WhileLoop) (Value, error) {
 	return result, nil
 }
 
-func (ev *Evaluator) evalForLoop(fl *ForLoop) (Value, error) {
+func (ev *Evaluator) evalForLoop(fl *ast.ForLoop) (Value, error) {
 	count, err := ev.Eval(fl.Count)
 	if err != nil {
 		return nil, err
 	}
 
-	num, err := toNumber(count)
+	num, err := ToNumber(count)
 	if err != nil {
 		return nil, err
 	}
@@ -454,7 +476,7 @@ func (ev *Evaluator) evalForLoop(fl *ForLoop) (Value, error) {
 	return result, nil
 }
 
-func (ev *Evaluator) evalForEachLoop(fel *ForEachLoop) (Value, error) {
+func (ev *Evaluator) evalForEachLoop(fel *ast.ForEachLoop) (Value, error) {
 	list, err := ev.Eval(fel.List)
 	if err != nil {
 		return nil, err
@@ -472,8 +494,6 @@ func (ev *Evaluator) evalForEachLoop(fel *ForEachLoop) (Value, error) {
 
 	var result Value
 	for _, item := range items {
-		// Use Set to update the loop variable each iteration
-		// Set handles both creation and update of variables
 		ev.env.Set(fel.Item, item)
 		val, err := ev.evalStatements(fel.Body)
 		if err != nil {
@@ -487,7 +507,7 @@ func (ev *Evaluator) evalForEachLoop(fel *ForEachLoop) (Value, error) {
 	return result, nil
 }
 
-func (ev *Evaluator) evalStatements(stmts []Statement) (Value, error) {
+func (ev *Evaluator) evalStatements(stmts []ast.Statement) (Value, error) {
 	var result Value
 	for _, stmt := range stmts {
 		val, err := ev.Eval(stmt)
@@ -502,7 +522,7 @@ func (ev *Evaluator) evalStatements(stmts []Statement) (Value, error) {
 	return result, nil
 }
 
-func (ev *Evaluator) evalListLiteral(ll *ListLiteral) (Value, error) {
+func (ev *Evaluator) evalListLiteral(ll *ast.ListLiteral) (Value, error) {
 	var result []interface{}
 	for _, elem := range ll.Elements {
 		val, err := ev.Eval(elem)
@@ -514,10 +534,9 @@ func (ev *Evaluator) evalListLiteral(ll *ListLiteral) (Value, error) {
 	return result, nil
 }
 
-func (ev *Evaluator) evalIdentifier(id *Identifier) (Value, error) {
+func (ev *Evaluator) evalIdentifier(id *ast.Identifier) (Value, error) {
 	val, ok := ev.env.Get(id.Name)
 	if !ok {
-		// Try to find similar variable names
 		suggestion := ev.findSimilarVariable(id.Name)
 		if suggestion != "" {
 			return nil, ev.runtimeError(fmt.Sprintf("undefined variable '%s'\n  Perhaps you meant: '%s'", id.Name, suggestion))
@@ -568,7 +587,6 @@ func levenshteinDistance(s1, s2 string) int {
 	lenS1 := len(s1)
 	lenS2 := len(s2)
 
-	// Create distance matrix
 	distances := make([]int, lenS1+1)
 	for i := range distances {
 		distances[i] = i
@@ -597,7 +615,7 @@ func min(a, b int) int {
 	return b
 }
 
-func (ev *Evaluator) evalBinaryExpression(be *BinaryExpression) (Value, error) {
+func (ev *Evaluator) evalBinaryExpression(be *ast.BinaryExpression) (Value, error) {
 	left, err := ev.Eval(be.Left)
 	if err != nil {
 		return nil, err
@@ -610,24 +628,24 @@ func (ev *Evaluator) evalBinaryExpression(be *BinaryExpression) (Value, error) {
 
 	switch be.Operator {
 	case "+":
-		return add(left, right)
+		return Add(left, right)
 	case "-":
-		return subtract(left, right)
+		return Subtract(left, right)
 	case "*":
-		return multiply(left, right)
+		return Multiply(left, right)
 	case "/":
-		return divide(left, right)
+		return Divide(left, right)
 	case "%":
-		return modulo(left, right)
+		return Modulo(left, right)
 	case "is equal to", "is less than", "is greater than", "is less than or equal to", "is greater than or equal to", "is not equal to":
-		result, err := compare(be.Operator, left, right)
+		result, err := Compare(be.Operator, left, right)
 		return result, err
 	default:
 		return nil, fmt.Errorf("unknown operator: %s", be.Operator)
 	}
 }
 
-func (ev *Evaluator) evalUnaryExpression(ue *UnaryExpression) (Value, error) {
+func (ev *Evaluator) evalUnaryExpression(ue *ast.UnaryExpression) (Value, error) {
 	right, err := ev.Eval(ue.Right)
 	if err != nil {
 		return nil, err
@@ -635,7 +653,7 @@ func (ev *Evaluator) evalUnaryExpression(ue *UnaryExpression) (Value, error) {
 
 	switch ue.Operator {
 	case "-":
-		num, err := toNumber(right)
+		num, err := ToNumber(right)
 		if err != nil {
 			return nil, err
 		}
@@ -645,10 +663,9 @@ func (ev *Evaluator) evalUnaryExpression(ue *UnaryExpression) (Value, error) {
 	}
 }
 
-func (ev *Evaluator) evalFunctionCall(fc *FunctionCall) (Value, error) {
+func (ev *Evaluator) evalFunctionCall(fc *ast.FunctionCall) (Value, error) {
 	fn, ok := ev.env.GetFunction(fc.Name)
 	if !ok {
-		// Try to find similar function names
 		suggestion := ev.findSimilarFunction(fc.Name)
 		if suggestion != "" {
 			return nil, ev.runtimeError(fmt.Sprintf("undefined function '%s'\n  Perhaps you meant: '%s'", fc.Name, suggestion))
@@ -747,4 +764,240 @@ func (ev *Evaluator) findSimilarFunction(name string) string {
 	}
 
 	return ""
+}
+
+// ToNumber converts a value to a number
+func ToNumber(v Value) (float64, error) {
+	switch val := v.(type) {
+	case float64:
+		return val, nil
+	case string:
+		n, err := strconv.ParseFloat(val, 64)
+		return n, err
+	default:
+		return 0, fmt.Errorf("cannot convert %T to number", v)
+	}
+}
+
+// ToString converts a value to a string
+func ToString(v Value) string {
+	switch val := v.(type) {
+	case float64:
+		if val == float64(int64(val)) {
+			return strconv.FormatInt(int64(val), 10)
+		}
+		return strconv.FormatFloat(val, 'f', -1, 64)
+	case string:
+		return val
+	case bool:
+		if val {
+			return "true"
+		}
+		return "false"
+	case []interface{}:
+		var parts []string
+		for _, elem := range val {
+			parts = append(parts, ToString(elem))
+		}
+		return "[" + fmt.Sprintf("%v", parts)[1:len(fmt.Sprintf("%v", parts))-1] + "]"
+	case *FunctionValue:
+		return fmt.Sprintf("<function %s>", val.Name)
+	case nil:
+		return "nil"
+	default:
+		return fmt.Sprintf("%v", val)
+	}
+}
+
+// ToBool converts a value to a boolean
+func ToBool(v Value) bool {
+	switch val := v.(type) {
+	case bool:
+		return val
+	case float64:
+		return val != 0
+	case string:
+		return val != ""
+	case []interface{}:
+		return len(val) > 0
+	case nil:
+		return false
+	default:
+		return true
+	}
+}
+
+// Compare compares two values based on an operator
+func Compare(op string, left, right Value) (bool, error) {
+	switch op {
+	case "is equal to":
+		return Equals(left, right), nil
+	case "is less than":
+		l, err := ToNumber(left)
+		if err != nil {
+			return false, err
+		}
+		r, err := ToNumber(right)
+		if err != nil {
+			return false, err
+		}
+		return l < r, nil
+	case "is greater than":
+		l, err := ToNumber(left)
+		if err != nil {
+			return false, err
+		}
+		r, err := ToNumber(right)
+		if err != nil {
+			return false, err
+		}
+		return l > r, nil
+	case "is less than or equal to":
+		l, err := ToNumber(left)
+		if err != nil {
+			return false, err
+		}
+		r, err := ToNumber(right)
+		if err != nil {
+			return false, err
+		}
+		return l <= r, nil
+	case "is greater than or equal to":
+		l, err := ToNumber(left)
+		if err != nil {
+			return false, err
+		}
+		r, err := ToNumber(right)
+		if err != nil {
+			return false, err
+		}
+		return l >= r, nil
+	case "is not equal to":
+		return !Equals(left, right), nil
+	default:
+		return false, fmt.Errorf("unknown comparison operator: %s", op)
+	}
+}
+
+// Equals checks if two values are equal
+func Equals(left, right Value) bool {
+	switch l := left.(type) {
+	case float64:
+		switch r := right.(type) {
+		case float64:
+			return l == r
+		default:
+			return false
+		}
+	case string:
+		switch r := right.(type) {
+		case string:
+			return l == r
+		default:
+			return false
+		}
+	case bool:
+		switch r := right.(type) {
+		case bool:
+			return l == r
+		default:
+			return false
+		}
+	case nil:
+		return right == nil
+	default:
+		return false
+	}
+}
+
+// Add adds two values
+func Add(left, right Value) (Value, error) {
+	switch l := left.(type) {
+	case float64:
+		r, err := ToNumber(right)
+		if err != nil {
+			return nil, err
+		}
+		return l + r, nil
+	case string:
+		return l + ToString(right), nil
+	case []interface{}:
+		switch r := right.(type) {
+		case []interface{}:
+			return append(l, r...), nil
+		default:
+			return append(l, r), nil
+		}
+	default:
+		return nil, fmt.Errorf("cannot add %T and %T", left, right)
+	}
+}
+
+// Subtract subtracts two values
+func Subtract(left, right Value) (Value, error) {
+	l, err := ToNumber(left)
+	if err != nil {
+		return nil, fmt.Errorf("cannot subtract: left operand is not a number (got %T)\n  Hint: Subtraction only works with numbers", left)
+	}
+	r, err := ToNumber(right)
+	if err != nil {
+		return nil, fmt.Errorf("cannot subtract: right operand is not a number (got %T)\n  Hint: Subtraction only works with numbers", right)
+	}
+	return l - r, nil
+}
+
+// Multiply multiplies two values
+func Multiply(left, right Value) (Value, error) {
+	switch l := left.(type) {
+	case float64:
+		r, err := ToNumber(right)
+		if err != nil {
+			return nil, err
+		}
+		return l * r, nil
+	case string:
+		r, err := ToNumber(right)
+		if err != nil {
+			return nil, err
+		}
+		result := ""
+		for i := 0; i < int(r); i++ {
+			result += l
+		}
+		return result, nil
+	default:
+		return nil, fmt.Errorf("cannot multiply %T and %T", left, right)
+	}
+}
+
+// Divide divides two values
+func Divide(left, right Value) (Value, error) {
+	l, err := ToNumber(left)
+	if err != nil {
+		return nil, fmt.Errorf("cannot divide: left operand is not a number (got %T)\n  Hint: Division only works with numbers", left)
+	}
+	r, err := ToNumber(right)
+	if err != nil {
+		return nil, fmt.Errorf("cannot divide: right operand is not a number (got %T)\n  Hint: Division only works with numbers", right)
+	}
+	if r == 0 {
+		return nil, fmt.Errorf("division by zero\n  Hint: You cannot divide by zero - check your expression")
+	}
+	return l / r, nil
+}
+
+// Modulo calculates the remainder of two values
+func Modulo(left, right Value) (Value, error) {
+	l, err := ToNumber(left)
+	if err != nil {
+		return nil, fmt.Errorf("cannot get remainder: left operand is not a number (got %T)\n  Hint: Remainder only works with numbers", left)
+	}
+	r, err := ToNumber(right)
+	if err != nil {
+		return nil, fmt.Errorf("cannot get remainder: right operand is not a number (got %T)\n  Hint: Remainder only works with numbers", right)
+	}
+	if r == 0 {
+		return nil, fmt.Errorf("division by zero\n  Hint: You cannot get remainder when dividing by zero")
+	}
+	return float64(int64(l) % int64(r)), nil
 }

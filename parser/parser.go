@@ -1,19 +1,23 @@
-package interpreter
+package parser
 
 import (
+	"english/ast"
+	"english/token"
 	"fmt"
 	"strconv"
 	"strings"
 )
 
+// Parser transforms tokens into an AST
 type Parser struct {
-	tokens    []Token
+	tokens    []token.Token
 	position  int
-	curToken  Token
-	peekToken Token
+	curToken  token.Token
+	peekToken token.Token
 }
 
-func NewParser(tokens []Token) *Parser {
+// NewParser creates a new parser for the given tokens
+func NewParser(tokens []token.Token) *Parser {
 	p := &Parser{tokens: tokens, position: 0}
 	p.nextToken()
 	p.nextToken()
@@ -26,40 +30,40 @@ func (p *Parser) nextToken() {
 		p.peekToken = p.tokens[p.position]
 		p.position++
 	} else {
-		p.peekToken = Token{Type: TOKEN_EOF}
+		p.peekToken = token.Token{Type: token.EOF}
 	}
 }
 
-func (p *Parser) expectToken(tokenType TokenType) error {
+func (p *Parser) expectToken(tokenType token.Type) error {
 	if p.curToken.Type != tokenType {
 		return p.makeExpectError(tokenType)
 	}
 	return nil
 }
 
-func (p *Parser) makeExpectError(expected TokenType) error {
+func (p *Parser) makeExpectError(expected token.Type) error {
 	var suggestion string
 
 	// Provide helpful suggestions based on context
 	switch expected {
-	case TOKEN_PERIOD:
+	case token.PERIOD:
 		suggestion = "\n  Perhaps you forgot to end the statement with a period (.)"
-	case TOKEN_TO:
-		if p.curToken.Type == TOKEN_BE {
+	case token.TO:
+		if p.curToken.Type == token.BE {
 			suggestion = "\n  Perhaps you meant: 'to be' instead of just 'be'"
 		}
-	case TOKEN_BE:
-		if p.curToken.Type == TOKEN_TO {
+	case token.BE:
+		if p.curToken.Type == token.TO {
 			suggestion = "\n  Perhaps you meant: 'to be' (you have 'to' but missing 'be')"
 		}
-	case TOKEN_THATS:
+	case token.THATS:
 		suggestion = "\n  Perhaps you forgot to end the block with 'thats it.'"
-	case TOKEN_IT:
-		if p.curToken.Type == TOKEN_PERIOD {
+	case token.IT:
+		if p.curToken.Type == token.PERIOD {
 			suggestion = "\n  Perhaps you meant: 'thats it.' (missing 'it' before the period)"
 		}
-	case TOKEN_IDENTIFIER:
-		if p.curToken.Type == TOKEN_NUMBER || p.curToken.Type == TOKEN_STRING {
+	case token.IDENTIFIER:
+		if p.curToken.Type == token.NUMBER || p.curToken.Type == token.STRING {
 			suggestion = "\n  A variable name (identifier) is expected here, not a literal value"
 		}
 	}
@@ -68,10 +72,11 @@ func (p *Parser) makeExpectError(expected TokenType) error {
 		expected, p.curToken.Type, p.curToken.Line, p.curToken.Col, suggestion)
 }
 
-func (p *Parser) Parse() (*Program, error) {
-	program := &Program{}
+// Parse parses the tokens and returns the AST
+func (p *Parser) Parse() (*ast.Program, error) {
+	program := &ast.Program{}
 
-	for p.curToken.Type != TOKEN_EOF {
+	for p.curToken.Type != token.EOF {
 		stmt, err := p.parseStatement()
 		if err != nil {
 			return nil, err
@@ -84,34 +89,34 @@ func (p *Parser) Parse() (*Program, error) {
 	return program, nil
 }
 
-func (p *Parser) parseStatement() (Statement, error) {
+func (p *Parser) parseStatement() (ast.Statement, error) {
 	switch p.curToken.Type {
-	case TOKEN_DECLARE:
+	case token.DECLARE:
 		return p.parseDeclaration()
-	case TOKEN_SET:
+	case token.SET:
 		return p.parseAssignment()
-	case TOKEN_CALL:
+	case token.CALL:
 		return p.parseCall()
-	case TOKEN_IF:
+	case token.IF:
 		return p.parseIfStatement()
-	case TOKEN_REPEAT:
+	case token.REPEAT:
 		return p.parseRepeat()
-	case TOKEN_FOR:
+	case token.FOR:
 		return p.parseForEach()
-	case TOKEN_PRINT:
+	case token.PRINT:
 		return p.parseOutput()
-	case TOKEN_RETURN:
+	case token.RETURN:
 		return p.parseReturn()
-	case TOKEN_TOGGLE:
+	case token.TOGGLE:
 		return p.parseToggle()
 	default:
 		suggestion := ""
 		switch p.curToken.Type {
-		case TOKEN_IDENTIFIER:
+		case token.IDENTIFIER:
 			suggestion = "\n  Hint: To use a variable, you need 'Set', 'Print', or another statement keyword"
-		case TOKEN_NUMBER, TOKEN_STRING:
+		case token.NUMBER, token.STRING:
 			suggestion = "\n  Hint: Literal values must be part of a statement (e.g., 'Print \"text\".' or 'Declare x to be 5.')"
-		case TOKEN_EOF:
+		case token.EOF:
 			suggestion = "\n  Hint: Unexpected end of file - check if you have unclosed blocks"
 		}
 		return nil, fmt.Errorf("unexpected token: %v (value: '%s') at line %d, column %d%s",
@@ -119,43 +124,43 @@ func (p *Parser) parseStatement() (Statement, error) {
 	}
 }
 
-func (p *Parser) parseDeclaration() (Statement, error) {
-	if err := p.expectToken(TOKEN_DECLARE); err != nil {
+func (p *Parser) parseDeclaration() (ast.Statement, error) {
+	if err := p.expectToken(token.DECLARE); err != nil {
 		return nil, err
 	}
 	p.nextToken()
 
 	// Check if it's a function declaration
-	if p.curToken.Type == TOKEN_FUNCTION {
+	if p.curToken.Type == token.FUNCTION {
 		return p.parseFunctionDeclaration()
 	}
 
 	// Variable or constant declaration
 	nameToken := p.curToken
-	if p.curToken.Type != TOKEN_IDENTIFIER {
+	if p.curToken.Type != token.IDENTIFIER {
 		return nil, fmt.Errorf("expected identifier after 'Declare', got %v at line %d", p.curToken.Type, p.curToken.Line)
 	}
 	p.nextToken()
 
-	if err := p.expectToken(TOKEN_TO); err != nil {
+	if err := p.expectToken(token.TO); err != nil {
 		return nil, err
 	}
 	p.nextToken()
 
 	// Check for "always" keyword (can appear before or after "be")
 	isConstant := false
-	if p.curToken.Type == TOKEN_ALWAYS {
+	if p.curToken.Type == token.ALWAYS {
 		isConstant = true
 		p.nextToken()
 	}
 
-	if err := p.expectToken(TOKEN_BE); err != nil {
+	if err := p.expectToken(token.BE); err != nil {
 		return nil, err
 	}
 	p.nextToken()
 
 	// Check for "always" after "be" if not seen before
-	if !isConstant && p.curToken.Type == TOKEN_ALWAYS {
+	if !isConstant && p.curToken.Type == token.ALWAYS {
 		isConstant = true
 		p.nextToken()
 	}
@@ -165,26 +170,26 @@ func (p *Parser) parseDeclaration() (Statement, error) {
 		return nil, err
 	}
 
-	if err := p.expectToken(TOKEN_PERIOD); err != nil {
+	if err := p.expectToken(token.PERIOD); err != nil {
 		return nil, err
 	}
 	p.nextToken()
 
-	return &VariableDecl{
+	return &ast.VariableDecl{
 		Name:       nameToken.Value,
 		IsConstant: isConstant,
 		Value:      value,
 	}, nil
 }
 
-func (p *Parser) parseFunctionDeclaration() (Statement, error) {
-	if err := p.expectToken(TOKEN_FUNCTION); err != nil {
+func (p *Parser) parseFunctionDeclaration() (ast.Statement, error) {
+	if err := p.expectToken(token.FUNCTION); err != nil {
 		return nil, err
 	}
 	p.nextToken()
 
 	nameToken := p.curToken
-	if p.curToken.Type != TOKEN_IDENTIFIER {
+	if p.curToken.Type != token.IDENTIFIER {
 		return nil, fmt.Errorf("expected function name, got %v", p.curToken.Type)
 	}
 	p.nextToken()
@@ -192,25 +197,25 @@ func (p *Parser) parseFunctionDeclaration() (Statement, error) {
 	var parameters []string
 
 	// Skip optional "that" before "takes" or "does"
-	if p.curToken.Type == TOKEN_THAT {
+	if p.curToken.Type == token.THAT {
 		p.nextToken()
 	}
 
-	if p.curToken.Type == TOKEN_TAKES {
+	if p.curToken.Type == token.TAKES {
 		p.nextToken()
 		for {
 			paramToken := p.curToken
-			if p.curToken.Type != TOKEN_IDENTIFIER {
+			if p.curToken.Type != token.IDENTIFIER {
 				return nil, fmt.Errorf("expected parameter name")
 			}
 			parameters = append(parameters, paramToken.Value)
 			p.nextToken()
 
-			if p.curToken.Type != TOKEN_AND {
+			if p.curToken.Type != token.AND {
 				break
 			}
 			// Check if "and" is followed by "does" (end of params) or another param
-			if p.peekToken.Type == TOKEN_DOES {
+			if p.peekToken.Type == token.DOES {
 				break
 			}
 			p.nextToken()
@@ -218,26 +223,26 @@ func (p *Parser) parseFunctionDeclaration() (Statement, error) {
 	}
 
 	// Support "and does" syntax after parameters
-	if p.curToken.Type == TOKEN_AND {
+	if p.curToken.Type == token.AND {
 		p.nextToken()
 	}
 
-	if err := p.expectToken(TOKEN_DOES); err != nil {
+	if err := p.expectToken(token.DOES); err != nil {
 		return nil, err
 	}
 	p.nextToken()
 
-	if err := p.expectToken(TOKEN_THE); err != nil {
+	if err := p.expectToken(token.THE); err != nil {
 		return nil, err
 	}
 	p.nextToken()
 
-	if err := p.expectToken(TOKEN_FOLLOWING); err != nil {
+	if err := p.expectToken(token.FOLLOWING); err != nil {
 		return nil, err
 	}
 	p.nextToken()
 
-	if err := p.expectToken(TOKEN_COLON); err != nil {
+	if err := p.expectToken(token.COLON); err != nil {
 		return nil, err
 	}
 	p.nextToken()
@@ -247,67 +252,67 @@ func (p *Parser) parseFunctionDeclaration() (Statement, error) {
 		return nil, err
 	}
 
-	if p.curToken.Type == TOKEN_THATS {
+	if p.curToken.Type == token.THATS {
 		p.nextToken()
-		if err := p.expectToken(TOKEN_IT); err != nil {
+		if err := p.expectToken(token.IT); err != nil {
 			return nil, err
 		}
 		p.nextToken()
-		if err := p.expectToken(TOKEN_PERIOD); err != nil {
+		if err := p.expectToken(token.PERIOD); err != nil {
 			return nil, err
 		}
 		p.nextToken()
 	}
 
-	return &FunctionDecl{
+	return &ast.FunctionDecl{
 		Name:       nameToken.Value,
 		Parameters: parameters,
 		Body:       body,
 	}, nil
 }
 
-func (p *Parser) parseAssignment() (Statement, error) {
-	if err := p.expectToken(TOKEN_SET); err != nil {
+func (p *Parser) parseAssignment() (ast.Statement, error) {
+	if err := p.expectToken(token.SET); err != nil {
 		return nil, err
 	}
 	p.nextToken()
 
 	// Check for "Set the item at position X in Y to be Z"
-	if p.curToken.Type == TOKEN_THE {
+	if p.curToken.Type == token.THE {
 		p.nextToken()
-		if p.curToken.Type == TOKEN_ITEM {
+		if p.curToken.Type == token.ITEM {
 			return p.parseIndexAssignment()
 		}
 		return nil, fmt.Errorf("unexpected token after 'Set the': %v", p.curToken.Type)
 	}
 
 	nameToken := p.curToken
-	if p.curToken.Type != TOKEN_IDENTIFIER {
+	if p.curToken.Type != token.IDENTIFIER {
 		return nil, fmt.Errorf("expected identifier after 'Set'")
 	}
 	p.nextToken()
 
-	if err := p.expectToken(TOKEN_TO); err != nil {
+	if err := p.expectToken(token.TO); err != nil {
 		return nil, err
 	}
 	p.nextToken()
 
-	if err := p.expectToken(TOKEN_BE); err != nil {
+	if err := p.expectToken(token.BE); err != nil {
 		return nil, err
 	}
 	p.nextToken()
 
 	// Check for function call result
-	if p.curToken.Type == TOKEN_THE {
+	if p.curToken.Type == token.THE {
 		p.nextToken()
-		if p.curToken.Type == TOKEN_IDENTIFIER && strings.EqualFold(p.curToken.Value, "result") {
+		if p.curToken.Type == token.IDENTIFIER && strings.EqualFold(p.curToken.Value, "result") {
 			p.nextToken()
-			if p.curToken.Type == TOKEN_OF {
+			if p.curToken.Type == token.OF {
 				p.nextToken()
-				if p.curToken.Type == TOKEN_CALLING {
+				if p.curToken.Type == token.CALLING {
 					p.nextToken()
 					funcName := p.curToken.Value
-					if p.curToken.Type != TOKEN_IDENTIFIER {
+					if p.curToken.Type != token.IDENTIFIER {
 						return nil, fmt.Errorf("expected function name")
 					}
 					p.nextToken()
@@ -317,14 +322,14 @@ func (p *Parser) parseAssignment() (Statement, error) {
 						return nil, err
 					}
 
-					if err := p.expectToken(TOKEN_PERIOD); err != nil {
+					if err := p.expectToken(token.PERIOD); err != nil {
 						return nil, err
 					}
 					p.nextToken()
 
-					return &Assignment{
+					return &ast.Assignment{
 						Name: nameToken.Value,
-						Value: &FunctionCall{
+						Value: &ast.FunctionCall{
 							Name:      funcName,
 							Arguments: args,
 						},
@@ -339,31 +344,31 @@ func (p *Parser) parseAssignment() (Statement, error) {
 		return nil, err
 	}
 
-	if err := p.expectToken(TOKEN_PERIOD); err != nil {
+	if err := p.expectToken(token.PERIOD); err != nil {
 		return nil, err
 	}
 	p.nextToken()
 
-	return &Assignment{
+	return &ast.Assignment{
 		Name:  nameToken.Value,
 		Value: value,
 	}, nil
 }
 
 // parseIndexAssignment parses "the item at position X in Y to be Z"
-func (p *Parser) parseIndexAssignment() (Statement, error) {
+func (p *Parser) parseIndexAssignment() (ast.Statement, error) {
 	// Already consumed "Set the", now at "item"
-	if err := p.expectToken(TOKEN_ITEM); err != nil {
+	if err := p.expectToken(token.ITEM); err != nil {
 		return nil, err
 	}
 	p.nextToken()
 
-	if err := p.expectToken(TOKEN_AT); err != nil {
+	if err := p.expectToken(token.AT); err != nil {
 		return nil, err
 	}
 	p.nextToken()
 
-	if err := p.expectToken(TOKEN_POSITION); err != nil {
+	if err := p.expectToken(token.POSITION); err != nil {
 		return nil, err
 	}
 	p.nextToken()
@@ -373,23 +378,23 @@ func (p *Parser) parseIndexAssignment() (Statement, error) {
 		return nil, err
 	}
 
-	if err := p.expectToken(TOKEN_IN); err != nil {
+	if err := p.expectToken(token.IN); err != nil {
 		return nil, err
 	}
 	p.nextToken()
 
 	listName := p.curToken.Value
-	if p.curToken.Type != TOKEN_IDENTIFIER {
+	if p.curToken.Type != token.IDENTIFIER {
 		return nil, fmt.Errorf("expected list name")
 	}
 	p.nextToken()
 
-	if err := p.expectToken(TOKEN_TO); err != nil {
+	if err := p.expectToken(token.TO); err != nil {
 		return nil, err
 	}
 	p.nextToken()
 
-	if err := p.expectToken(TOKEN_BE); err != nil {
+	if err := p.expectToken(token.BE); err != nil {
 		return nil, err
 	}
 	p.nextToken()
@@ -399,45 +404,45 @@ func (p *Parser) parseIndexAssignment() (Statement, error) {
 		return nil, err
 	}
 
-	if err := p.expectToken(TOKEN_PERIOD); err != nil {
+	if err := p.expectToken(token.PERIOD); err != nil {
 		return nil, err
 	}
 	p.nextToken()
 
-	return &IndexAssignment{
+	return &ast.IndexAssignment{
 		ListName: listName,
 		Index:    index,
 		Value:    value,
 	}, nil
 }
 
-func (p *Parser) parseCall() (Statement, error) {
-	if err := p.expectToken(TOKEN_CALL); err != nil {
+func (p *Parser) parseCall() (ast.Statement, error) {
+	if err := p.expectToken(token.CALL); err != nil {
 		return nil, err
 	}
 	p.nextToken()
 
 	funcName := p.curToken.Value
-	if p.curToken.Type != TOKEN_IDENTIFIER {
+	if p.curToken.Type != token.IDENTIFIER {
 		return nil, fmt.Errorf("expected function name after 'Call'")
 	}
 	p.nextToken()
 
-	if err := p.expectToken(TOKEN_PERIOD); err != nil {
+	if err := p.expectToken(token.PERIOD); err != nil {
 		return nil, err
 	}
 	p.nextToken()
 
-	return &CallStatement{
-		FunctionCall: &FunctionCall{
+	return &ast.CallStatement{
+		FunctionCall: &ast.FunctionCall{
 			Name:      funcName,
-			Arguments: []Expression{},
+			Arguments: []ast.Expression{},
 		},
 	}, nil
 }
 
-func (p *Parser) parseIfStatement() (Statement, error) {
-	if err := p.expectToken(TOKEN_IF); err != nil {
+func (p *Parser) parseIfStatement() (ast.Statement, error) {
+	if err := p.expectToken(token.IF); err != nil {
 		return nil, err
 	}
 	p.nextToken()
@@ -447,12 +452,12 @@ func (p *Parser) parseIfStatement() (Statement, error) {
 		return nil, err
 	}
 
-	if err := p.expectToken(TOKEN_COMMA); err != nil {
+	if err := p.expectToken(token.COMMA); err != nil {
 		return nil, err
 	}
 	p.nextToken()
 
-	if err := p.expectToken(TOKEN_THEN); err != nil {
+	if err := p.expectToken(token.THEN); err != nil {
 		return nil, err
 	}
 	p.nextToken()
@@ -462,22 +467,22 @@ func (p *Parser) parseIfStatement() (Statement, error) {
 		return nil, err
 	}
 
-	var elseIfParts []*ElseIfPart
-	var elseBody []Statement
+	var elseIfParts []*ast.ElseIfPart
+	var elseBody []ast.Statement
 
-	for p.curToken.Type == TOKEN_OTHERWISE {
+	for p.curToken.Type == token.OTHERWISE {
 		p.nextToken()
-		if p.curToken.Type == TOKEN_IF {
+		if p.curToken.Type == token.IF {
 			p.nextToken()
 			eifCond, err := p.parseComparison()
 			if err != nil {
 				return nil, err
 			}
-			if err := p.expectToken(TOKEN_COMMA); err != nil {
+			if err := p.expectToken(token.COMMA); err != nil {
 				return nil, err
 			}
 			p.nextToken()
-			if err := p.expectToken(TOKEN_THEN); err != nil {
+			if err := p.expectToken(token.THEN); err != nil {
 				return nil, err
 			}
 			p.nextToken()
@@ -485,7 +490,7 @@ func (p *Parser) parseIfStatement() (Statement, error) {
 			if err != nil {
 				return nil, err
 			}
-			elseIfParts = append(elseIfParts, &ElseIfPart{
+			elseIfParts = append(elseIfParts, &ast.ElseIfPart{
 				Condition: eifCond,
 				Body:      eifBody,
 			})
@@ -498,19 +503,19 @@ func (p *Parser) parseIfStatement() (Statement, error) {
 		}
 	}
 
-	if p.curToken.Type == TOKEN_THATS {
+	if p.curToken.Type == token.THATS {
 		p.nextToken()
-		if err := p.expectToken(TOKEN_IT); err != nil {
+		if err := p.expectToken(token.IT); err != nil {
 			return nil, err
 		}
 		p.nextToken()
-		if err := p.expectToken(TOKEN_PERIOD); err != nil {
+		if err := p.expectToken(token.PERIOD); err != nil {
 			return nil, err
 		}
 		p.nextToken()
 	}
 
-	return &IfStatement{
+	return &ast.IfStatement{
 		Condition: condition,
 		Then:      thenBody,
 		ElseIf:    elseIfParts,
@@ -518,31 +523,31 @@ func (p *Parser) parseIfStatement() (Statement, error) {
 	}, nil
 }
 
-func (p *Parser) parseRepeat() (Statement, error) {
-	if err := p.expectToken(TOKEN_REPEAT); err != nil {
+func (p *Parser) parseRepeat() (ast.Statement, error) {
+	if err := p.expectToken(token.REPEAT); err != nil {
 		return nil, err
 	}
 	p.nextToken()
 
-	if err := p.expectToken(TOKEN_THE); err != nil {
+	if err := p.expectToken(token.THE); err != nil {
 		return nil, err
 	}
 	p.nextToken()
 
-	if err := p.expectToken(TOKEN_FOLLOWING); err != nil {
+	if err := p.expectToken(token.FOLLOWING); err != nil {
 		return nil, err
 	}
 	p.nextToken()
 
 	// Check if it's a while loop or for loop
-	if p.curToken.Type == TOKEN_WHILE {
+	if p.curToken.Type == token.WHILE {
 		p.nextToken()
 		condition, err := p.parseComparison()
 		if err != nil {
 			return nil, err
 		}
 
-		if err := p.expectToken(TOKEN_COLON); err != nil {
+		if err := p.expectToken(token.COLON); err != nil {
 			return nil, err
 		}
 		p.nextToken()
@@ -552,19 +557,19 @@ func (p *Parser) parseRepeat() (Statement, error) {
 			return nil, err
 		}
 
-		if p.curToken.Type == TOKEN_THATS {
+		if p.curToken.Type == token.THATS {
 			p.nextToken()
-			if err := p.expectToken(TOKEN_IT); err != nil {
+			if err := p.expectToken(token.IT); err != nil {
 				return nil, err
 			}
 			p.nextToken()
-			if err := p.expectToken(TOKEN_PERIOD); err != nil {
+			if err := p.expectToken(token.PERIOD); err != nil {
 				return nil, err
 			}
 			p.nextToken()
 		}
 
-		return &WhileLoop{
+		return &ast.WhileLoop{
 			Condition: condition,
 			Body:      body,
 		}, nil
@@ -576,12 +581,12 @@ func (p *Parser) parseRepeat() (Statement, error) {
 		return nil, err
 	}
 
-	if err := p.expectToken(TOKEN_TIMES); err != nil {
+	if err := p.expectToken(token.TIMES); err != nil {
 		return nil, err
 	}
 	p.nextToken()
 
-	if err := p.expectToken(TOKEN_COLON); err != nil {
+	if err := p.expectToken(token.COLON); err != nil {
 		return nil, err
 	}
 	p.nextToken()
@@ -591,48 +596,48 @@ func (p *Parser) parseRepeat() (Statement, error) {
 		return nil, err
 	}
 
-	if p.curToken.Type == TOKEN_THATS {
+	if p.curToken.Type == token.THATS {
 		p.nextToken()
-		if err := p.expectToken(TOKEN_IT); err != nil {
+		if err := p.expectToken(token.IT); err != nil {
 			return nil, err
 		}
 		p.nextToken()
-		if err := p.expectToken(TOKEN_PERIOD); err != nil {
+		if err := p.expectToken(token.PERIOD); err != nil {
 			return nil, err
 		}
 		p.nextToken()
 	}
 
-	return &ForLoop{
+	return &ast.ForLoop{
 		Count: countExpr,
 		Body:  body,
 	}, nil
 }
 
-func (p *Parser) parseForEach() (Statement, error) {
-	if err := p.expectToken(TOKEN_FOR); err != nil {
+func (p *Parser) parseForEach() (ast.Statement, error) {
+	if err := p.expectToken(token.FOR); err != nil {
 		return nil, err
 	}
 	p.nextToken()
 
-	if err := p.expectToken(TOKEN_EACH); err != nil {
+	if err := p.expectToken(token.EACH); err != nil {
 		return nil, err
 	}
 	p.nextToken()
 
 	itemToken := p.curToken
 	// Allow both IDENTIFIER and ITEM keyword as the loop variable name
-	if p.curToken.Type != TOKEN_IDENTIFIER && p.curToken.Type != TOKEN_ITEM {
+	if p.curToken.Type != token.IDENTIFIER && p.curToken.Type != token.ITEM {
 		return nil, fmt.Errorf("expected item identifier in for-each")
 	}
-	// Get the value, treating TOKEN_ITEM as "item" string
+	// Get the value, treating token.ITEM as "item" string
 	itemName := itemToken.Value
-	if itemToken.Type == TOKEN_ITEM {
+	if itemToken.Type == token.ITEM {
 		itemName = "item"
 	}
 	p.nextToken()
 
-	if err := p.expectToken(TOKEN_IN); err != nil {
+	if err := p.expectToken(token.IN); err != nil {
 		return nil, err
 	}
 	p.nextToken()
@@ -642,27 +647,27 @@ func (p *Parser) parseForEach() (Statement, error) {
 		return nil, err
 	}
 
-	if err := p.expectToken(TOKEN_COMMA); err != nil {
+	if err := p.expectToken(token.COMMA); err != nil {
 		return nil, err
 	}
 	p.nextToken()
 
-	if err := p.expectToken(TOKEN_DO); err != nil {
+	if err := p.expectToken(token.DO); err != nil {
 		return nil, err
 	}
 	p.nextToken()
 
-	if err := p.expectToken(TOKEN_THE); err != nil {
+	if err := p.expectToken(token.THE); err != nil {
 		return nil, err
 	}
 	p.nextToken()
 
-	if err := p.expectToken(TOKEN_FOLLOWING); err != nil {
+	if err := p.expectToken(token.FOLLOWING); err != nil {
 		return nil, err
 	}
 	p.nextToken()
 
-	if err := p.expectToken(TOKEN_COLON); err != nil {
+	if err := p.expectToken(token.COLON); err != nil {
 		return nil, err
 	}
 	p.nextToken()
@@ -672,50 +677,27 @@ func (p *Parser) parseForEach() (Statement, error) {
 		return nil, err
 	}
 
-	if p.curToken.Type == TOKEN_THATS {
+	if p.curToken.Type == token.THATS {
 		p.nextToken()
-		if err := p.expectToken(TOKEN_IT); err != nil {
+		if err := p.expectToken(token.IT); err != nil {
 			return nil, err
 		}
 		p.nextToken()
-		if err := p.expectToken(TOKEN_PERIOD); err != nil {
+		if err := p.expectToken(token.PERIOD); err != nil {
 			return nil, err
 		}
 		p.nextToken()
 	}
 
-	return &ForEachLoop{
+	return &ast.ForEachLoop{
 		Item: itemName,
 		List: listExpr,
 		Body: body,
 	}, nil
 }
 
-func (p *Parser) parseOutput() (Statement, error) {
-	if err := p.expectToken(TOKEN_PRINT); err != nil {
-		return nil, err
-	}
-	p.nextToken()
-
-	// Check for "the value of" pattern - handled by parseExpression now via parsePrimary
-	// Just parse expression directly
-	value, err := p.parseExpression()
-	if err != nil {
-		return nil, err
-	}
-
-	if err := p.expectToken(TOKEN_PERIOD); err != nil {
-		return nil, err
-	}
-	p.nextToken()
-
-	return &OutputStatement{
-		Value: value,
-	}, nil
-}
-
-func (p *Parser) parseReturn() (Statement, error) {
-	if err := p.expectToken(TOKEN_RETURN); err != nil {
+func (p *Parser) parseOutput() (ast.Statement, error) {
+	if err := p.expectToken(token.PRINT); err != nil {
 		return nil, err
 	}
 	p.nextToken()
@@ -725,20 +707,41 @@ func (p *Parser) parseReturn() (Statement, error) {
 		return nil, err
 	}
 
-	if err := p.expectToken(TOKEN_PERIOD); err != nil {
+	if err := p.expectToken(token.PERIOD); err != nil {
 		return nil, err
 	}
 	p.nextToken()
 
-	return &ReturnStatement{
+	return &ast.OutputStatement{
 		Value: value,
 	}, nil
 }
 
-func (p *Parser) parseBlock() ([]Statement, error) {
-	var statements []Statement
+func (p *Parser) parseReturn() (ast.Statement, error) {
+	if err := p.expectToken(token.RETURN); err != nil {
+		return nil, err
+	}
+	p.nextToken()
 
-	for p.curToken.Type != TOKEN_THATS && p.curToken.Type != TOKEN_OTHERWISE && p.curToken.Type != TOKEN_EOF {
+	value, err := p.parseExpression()
+	if err != nil {
+		return nil, err
+	}
+
+	if err := p.expectToken(token.PERIOD); err != nil {
+		return nil, err
+	}
+	p.nextToken()
+
+	return &ast.ReturnStatement{
+		Value: value,
+	}, nil
+}
+
+func (p *Parser) parseBlock() ([]ast.Statement, error) {
+	var statements []ast.Statement
+
+	for p.curToken.Type != token.THATS && p.curToken.Type != token.OTHERWISE && p.curToken.Type != token.EOF {
 		stmt, err := p.parseStatement()
 		if err != nil {
 			return nil, err
@@ -751,22 +754,22 @@ func (p *Parser) parseBlock() ([]Statement, error) {
 	return statements, nil
 }
 
-func (p *Parser) parseComparison() (Expression, error) {
+func (p *Parser) parseComparison() (ast.Expression, error) {
 	left, err := p.parseExpression()
 	if err != nil {
 		return nil, err
 	}
 
 	switch p.curToken.Type {
-	case TOKEN_IS_EQUAL_TO, TOKEN_IS_LESS_THAN, TOKEN_IS_GREATER_THAN,
-		TOKEN_IS_LESS_EQUAL, TOKEN_IS_GREATER_EQUAL, TOKEN_IS_NOT_EQUAL:
+	case token.IS_EQUAL_TO, token.IS_LESS_THAN, token.IS_GREATER_THAN,
+		token.IS_LESS_EQUAL, token.IS_GREATER_EQUAL, token.IS_NOT_EQUAL:
 		op := p.curToken.Value
 		p.nextToken()
 		right, err := p.parseExpression()
 		if err != nil {
 			return nil, err
 		}
-		return &BinaryExpression{
+		return &ast.BinaryExpression{
 			Left:     left,
 			Operator: op,
 			Right:    right,
@@ -776,19 +779,19 @@ func (p *Parser) parseComparison() (Expression, error) {
 	return left, nil
 }
 
-func (p *Parser) parseExpression() (Expression, error) {
+func (p *Parser) parseExpression() (ast.Expression, error) {
 	return p.parseAdditive()
 }
 
-func (p *Parser) parseAdditive() (Expression, error) {
+func (p *Parser) parseAdditive() (ast.Expression, error) {
 	left, err := p.parseMultiplicative()
 	if err != nil {
 		return nil, err
 	}
 
-	for p.curToken.Type == TOKEN_PLUS || p.curToken.Type == TOKEN_MINUS {
+	for p.curToken.Type == token.PLUS || p.curToken.Type == token.MINUS {
 		op := "+"
-		if p.curToken.Type == TOKEN_MINUS {
+		if p.curToken.Type == token.MINUS {
 			op = "-"
 		}
 		p.nextToken()
@@ -796,7 +799,7 @@ func (p *Parser) parseAdditive() (Expression, error) {
 		if err != nil {
 			return nil, err
 		}
-		left = &BinaryExpression{
+		left = &ast.BinaryExpression{
 			Left:     left,
 			Operator: op,
 			Right:    right,
@@ -806,15 +809,15 @@ func (p *Parser) parseAdditive() (Expression, error) {
 	return left, nil
 }
 
-func (p *Parser) parseMultiplicative() (Expression, error) {
+func (p *Parser) parseMultiplicative() (ast.Expression, error) {
 	left, err := p.parsePrimary()
 	if err != nil {
 		return nil, err
 	}
 
-	for p.curToken.Type == TOKEN_STAR || p.curToken.Type == TOKEN_SLASH {
+	for p.curToken.Type == token.STAR || p.curToken.Type == token.SLASH {
 		op := "*"
-		if p.curToken.Type == TOKEN_SLASH {
+		if p.curToken.Type == token.SLASH {
 			op = "/"
 		}
 		p.nextToken()
@@ -822,7 +825,7 @@ func (p *Parser) parseMultiplicative() (Expression, error) {
 		if err != nil {
 			return nil, err
 		}
-		left = &BinaryExpression{
+		left = &ast.BinaryExpression{
 			Left:     left,
 			Operator: op,
 			Right:    right,
@@ -832,119 +835,119 @@ func (p *Parser) parseMultiplicative() (Expression, error) {
 	return left, nil
 }
 
-func (p *Parser) parsePrimary() (Expression, error) {
+func (p *Parser) parsePrimary() (ast.Expression, error) {
 	switch p.curToken.Type {
-	case TOKEN_NUMBER:
+	case token.NUMBER:
 		value, _ := strconv.ParseFloat(p.curToken.Value, 64)
 		p.nextToken()
-		return &NumberLiteral{Value: value}, nil
+		return &ast.NumberLiteral{Value: value}, nil
 
-	case TOKEN_STRING:
+	case token.STRING:
 		value := p.curToken.Value
 		p.nextToken()
-		return &StringLiteral{Value: value}, nil
+		return &ast.StringLiteral{Value: value}, nil
 
-	case TOKEN_TRUE:
+	case token.TRUE:
 		p.nextToken()
-		return &BooleanLiteral{Value: true}, nil
+		return &ast.BooleanLiteral{Value: true}, nil
 
-	case TOKEN_FALSE:
+	case token.FALSE:
 		p.nextToken()
-		return &BooleanLiteral{Value: false}, nil
+		return &ast.BooleanLiteral{Value: false}, nil
 
-	case TOKEN_LBRACKET:
+	case token.LBRACKET:
 		return p.parseList()
 
-	case TOKEN_THE:
+	case token.THE:
 		// Handle "the item at position X in Y" or "the length of X" or "the remainder of X divided by Y" or "the location of X"
 		p.nextToken()
-		if p.curToken.Type == TOKEN_ITEM {
+		if p.curToken.Type == token.ITEM {
 			return p.parseIndexExpression()
 		}
-		if p.curToken.Type == TOKEN_LENGTH {
+		if p.curToken.Type == token.LENGTH {
 			return p.parseLengthExpression()
 		}
-		if p.curToken.Type == TOKEN_REMAINDER {
+		if p.curToken.Type == token.REMAINDER {
 			return p.parseRemainderExpression()
 		}
-		if p.curToken.Type == TOKEN_LOCATION {
+		if p.curToken.Type == token.LOCATION {
 			return p.parseLocationExpression()
 		}
 		// Fall back to treating "the" as part of other constructs
 		// Put back THE token context - this is for "the value of" pattern
-		if p.curToken.Type == TOKEN_VALUE {
+		if p.curToken.Type == token.VALUE {
 			p.nextToken()
-			if p.curToken.Type == TOKEN_OF {
+			if p.curToken.Type == token.OF {
 				p.nextToken()
 			}
 			return p.parseExpression()
 		}
 		return nil, fmt.Errorf("unexpected token after 'the': %v at line %d", p.curToken.Type, p.curToken.Line)
 
-	case TOKEN_ITEM:
+	case token.ITEM:
 		// "item" used as a variable name (not "the item at position")
 		p.nextToken()
-		return &Identifier{Name: "item"}, nil
+		return &ast.Identifier{Name: "item"}, nil
 
-	case TOKEN_IDENTIFIER:
+	case token.IDENTIFIER:
 		name := p.curToken.Value
 		p.nextToken()
 
 		// Check if it's a function call
-		if p.curToken.Type == TOKEN_LPAREN {
+		if p.curToken.Type == token.LPAREN {
 			p.nextToken()
 			args, err := p.parseFunctionCallArgs()
 			if err != nil {
 				return nil, err
 			}
-			if err := p.expectToken(TOKEN_RPAREN); err != nil {
+			if err := p.expectToken(token.RPAREN); err != nil {
 				return nil, err
 			}
 			p.nextToken()
-			return &FunctionCall{
+			return &ast.FunctionCall{
 				Name:      name,
 				Arguments: args,
 			}, nil
 		}
 
 		// Check if it's array indexing with brackets: list[0]
-		if p.curToken.Type == TOKEN_LBRACKET {
+		if p.curToken.Type == token.LBRACKET {
 			p.nextToken()
 			index, err := p.parseExpression()
 			if err != nil {
 				return nil, err
 			}
-			if err := p.expectToken(TOKEN_RBRACKET); err != nil {
+			if err := p.expectToken(token.RBRACKET); err != nil {
 				return nil, err
 			}
 			p.nextToken()
-			return &IndexExpression{
-				List:  &Identifier{Name: name},
+			return &ast.IndexExpression{
+				List:  &ast.Identifier{Name: name},
 				Index: index,
 			}, nil
 		}
 
-		return &Identifier{Name: name}, nil
+		return &ast.Identifier{Name: name}, nil
 
-	case TOKEN_LPAREN:
+	case token.LPAREN:
 		p.nextToken()
 		expr, err := p.parseExpression()
 		if err != nil {
 			return nil, err
 		}
-		if err := p.expectToken(TOKEN_RPAREN); err != nil {
+		if err := p.expectToken(token.RPAREN); err != nil {
 			return nil, err
 		}
 		p.nextToken()
 		return expr, nil
 
-	case TOKEN_MINUS:
+	case token.MINUS:
 		p.nextToken()
 		expr, err := p.parsePrimary()
 		if err != nil {
 			return nil, err
 		}
-		return &UnaryExpression{
+		return &ast.UnaryExpression{
 			Operator: "-",
 			Right:    expr,
 		}, nil
@@ -955,19 +958,19 @@ func (p *Parser) parsePrimary() (Expression, error) {
 }
 
 // parseIndexExpression parses "item at position X in Y"
-func (p *Parser) parseIndexExpression() (Expression, error) {
+func (p *Parser) parseIndexExpression() (ast.Expression, error) {
 	// Already consumed "the", now at "item"
-	if err := p.expectToken(TOKEN_ITEM); err != nil {
+	if err := p.expectToken(token.ITEM); err != nil {
 		return nil, err
 	}
 	p.nextToken()
 
-	if err := p.expectToken(TOKEN_AT); err != nil {
+	if err := p.expectToken(token.AT); err != nil {
 		return nil, err
 	}
 	p.nextToken()
 
-	if err := p.expectToken(TOKEN_POSITION); err != nil {
+	if err := p.expectToken(token.POSITION); err != nil {
 		return nil, err
 	}
 	p.nextToken()
@@ -977,7 +980,7 @@ func (p *Parser) parseIndexExpression() (Expression, error) {
 		return nil, err
 	}
 
-	if err := p.expectToken(TOKEN_IN); err != nil {
+	if err := p.expectToken(token.IN); err != nil {
 		return nil, err
 	}
 	p.nextToken()
@@ -987,21 +990,21 @@ func (p *Parser) parseIndexExpression() (Expression, error) {
 		return nil, err
 	}
 
-	return &IndexExpression{
+	return &ast.IndexExpression{
 		List:  list,
 		Index: index,
 	}, nil
 }
 
 // parseLengthExpression parses "length of X"
-func (p *Parser) parseLengthExpression() (Expression, error) {
+func (p *Parser) parseLengthExpression() (ast.Expression, error) {
 	// Already consumed "the", now at "length"
-	if err := p.expectToken(TOKEN_LENGTH); err != nil {
+	if err := p.expectToken(token.LENGTH); err != nil {
 		return nil, err
 	}
 	p.nextToken()
 
-	if err := p.expectToken(TOKEN_OF); err != nil {
+	if err := p.expectToken(token.OF); err != nil {
 		return nil, err
 	}
 	p.nextToken()
@@ -1011,20 +1014,20 @@ func (p *Parser) parseLengthExpression() (Expression, error) {
 		return nil, err
 	}
 
-	return &LengthExpression{
+	return &ast.LengthExpression{
 		List: list,
 	}, nil
 }
 
 // parseRemainderExpression parses "remainder of X divided by Y" or "remainder of X / Y"
-func (p *Parser) parseRemainderExpression() (Expression, error) {
+func (p *Parser) parseRemainderExpression() (ast.Expression, error) {
 	// Already consumed "the", now at "remainder"
-	if err := p.expectToken(TOKEN_REMAINDER); err != nil {
+	if err := p.expectToken(token.REMAINDER); err != nil {
 		return nil, err
 	}
 	p.nextToken()
 
-	if err := p.expectToken(TOKEN_OF); err != nil {
+	if err := p.expectToken(token.OF); err != nil {
 		return nil, err
 	}
 	p.nextToken()
@@ -1036,13 +1039,13 @@ func (p *Parser) parseRemainderExpression() (Expression, error) {
 	}
 
 	// Expect "divided by" or "/"
-	if p.curToken.Type == TOKEN_DIVIDED {
+	if p.curToken.Type == token.DIVIDED {
 		p.nextToken()
-		if err := p.expectToken(TOKEN_BY); err != nil {
+		if err := p.expectToken(token.BY); err != nil {
 			return nil, err
 		}
 		p.nextToken()
-	} else if p.curToken.Type == TOKEN_SLASH {
+	} else if p.curToken.Type == token.SLASH {
 		p.nextToken()
 	} else {
 		return nil, fmt.Errorf("expected 'divided by' or '/' after remainder operand, got %v", p.curToken.Type)
@@ -1054,7 +1057,7 @@ func (p *Parser) parseRemainderExpression() (Expression, error) {
 		return nil, err
 	}
 
-	return &BinaryExpression{
+	return &ast.BinaryExpression{
 		Left:     left,
 		Operator: "%",
 		Right:    right,
@@ -1062,74 +1065,74 @@ func (p *Parser) parseRemainderExpression() (Expression, error) {
 }
 
 // parseLocationExpression parses "location of X"
-func (p *Parser) parseLocationExpression() (Expression, error) {
+func (p *Parser) parseLocationExpression() (ast.Expression, error) {
 	// Already consumed "the", now at "location"
-	if err := p.expectToken(TOKEN_LOCATION); err != nil {
+	if err := p.expectToken(token.LOCATION); err != nil {
 		return nil, err
 	}
 	p.nextToken()
 
-	if err := p.expectToken(TOKEN_OF); err != nil {
+	if err := p.expectToken(token.OF); err != nil {
 		return nil, err
 	}
 	p.nextToken()
 
 	// Get the variable name
-	if p.curToken.Type != TOKEN_IDENTIFIER {
+	if p.curToken.Type != token.IDENTIFIER {
 		return nil, fmt.Errorf("expected variable name after 'the location of', got %v", p.curToken.Type)
 	}
 	name := p.curToken.Value
 	p.nextToken()
 
-	return &LocationExpression{
+	return &ast.LocationExpression{
 		Name: name,
 	}, nil
 }
 
 // parseToggle parses "Toggle x." or "Toggle the value of x."
-func (p *Parser) parseToggle() (Statement, error) {
-	if err := p.expectToken(TOKEN_TOGGLE); err != nil {
+func (p *Parser) parseToggle() (ast.Statement, error) {
+	if err := p.expectToken(token.TOGGLE); err != nil {
 		return nil, err
 	}
 	p.nextToken()
 
 	// Handle "toggle the value of x"
-	if p.curToken.Type == TOKEN_THE {
+	if p.curToken.Type == token.THE {
 		p.nextToken()
-		if p.curToken.Type == TOKEN_VALUE {
+		if p.curToken.Type == token.VALUE {
 			p.nextToken()
-			if p.curToken.Type == TOKEN_OF {
+			if p.curToken.Type == token.OF {
 				p.nextToken()
 			}
 		}
 	}
 
 	// Get the variable name
-	if p.curToken.Type != TOKEN_IDENTIFIER {
+	if p.curToken.Type != token.IDENTIFIER {
 		return nil, fmt.Errorf("expected variable name after 'Toggle', got %v", p.curToken.Type)
 	}
 	name := p.curToken.Value
 	p.nextToken()
 
-	if err := p.expectToken(TOKEN_PERIOD); err != nil {
+	if err := p.expectToken(token.PERIOD); err != nil {
 		return nil, err
 	}
 	p.nextToken()
 
-	return &ToggleStatement{
+	return &ast.ToggleStatement{
 		Name: name,
 	}, nil
 }
 
-func (p *Parser) parseList() (Expression, error) {
-	if err := p.expectToken(TOKEN_LBRACKET); err != nil {
+func (p *Parser) parseList() (ast.Expression, error) {
+	if err := p.expectToken(token.LBRACKET); err != nil {
 		return nil, err
 	}
 	p.nextToken()
 
-	var elements []Expression
+	var elements []ast.Expression
 
-	if p.curToken.Type != TOKEN_RBRACKET {
+	if p.curToken.Type != token.RBRACKET {
 		for {
 			elem, err := p.parseExpression()
 			if err != nil {
@@ -1137,25 +1140,25 @@ func (p *Parser) parseList() (Expression, error) {
 			}
 			elements = append(elements, elem)
 
-			if p.curToken.Type != TOKEN_COMMA {
+			if p.curToken.Type != token.COMMA {
 				break
 			}
 			p.nextToken()
 		}
 	}
 
-	if err := p.expectToken(TOKEN_RBRACKET); err != nil {
+	if err := p.expectToken(token.RBRACKET); err != nil {
 		return nil, err
 	}
 	p.nextToken()
 
-	return &ListLiteral{Elements: elements}, nil
+	return &ast.ListLiteral{Elements: elements}, nil
 }
 
-func (p *Parser) parseFunctionArguments() ([]Expression, error) {
-	var args []Expression
+func (p *Parser) parseFunctionArguments() ([]ast.Expression, error) {
+	var args []ast.Expression
 
-	if p.curToken.Type == TOKEN_WITH {
+	if p.curToken.Type == token.WITH {
 		p.nextToken()
 		for {
 			arg, err := p.parseExpression()
@@ -1164,7 +1167,7 @@ func (p *Parser) parseFunctionArguments() ([]Expression, error) {
 			}
 			args = append(args, arg)
 
-			if p.curToken.Type != TOKEN_AND {
+			if p.curToken.Type != token.AND {
 				break
 			}
 			p.nextToken()
@@ -1174,10 +1177,10 @@ func (p *Parser) parseFunctionArguments() ([]Expression, error) {
 	return args, nil
 }
 
-func (p *Parser) parseFunctionCallArgs() ([]Expression, error) {
-	var args []Expression
+func (p *Parser) parseFunctionCallArgs() ([]ast.Expression, error) {
+	var args []ast.Expression
 
-	if p.curToken.Type != TOKEN_RPAREN {
+	if p.curToken.Type != token.RPAREN {
 		for {
 			arg, err := p.parseExpression()
 			if err != nil {
@@ -1185,7 +1188,7 @@ func (p *Parser) parseFunctionCallArgs() ([]Expression, error) {
 			}
 			args = append(args, arg)
 
-			if p.curToken.Type != TOKEN_COMMA {
+			if p.curToken.Type != token.COMMA {
 				break
 			}
 			p.nextToken()

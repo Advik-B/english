@@ -1,0 +1,38 @@
+# Test standard library functions
+
+# Math functions
+print "=== Math Functions ===".
+declare result to be 0.
+set result to be the result of calling sqrt with 16.
+print "sqrt(16) =", result.
+
+set result to be the result of calling pow with 2 and 8.
+print "pow(2, 8) =", result.
+
+set result to be the result of calling abs with -42.
+print "abs(-42) =", result.
+
+# String functions
+print "=== String Functions ===".
+declare text to be "hello world".
+set text to be the result of calling uppercase with text.
+print "uppercase:", text.
+
+set text to be the result of calling lowercase with text.
+print "lowercase:", text.
+
+# List functions
+print "=== List Functions ===".
+declare mylist to be [3, 1, 4, 1, 5, 9, 2, 6].
+print "Original list:", mylist.
+
+set mylist to be the result of calling sort with mylist.
+print "Sorted:", mylist.
+
+set mylist to be the result of calling reverse with mylist.
+print "Reversed:", mylist.
+
+set mylist to be the result of calling append with mylist and 100.
+print "After append(100):", mylist.
+
+print "All stdlib functions work!".

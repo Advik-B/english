@@ -67,6 +67,7 @@ func (fc *FunctionCall) expressionNode() {}
 // CallStatement represents a function call as a statement
 type CallStatement struct {
 	FunctionCall *FunctionCall
+	MethodCall   *MethodCall
 }
 
 func (cs *CallStatement) node()          {}
@@ -241,3 +242,133 @@ type LocationExpression struct {
 
 func (le *LocationExpression) node()           {}
 func (le *LocationExpression) expressionNode() {}
+
+// StructDecl represents a struct type declaration
+type StructDecl struct {
+	Name         string
+	Fields       []*StructField
+	Methods      []*FunctionDecl
+}
+
+func (sd *StructDecl) node()          {}
+func (sd *StructDecl) statementNode() {}
+
+// StructField represents a field in a struct definition
+type StructField struct {
+	Name         string
+	TypeName     string
+	DefaultValue Expression
+	IsUnsigned   bool
+}
+
+// StructInstantiation creates a new instance of a struct
+type StructInstantiation struct {
+	StructName   string
+	FieldValues  map[string]Expression
+	FieldOrder   []string // Maintain field order
+}
+
+func (si *StructInstantiation) node()           {}
+func (si *StructInstantiation) expressionNode() {}
+
+// FieldAccess accesses a field of a struct
+type FieldAccess struct {
+	Object Expression
+	Field  string
+}
+
+func (fa *FieldAccess) node()           {}
+func (fa *FieldAccess) expressionNode() {}
+
+// FieldAssignment assigns a value to a struct field
+type FieldAssignment struct {
+	ObjectName string
+	Field      string
+	Value      Expression
+}
+
+func (fa *FieldAssignment) node()          {}
+func (fa *FieldAssignment) statementNode() {}
+
+// TryStatement represents try/error/finally block
+type TryStatement struct {
+	TryBody     []Statement
+	ErrorVar    string // Variable name to bind the error to
+	ErrorBody   []Statement
+	FinallyBody []Statement
+}
+
+func (ts *TryStatement) node()          {}
+func (ts *TryStatement) statementNode() {}
+
+// RaiseStatement raises an error
+type RaiseStatement struct {
+	Message   Expression
+	ErrorType string // Optional error type
+}
+
+func (rs *RaiseStatement) node()          {}
+func (rs *RaiseStatement) statementNode() {}
+
+// TypeExpression gets the type of a value
+type TypeExpression struct {
+	Value Expression
+}
+
+func (te *TypeExpression) node()           {}
+func (te *TypeExpression) expressionNode() {}
+
+// CastExpression casts a value to a type
+type CastExpression struct {
+	Value    Expression
+	TypeName string
+}
+
+func (ce *CastExpression) node()           {}
+func (ce *CastExpression) expressionNode() {}
+
+// ReferenceExpression creates a reference to a variable
+type ReferenceExpression struct {
+	Name string
+}
+
+func (re *ReferenceExpression) node()           {}
+func (re *ReferenceExpression) expressionNode() {}
+
+// CopyExpression creates a copy of a value
+type CopyExpression struct {
+	Value Expression
+}
+
+func (ce *CopyExpression) node()           {}
+func (ce *CopyExpression) expressionNode() {}
+
+// SwapStatement swaps two variables
+type SwapStatement struct {
+	Name1 string
+	Name2 string
+}
+
+func (ss *SwapStatement) node()          {}
+func (ss *SwapStatement) statementNode() {}
+
+// TypedVariableDecl represents a variable declaration with explicit type
+type TypedVariableDecl struct {
+	Name       string
+	TypeName   string
+	IsConstant bool
+	Value      Expression
+}
+
+func (tvd *TypedVariableDecl) node()          {}
+func (tvd *TypedVariableDecl) statementNode() {}
+
+// MethodCall represents calling a method on an object
+type MethodCall struct {
+	Object     Expression
+	MethodName string
+	Arguments  []Expression
+}
+
+func (mc *MethodCall) node()           {}
+func (mc *MethodCall) expressionNode() {}

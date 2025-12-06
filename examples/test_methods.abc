@@ -1,0 +1,34 @@
+# Test struct methods and method call syntax
+
+declare Person as a structure with the following fields:
+    name is a string.
+    age is an unsigned integer with 18 being the default.
+    
+    let talk be a function that does the following:
+        print "Hello, my name is", name.
+    thats it.
+    
+    let greet be a function that takes other and does the following:
+        print name, "says hello to", other.
+    thats it.
+thats it.
+
+# Create instance
+let p be a new instance of Person with the following fields:
+    name is "Alice".
+    age is 25.
+thats it.
+
+# Test method call with "from" (preferred)
+print "Testing 'call from' syntax:".
+call talk from p.
+
+# Test method call with "on"
+print "Testing 'call on' syntax:".
+call talk on p.
+
+# Test method with arguments
+print "Testing method with arguments:".
+call greet from p with "Bob".
+
+print "All method call syntaxes work!".

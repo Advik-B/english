@@ -76,6 +76,25 @@ Declare x to be 5.
 Declare name to be "John".
 Declare pi to always be 3.14159.  # Constant (immutable)
 Set x to 10.
+
+# Alternative 'let' syntax
+let y be 10.
+let y be equal to 10.
+let y = 10.
+let y equal 10.
+let constant always be 100.  # Constant
+let constant be always 100.  # Constant (alternative)
+```
+
+### Scoped Variables
+
+Variables can be declared inside blocks, loops, and functions. Each iteration of a loop creates a new scope:
+
+```english
+repeat the following 3 times:
+    let temp be 42.  # 'temp' is scoped to each iteration
+    Print temp.
+thats it.
 ```
 
 ### Boolean Values

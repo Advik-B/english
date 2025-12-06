@@ -18,6 +18,8 @@ const (
 
 	// Keywords
 	DECLARE
+	LET
+	EQUAL
 	FUNCTION
 	THAT
 	DOES
@@ -76,6 +78,7 @@ const (
 	MINUS
 	STAR
 	SLASH
+	ASSIGN
 
 	// Comparison operators (multi-word)
 	IS_EQUAL_TO
@@ -111,6 +114,10 @@ func (t Type) String() string {
 		return "IDENTIFIER"
 	case DECLARE:
 		return "DECLARE"
+	case LET:
+		return "LET"
+	case EQUAL:
+		return "EQUAL"
 	case FUNCTION:
 		return "FUNCTION"
 	case THAT:
@@ -223,6 +230,8 @@ func (t Type) String() string {
 		return "STAR"
 	case SLASH:
 		return "SLASH"
+	case ASSIGN:
+		return "ASSIGN"
 	case IS_EQUAL_TO:
 		return "IS_EQUAL_TO"
 	case IS_LESS_THAN:

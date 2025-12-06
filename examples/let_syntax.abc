@@ -1,0 +1,52 @@
+# Let Syntax Example
+# Demonstrates the various ways to declare variables using 'let'
+
+Print "=== Let Syntax Examples ===".
+
+# Basic let syntax
+let x be 10.
+Print "let x be 10:".
+Print the value of x.
+
+# Assignment style
+let y = 20.
+Print "let y = 20:".
+Print the value of y.
+
+# Equal keyword
+let z equal 30.
+Print "let z equal 30:".
+Print the value of z.
+
+# Constant with always before be
+let PI always be 3.14159.
+Print "let PI always be 3.14159:".
+Print the value of PI.
+
+# Constant with always after be
+let E be always 2.71828.
+Print "let E be always 2.71828:".
+Print the value of E.
+
+# Equal to syntax (natural English)
+let max be equal to 100.
+Print "let max be equal to 100:".
+Print the value of max.
+
+# Using let with expressions
+let sum = x + y + z.
+Print "let sum = x + y + z:".
+Print the value of sum.
+
+# Scoped variables in loops
+Print "Scoped variables in loops:".
+Declare counter to be 0.
+repeat the following while counter is less than 3:
+    # This variable is scoped to each loop iteration
+    let temp = counter * 10.
+    Print "temp:".
+    Print the value of temp.
+    Set counter to be counter + 1.
+thats it.
+
+Print "=== Done! ===".

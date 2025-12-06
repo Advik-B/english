@@ -97,6 +97,8 @@ func (l *Lexer) readIdentifier() string {
 // keywords maps lowercase keywords to their token types
 var keywords = map[string]token.Type{
 	"declare":   token.DECLARE,
+	"let":       token.LET,
+	"equal":     token.EQUAL,
 	"function":  token.FUNCTION,
 	"that":      token.THAT,
 	"does":      token.DOES,
@@ -205,6 +207,9 @@ func (l *Lexer) NextToken() token.Token {
 		l.readChar()
 	case '/':
 		tok = token.Token{Type: token.SLASH, Value: "/", Line: line, Col: col}
+		l.readChar()
+	case '=':
+		tok = token.Token{Type: token.ASSIGN, Value: "=", Line: line, Col: col}
 		l.readChar()
 	case '"', '\'':
 		quote := l.ch

@@ -98,6 +98,8 @@ func (p *Parser) parseStatement() (ast.Statement, error) {
 	switch p.curToken.Type {
 	case token.DECLARE:
 		return p.parseDeclaration()
+	case token.LET:
+		return p.parseLetDeclaration()
 	case token.BREAK:
 		return p.parseBreak()
 	case token.SET:
@@ -129,6 +131,79 @@ func (p *Parser) parseStatement() (ast.Statement, error) {
 		return nil, fmt.Errorf("unexpected token: %v (value: '%s') at line %d, column %d%s",
 			p.curToken.Type, p.curToken.Value, p.curToken.Line, p.curToken.Col, suggestion)
 	}
+}
+
+// parseLetDeclaration parses various "let" syntax forms:
+// - let x be 10.
+// - let x be equal to 10.
+// - let x always be 10.
+// - let x be always 10.
+// - let x = 10.
+// - let x equal 10.
+func (p *Parser) parseLetDeclaration() (ast.Statement, error) {
+	if err := p.expectToken(token.LET); err != nil {
+		return nil, err
+	}
+	p.nextToken()
+
+	// Get variable name
+	nameToken := p.curToken
+	if p.curToken.Type != token.IDENTIFIER {
+		return nil, fmt.Errorf("expected identifier after 'let', got %v at line %d", p.curToken.Type, p.curToken.Line)
+	}
+	p.nextToken()
+
+	isConstant := false
+
+	// Handle different syntax forms
+	switch p.curToken.Type {
+	case token.ASSIGN:
+		// let x = 10.
+		p.nextToken()
+	case token.EQUAL:
+		// let x equal 10.
+		p.nextToken()
+	case token.ALWAYS:
+		// let x always be 10.
+		isConstant = true
+		p.nextToken()
+		if err := p.expectToken(token.BE); err != nil {
+			return nil, err
+		}
+		p.nextToken()
+	case token.BE:
+		// let x be 10. OR let x be equal to 10. OR let x be always 10.
+		p.nextToken()
+		if p.curToken.Type == token.ALWAYS {
+			isConstant = true
+			p.nextToken()
+		} else if p.curToken.Type == token.EQUAL {
+			// let x be equal to 10.
+			p.nextToken()
+			if err := p.expectToken(token.TO); err != nil {
+				return nil, err
+			}
+			p.nextToken()
+		}
+	default:
+		return nil, fmt.Errorf("expected 'be', '=', 'equal', or 'always' after variable name, got %v at line %d", p.curToken.Type, p.curToken.Line)
+	}
+
+	value, err := p.parseExpression()
+	if err != nil {
+		return nil, err
+	}
+
+	if err := p.expectToken(token.PERIOD); err != nil {
+		return nil, err
+	}
+	p.nextToken()
+
+	return &ast.VariableDecl{
+		Name:       nameToken.Value,
+		IsConstant: isConstant,
+		Value:      value,
+	}, nil
 }
 
 func (p *Parser) parseDeclaration() (ast.Statement, error) {

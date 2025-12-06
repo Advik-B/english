@@ -7,6 +7,7 @@ type Environment struct {
 	variables map[string]Value
 	constants map[string]bool
 	functions map[string]*FunctionValue
+	structs   map[string]*StructDefinition
 	parent    *Environment
 }
 
@@ -16,6 +17,7 @@ func NewEnvironment() *Environment {
 		variables: make(map[string]Value),
 		constants: make(map[string]bool),
 		functions: make(map[string]*FunctionValue),
+		structs:   make(map[string]*StructDefinition),
 	}
 }
 
@@ -25,6 +27,7 @@ func (e *Environment) NewChild() *Environment {
 		variables: make(map[string]Value),
 		constants: make(map[string]bool),
 		functions: make(map[string]*FunctionValue),
+		structs:   make(map[string]*StructDefinition),
 		parent:    e,
 	}
 }
@@ -104,4 +107,20 @@ func (e *Environment) GetAllFunctions() map[string]*FunctionValue {
 // IsConstant returns whether a variable is a constant
 func (e *Environment) IsConstant(name string) bool {
 	return e.constants[name]
+}
+
+// GetStruct retrieves a struct definition from the environment
+func (e *Environment) GetStruct(name string) (*StructDefinition, bool) {
+	if s, ok := e.structs[name]; ok {
+		return s, ok
+	}
+	if e.parent != nil {
+		return e.parent.GetStruct(name)
+	}
+	return nil, false
+}
+
+// DefineStruct declares a new struct definition
+func (e *Environment) DefineStruct(name string, def *StructDefinition) {
+	e.structs[name] = def
 }

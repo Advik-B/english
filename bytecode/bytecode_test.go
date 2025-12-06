@@ -270,10 +270,10 @@ func TestEncodeDecodeIfStatement(t *testing.T) {
 					Right:    &ast.NumberLiteral{Value: 5},
 				},
 				Then: []ast.Statement{
-					&ast.OutputStatement{Value: &ast.StringLiteral{Value: "yes"}},
+					&ast.OutputStatement{Values: []ast.Expression{&ast.StringLiteral{Value: "yes"}}, Newline: true},
 				},
 				Else: []ast.Statement{
-					&ast.OutputStatement{Value: &ast.StringLiteral{Value: "no"}},
+					&ast.OutputStatement{Values: []ast.Expression{&ast.StringLiteral{Value: "no"}}, Newline: true},
 				},
 			},
 		},
@@ -309,7 +309,7 @@ func TestEncodeDecodeIfElseIf(t *testing.T) {
 				ElseIf: []*ast.ElseIfPart{
 					{
 						Condition: &ast.BooleanLiteral{Value: true},
-						Body:      []ast.Statement{&ast.OutputStatement{Value: &ast.StringLiteral{Value: "else if"}}},
+						Body:      []ast.Statement{&ast.OutputStatement{Values: []ast.Expression{&ast.StringLiteral{Value: "else if"}}, Newline: true}},
 					},
 				},
 				Else: []ast.Statement{},
@@ -379,7 +379,7 @@ func TestEncodeDecodeForLoop(t *testing.T) {
 			&ast.ForLoop{
 				Count: &ast.NumberLiteral{Value: 5},
 				Body: []ast.Statement{
-					&ast.OutputStatement{Value: &ast.StringLiteral{Value: "hello"}},
+					&ast.OutputStatement{Values: []ast.Expression{&ast.StringLiteral{Value: "hello"}}, Newline: true},
 				},
 			},
 		},
@@ -410,7 +410,7 @@ func TestEncodeDecodeForEachLoop(t *testing.T) {
 				Item: "item",
 				List: &ast.Identifier{Name: "myList"},
 				Body: []ast.Statement{
-					&ast.OutputStatement{Value: &ast.Identifier{Name: "item"}},
+					&ast.OutputStatement{Values: []ast.Expression{&ast.Identifier{Name: "item"}}, Newline: true},
 				},
 			},
 		},
@@ -526,10 +526,11 @@ func TestEncodeDecodeIndexExpression(t *testing.T) {
 	program := &ast.Program{
 		Statements: []ast.Statement{
 			&ast.OutputStatement{
-				Value: &ast.IndexExpression{
+				Values: []ast.Expression{&ast.IndexExpression{
 					List:  &ast.Identifier{Name: "myList"},
 					Index: &ast.NumberLiteral{Value: 0},
-				},
+				}},
+				Newline: true,
 			},
 		},
 	}
@@ -547,7 +548,7 @@ func TestEncodeDecodeIndexExpression(t *testing.T) {
 	}
 
 	output := decoded.Statements[0].(*ast.OutputStatement)
-	indexExpr := output.Value.(*ast.IndexExpression)
+	indexExpr := output.Values[0].(*ast.IndexExpression)
 	ident := indexExpr.List.(*ast.Identifier)
 	if ident.Name != "myList" {
 		t.Errorf("Expected list name 'myList', got %q", ident.Name)
@@ -587,9 +588,10 @@ func TestEncodeDecodeLengthExpression(t *testing.T) {
 	program := &ast.Program{
 		Statements: []ast.Statement{
 			&ast.OutputStatement{
-				Value: &ast.LengthExpression{
+				Values: []ast.Expression{&ast.LengthExpression{
 					List: &ast.Identifier{Name: "myList"},
-				},
+				}},
+				Newline: true,
 			},
 		},
 	}
@@ -607,7 +609,7 @@ func TestEncodeDecodeLengthExpression(t *testing.T) {
 	}
 
 	output := decoded.Statements[0].(*ast.OutputStatement)
-	lengthExpr := output.Value.(*ast.LengthExpression)
+	lengthExpr := output.Values[0].(*ast.LengthExpression)
 	ident := lengthExpr.List.(*ast.Identifier)
 	if ident.Name != "myList" {
 		t.Errorf("Expected list name 'myList', got %q", ident.Name)
@@ -618,7 +620,8 @@ func TestEncodeDecodeLocationExpression(t *testing.T) {
 	program := &ast.Program{
 		Statements: []ast.Statement{
 			&ast.OutputStatement{
-				Value: &ast.LocationExpression{Name: "x"},
+				Values:  []ast.Expression{&ast.LocationExpression{Name: "x"}},
+				Newline: true,
 			},
 		},
 	}
@@ -636,7 +639,7 @@ func TestEncodeDecodeLocationExpression(t *testing.T) {
 	}
 
 	output := decoded.Statements[0].(*ast.OutputStatement)
-	locExpr := output.Value.(*ast.LocationExpression)
+	locExpr := output.Values[0].(*ast.LocationExpression)
 	if locExpr.Name != "x" {
 		t.Errorf("Expected name 'x', got %q", locExpr.Name)
 	}

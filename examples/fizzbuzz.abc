@@ -1,0 +1,34 @@
+# FizzBuzz Example
+# Classic programming challenge: Print numbers 1-20
+# - Print "Fizz" for multiples of 3
+# - Print "Buzz" for multiples of 5
+# - Print "FizzBuzz" for multiples of both 3 and 5
+# - Print the number otherwise
+
+Print "=== FizzBuzz ===".
+Print "Numbers 1-20 with FizzBuzz rules:".
+
+Declare i to be 1.
+Declare mod3 to be 0.
+Declare mod5 to be 0.
+
+repeat the following while i is less than or equal to 20:
+    Set mod3 to be the remainder of i divided by 3.
+    Set mod5 to be the remainder of i divided by 5.
+    
+    If mod3 is equal to 0, then
+        If mod5 is equal to 0, then
+            Print "FizzBuzz".
+        otherwise
+            Print "Fizz".
+        thats it.
+    otherwise if mod5 is equal to 0, then
+        Print "Buzz".
+    otherwise
+        Print the value of i.
+    thats it.
+    
+    Set i to be i + 1.
+thats it.
+
+Print "=== Done! ===".

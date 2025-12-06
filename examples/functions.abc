@@ -1,0 +1,76 @@
+# Functions Example
+# Demonstrates function declaration, parameters, and return values
+
+Print "=== Function Examples ===".
+
+# Simple function with no parameters
+Declare function sayHello that does the following:
+    Print "Hello from the function!".
+thats it.
+
+Print "Calling sayHello:".
+Call sayHello.
+
+# Function with parameters
+Declare function greet that takes name and does the following:
+    Print "Hello,", the value of name, "! Nice to meet you.".
+thats it.
+
+Print "Calling greet with 'Alice':".
+Declare x to be 0.
+Set x to be the result of calling greet with "Alice".
+
+# Function with return value
+Declare function add that takes a and b and does the following:
+    Return a + b.
+thats it.
+
+Print "Adding 5 and 7:".
+Declare sum to be 0.
+Set sum to be the result of calling add with 5 and 7.
+Print "Result:", the value of sum.
+
+# Function with multiple parameters
+Declare function multiply that takes x and y and does the following:
+    Return x * y.
+thats it.
+
+Print "Multiplying 6 and 8:".
+Declare product to be 0.
+Set product to be the result of calling multiply with 6 and 8.
+Print "Result:", the value of product.
+
+# Nested function calls
+Print "Nested: add(multiply(2, 3), 4)".
+Declare inner to be 0.
+Set inner to be the result of calling multiply with 2 and 3.
+Declare outer to be 0.
+Set outer to be the result of calling add with inner and 4.
+Print "Result:", the value of outer.
+
+# Function that uses conditionals
+Declare function max that takes a and b and does the following:
+    If a is greater than b, then
+        Return a.
+    otherwise
+        Return b.
+    thats it.
+thats it.
+
+Print "Max of 10 and 25:".
+Declare maximum to be 0.
+Set maximum to be the result of calling max with 10 and 25.
+Print "Result:", the value of maximum.
+
+# Function that calculates average
+Declare function average that takes x and y and z and does the following:
+    Declare total to be x + y + z.
+    Return total / 3.
+thats it.
+
+Print "Average of 10, 20, 30:".
+Declare avg to be 0.
+Set avg to be the result of calling average with 10 and 20 and 30.
+Print "Result:", the value of avg.
+
+Print "=== Done! ===".

@@ -1,0 +1,55 @@
+# Pattern Printing Example
+# Prints various patterns using loops
+
+Print "=== Pattern Examples ===".
+
+# Triangle pattern using numbers
+Print "Number triangle:".
+Declare row to be 1.
+Declare col to be 1.
+repeat the following while row is less than or equal to 5:
+    Set col to be 1.
+    repeat the following while col is less than or equal to row:
+        Print the value of col.
+        Set col to be col + 1.
+    thats it.
+    Set row to be row + 1.
+thats it.
+
+# Countdown pattern
+Print "Countdown rows:".
+Declare i to be 5.
+Declare j to be 0.
+repeat the following while i is greater than or equal to 1:
+    Set j to be i.
+    repeat the following while j is greater than or equal to 1:
+        Print the value of j.
+        Set j to be j - 1.
+    thats it.
+    Set i to be i - 1.
+thats it.
+
+# Square pattern with border check
+Print "Square pattern 4x4:".
+Declare r to be 1.
+Declare c to be 1.
+repeat the following while r is less than or equal to 4:
+    Set c to be 1.
+    repeat the following while c is less than or equal to 4:
+        If r is equal to 1, then
+            Print "*".
+        otherwise if r is equal to 4, then
+            Print "*".
+        otherwise if c is equal to 1, then
+            Print "*".
+        otherwise if c is equal to 4, then
+            Print "*".
+        otherwise
+            Print " ".
+        thats it.
+        Set c to be c + 1.
+    thats it.
+    Set r to be r + 1.
+thats it.
+
+Print "=== Done! ===".

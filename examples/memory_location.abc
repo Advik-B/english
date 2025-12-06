@@ -1,0 +1,28 @@
+# Memory Location Example
+# Demonstrates the memory location feature
+
+Print "=== Memory Location Example ===".
+
+# Declare some variables
+Declare x to be 42.
+Declare name to be "Alice".
+Declare numbers to be [1, 2, 3].
+
+# Print their memory locations
+Print "Variable x value:", the value of x.
+Print "Variable x location:", the location of x.
+
+Print "Variable name value:", the value of name.
+Print "Variable name location:", the location of name.
+
+Print "Variable numbers value:", the value of numbers.
+Print "Variable numbers location:", the location of numbers.
+
+# Show that different variables have different locations
+Declare y to be 42.
+Print "Variable y (same value as x):", the value of y.
+Print "Variable y location:", the location of y.
+
+Print "Note: x and y have the same value but different memory locations".
+
+Print "=== Done! ===".

@@ -91,10 +91,9 @@ func (e *Environment) Set(name string, value Value) error {
 		e.variables[name] = value
 		return nil
 	}
+	// Look up the scope chain for the variable and set it where it's found
 	if e.parent != nil {
-		if _, exists := e.parent.variables[name]; exists {
-			return e.parent.Set(name, value)
-		}
+		return e.parent.Set(name, value)
 	}
 	e.variables[name] = value
 	return nil
@@ -390,11 +389,20 @@ func (ev *Evaluator) evalCallStatement(cs *ast.CallStatement) (Value, error) {
 }
 
 func (ev *Evaluator) evalOutput(os *ast.OutputStatement) (Value, error) {
-	value, err := ev.Eval(os.Value)
-	if err != nil {
-		return nil, err
+	var parts []string
+	for _, expr := range os.Values {
+		value, err := ev.Eval(expr)
+		if err != nil {
+			return nil, err
+		}
+		parts = append(parts, ToString(value))
 	}
-	fmt.Println(ToString(value))
+	output := strings.Join(parts, " ")
+	if os.Newline {
+		fmt.Println(output)
+	} else {
+		fmt.Print(output)
+	}
 	return nil, nil
 }
 
@@ -412,8 +420,14 @@ func (ev *Evaluator) evalIfStatement(is *ast.IfStatement) (Value, error) {
 		return nil, err
 	}
 
+	oldEnv := ev.env
+
 	if ToBool(cond) {
-		return ev.evalStatements(is.Then)
+		// Create scoped environment for then block
+		ev.env = oldEnv.NewChild()
+		result, err := ev.evalStatements(is.Then)
+		ev.env = oldEnv
+		return result, err
 	}
 
 	for _, eif := range is.ElseIf {
@@ -422,12 +436,20 @@ func (ev *Evaluator) evalIfStatement(is *ast.IfStatement) (Value, error) {
 			return nil, err
 		}
 		if ToBool(cond) {
-			return ev.evalStatements(eif.Body)
+			// Create scoped environment for else-if block
+			ev.env = oldEnv.NewChild()
+			result, err := ev.evalStatements(eif.Body)
+			ev.env = oldEnv
+			return result, err
 		}
 	}
 
 	if is.Else != nil {
-		return ev.evalStatements(is.Else)
+		// Create scoped environment for else block
+		ev.env = oldEnv.NewChild()
+		result, err := ev.evalStatements(is.Else)
+		ev.env = oldEnv
+		return result, err
 	}
 
 	return nil, nil
@@ -444,7 +466,14 @@ func (ev *Evaluator) evalWhileLoop(wl *ast.WhileLoop) (Value, error) {
 			break
 		}
 
+		// Create a new child environment for each iteration to support scoped variables
+		childEnv := ev.env.NewChild()
+		oldEnv := ev.env
+		ev.env = childEnv
+
 		val, err := ev.evalStatements(wl.Body)
+		ev.env = oldEnv // Restore environment
+
 		if err != nil {
 			return nil, err
 		}
@@ -472,7 +501,14 @@ func (ev *Evaluator) evalForLoop(fl *ast.ForLoop) (Value, error) {
 
 	var result Value
 	for i := 0; i < int(num); i++ {
+		// Create a new child environment for each iteration to support scoped variables
+		childEnv := ev.env.NewChild()
+		oldEnv := ev.env
+		ev.env = childEnv
+
 		val, err := ev.evalStatements(fl.Body)
+		ev.env = oldEnv // Restore environment
+
 		if err != nil {
 			return nil, err
 		}
@@ -498,15 +534,18 @@ func (ev *Evaluator) evalForEachLoop(fel *ast.ForEachLoop) (Value, error) {
 		return nil, fmt.Errorf("cannot iterate over %T", list)
 	}
 
-	childEnv := ev.env.NewChild()
 	oldEnv := ev.env
-	ev.env = childEnv
-	defer func() { ev.env = oldEnv }()
 
 	var result Value
 	for _, item := range items {
-		ev.env.Set(fel.Item, item)
+		// Create a new child environment for each iteration to support scoped variables
+		childEnv := oldEnv.NewChild()
+		ev.env = childEnv
+		ev.env.Define(fel.Item, item, false)
+
 		val, err := ev.evalStatements(fel.Body)
+		ev.env = oldEnv // Restore environment
+
 		if err != nil {
 			return nil, err
 		}

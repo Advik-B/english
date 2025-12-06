@@ -98,6 +98,8 @@ func (p *Parser) parseStatement() (ast.Statement, error) {
 	switch p.curToken.Type {
 	case token.DECLARE:
 		return p.parseDeclaration()
+	case token.LET:
+		return p.parseLetDeclaration()
 	case token.BREAK:
 		return p.parseBreak()
 	case token.SET:
@@ -111,7 +113,9 @@ func (p *Parser) parseStatement() (ast.Statement, error) {
 	case token.FOR:
 		return p.parseForEach()
 	case token.PRINT:
-		return p.parseOutput()
+		return p.parseOutput(true)
+	case token.WRITE:
+		return p.parseOutput(false)
 	case token.RETURN:
 		return p.parseReturn()
 	case token.TOGGLE:
@@ -129,6 +133,79 @@ func (p *Parser) parseStatement() (ast.Statement, error) {
 		return nil, fmt.Errorf("unexpected token: %v (value: '%s') at line %d, column %d%s",
 			p.curToken.Type, p.curToken.Value, p.curToken.Line, p.curToken.Col, suggestion)
 	}
+}
+
+// parseLetDeclaration parses various "let" syntax forms:
+// - let x be 10.
+// - let x be equal to 10.
+// - let x always be 10.
+// - let x be always 10.
+// - let x = 10.
+// - let x equal 10.
+func (p *Parser) parseLetDeclaration() (ast.Statement, error) {
+	if err := p.expectToken(token.LET); err != nil {
+		return nil, err
+	}
+	p.nextToken()
+
+	// Get variable name
+	nameToken := p.curToken
+	if p.curToken.Type != token.IDENTIFIER {
+		return nil, fmt.Errorf("expected identifier after 'let', got %v at line %d", p.curToken.Type, p.curToken.Line)
+	}
+	p.nextToken()
+
+	isConstant := false
+
+	// Handle different syntax forms
+	switch p.curToken.Type {
+	case token.ASSIGN:
+		// let x = 10.
+		p.nextToken()
+	case token.EQUAL:
+		// let x equal 10.
+		p.nextToken()
+	case token.ALWAYS:
+		// let x always be 10.
+		isConstant = true
+		p.nextToken()
+		if err := p.expectToken(token.BE); err != nil {
+			return nil, err
+		}
+		p.nextToken()
+	case token.BE:
+		// let x be 10. OR let x be equal to 10. OR let x be always 10.
+		p.nextToken()
+		if p.curToken.Type == token.ALWAYS {
+			isConstant = true
+			p.nextToken()
+		} else if p.curToken.Type == token.EQUAL {
+			// let x be equal to 10.
+			p.nextToken()
+			if err := p.expectToken(token.TO); err != nil {
+				return nil, err
+			}
+			p.nextToken()
+		}
+	default:
+		return nil, fmt.Errorf("expected 'be', '=', 'equal', or 'always' after variable name, got %v at line %d", p.curToken.Type, p.curToken.Line)
+	}
+
+	value, err := p.parseExpression()
+	if err != nil {
+		return nil, err
+	}
+
+	if err := p.expectToken(token.PERIOD); err != nil {
+		return nil, err
+	}
+	p.nextToken()
+
+	return &ast.VariableDecl{
+		Name:       nameToken.Value,
+		IsConstant: isConstant,
+		Value:      value,
+	}, nil
 }
 
 func (p *Parser) parseDeclaration() (ast.Statement, error) {
@@ -309,39 +386,37 @@ func (p *Parser) parseAssignment() (ast.Statement, error) {
 		p.nextToken()
 	}
 
-	// Check for function call result
-	if p.curToken.Type == token.THE {
-		p.nextToken()
-		if p.curToken.Type == token.IDENTIFIER && strings.EqualFold(p.curToken.Value, resultKeyword) {
+	// Check for function call result: "the result of calling ..."
+	if p.curToken.Type == token.THE && p.peekToken.Type == token.IDENTIFIER && strings.EqualFold(p.peekToken.Value, resultKeyword) {
+		p.nextToken() // consume THE
+		p.nextToken() // consume "result"
+		if p.curToken.Type == token.OF {
 			p.nextToken()
-			if p.curToken.Type == token.OF {
+			if p.curToken.Type == token.CALLING {
 				p.nextToken()
-				if p.curToken.Type == token.CALLING {
-					p.nextToken()
-					funcName := p.curToken.Value
-					if p.curToken.Type != token.IDENTIFIER {
-						return nil, fmt.Errorf("expected function name")
-					}
-					p.nextToken()
-
-					args, err := p.parseFunctionArguments()
-					if err != nil {
-						return nil, err
-					}
-
-					if err := p.expectToken(token.PERIOD); err != nil {
-						return nil, err
-					}
-					p.nextToken()
-
-					return &ast.Assignment{
-						Name: nameToken.Value,
-						Value: &ast.FunctionCall{
-							Name:      funcName,
-							Arguments: args,
-						},
-					}, nil
+				funcName := p.curToken.Value
+				if p.curToken.Type != token.IDENTIFIER {
+					return nil, fmt.Errorf("expected function name")
 				}
+				p.nextToken()
+
+				args, err := p.parseFunctionArguments()
+				if err != nil {
+					return nil, err
+				}
+
+				if err := p.expectToken(token.PERIOD); err != nil {
+					return nil, err
+				}
+				p.nextToken()
+
+				return &ast.Assignment{
+					Name: nameToken.Value,
+					Value: &ast.FunctionCall{
+						Name:      funcName,
+						Arguments: args,
+					},
+				}, nil
 			}
 		}
 	}
@@ -735,15 +810,30 @@ func (p *Parser) parseForEach() (ast.Statement, error) {
 	}, nil
 }
 
-func (p *Parser) parseOutput() (ast.Statement, error) {
-	if err := p.expectToken(token.PRINT); err != nil {
-		return nil, err
+func (p *Parser) parseOutput(newline bool) (ast.Statement, error) {
+	// Accept either PRINT or WRITE token
+	if p.curToken.Type != token.PRINT && p.curToken.Type != token.WRITE {
+		return nil, fmt.Errorf("expected %v or %v, got %v", token.PRINT, token.WRITE, p.curToken.Type)
 	}
 	p.nextToken()
 
+	var values []ast.Expression
+
+	// Parse first expression
 	value, err := p.parseExpression()
 	if err != nil {
 		return nil, err
+	}
+	values = append(values, value)
+
+	// Parse additional comma-separated expressions
+	for p.curToken.Type == token.COMMA {
+		p.nextToken() // consume comma
+		value, err := p.parseExpression()
+		if err != nil {
+			return nil, err
+		}
+		values = append(values, value)
 	}
 
 	if err := p.expectToken(token.PERIOD); err != nil {
@@ -752,7 +842,8 @@ func (p *Parser) parseOutput() (ast.Statement, error) {
 	p.nextToken()
 
 	return &ast.OutputStatement{
-		Value: value,
+		Values:  values,
+		Newline: newline,
 	}, nil
 }
 
@@ -793,10 +884,15 @@ func (p *Parser) parseBreak() (ast.Statement, error) {
 	}
 	p.nextToken()
 
-	if err := p.expectToken(token.THE); err != nil {
-		return nil, err
+	// Accept "the" or "this" (as IDENTIFIER)
+	if p.curToken.Type == token.THE {
+		p.nextToken()
+	} else if p.curToken.Type == token.IDENTIFIER && strings.EqualFold(p.curToken.Value, "this") {
+		p.nextToken()
+	} else {
+		return nil, fmt.Errorf("expected 'the' or 'this', got %v at line %d, column %d",
+			p.curToken.Type, p.curToken.Line, p.curToken.Col)
 	}
-	p.nextToken()
 
 	if err := p.expectToken(token.LOOP); err != nil {
 		return nil, err

@@ -1,0 +1,44 @@
+# Bubble Sort Example
+# Implements bubble sort algorithm to sort an array
+
+Print "=== Bubble Sort ===".
+
+# Create an unsorted array
+Declare arr to be [64, 34, 25, 12, 22, 11, 90].
+Print "Original array:".
+for each item in arr, do the following:
+    Print the value of item.
+thats it.
+
+# Bubble sort implementation
+Declare n to be 7.
+Declare i to be 0.
+Declare j to be 0.
+Declare current to be 0.
+Declare next_pos to be 0.
+Declare nextval to be 0.
+
+repeat the following while i is less than n - 1:
+    Set j to be 0.
+    repeat the following while j is less than n - i - 1:
+        Set current to be the item at position j in arr.
+        Set next_pos to be j + 1.
+        Set nextval to be the item at position next_pos in arr.
+        
+        If current is greater than nextval, then
+            # Swap elements
+            Set the item at position j in arr to be nextval.
+            Set the item at position next_pos in arr to be current.
+        thats it.
+        
+        Set j to be j + 1.
+    thats it.
+    Set i to be i + 1.
+thats it.
+
+Print "Sorted array:".
+for each item in arr, do the following:
+    Print the value of item.
+thats it.
+
+Print "=== Done! ===".

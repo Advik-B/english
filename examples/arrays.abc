@@ -1,0 +1,43 @@
+# Array Operations Example
+# Demonstrates array creation, access, and modification
+
+Print "=== Array Operations ===".
+
+# Create an array
+Declare numbers to be [10, 20, 30, 40, 50].
+Print "Original array: [10, 20, 30, 40, 50]".
+
+# Access elements
+Print "First element:", the item at position 0 in numbers.
+Print "Third element:", the item at position 2 in numbers.
+Print "Last element:", the item at position 4 in numbers.
+
+# Modify an element
+Set the item at position 2 in numbers to be 99.
+Print "After setting position 2 to 99:", the item at position 2 in numbers.
+
+# Iterate through the array
+Print "All elements:".
+for each item in numbers, do the following:
+    Print the value of item.
+thats it.
+
+# Calculate sum of all elements
+Declare sum to be 0.
+Declare idx to be 0.
+Declare current to be 0.
+repeat the following while idx is less than 5:
+    Set current to be the item at position idx in numbers.
+    Set sum to be sum + current.
+    Set idx to be idx + 1.
+thats it.
+Print "Sum of all elements:", the value of sum.
+
+# String array example
+Declare names to be ["Alice", "Bob", "Charlie"].
+Print "Names in the array:".
+for each item in names, do the following:
+    Print the value of item.
+thats it.
+
+Print "=== Done! ===".

@@ -18,6 +18,8 @@ const (
 
 	// Keywords
 	DECLARE
+	LET
+	EQUAL
 	FUNCTION
 	THAT
 	DOES
@@ -63,6 +65,7 @@ const (
 	FALSE
 	TOGGLE
 	LOCATION
+	WRITE
 
 	// Operators and Punctuation
 	PERIOD
@@ -76,6 +79,7 @@ const (
 	MINUS
 	STAR
 	SLASH
+	ASSIGN
 
 	// Comparison operators (multi-word)
 	IS_EQUAL_TO
@@ -111,6 +115,10 @@ func (t Type) String() string {
 		return "IDENTIFIER"
 	case DECLARE:
 		return "DECLARE"
+	case LET:
+		return "LET"
+	case EQUAL:
+		return "EQUAL"
 	case FUNCTION:
 		return "FUNCTION"
 	case THAT:
@@ -201,6 +209,8 @@ func (t Type) String() string {
 		return "TOGGLE"
 	case LOCATION:
 		return "LOCATION"
+	case WRITE:
+		return "WRITE"
 	case PERIOD:
 		return "PERIOD"
 	case COMMA:
@@ -223,6 +233,8 @@ func (t Type) String() string {
 		return "STAR"
 	case SLASH:
 		return "SLASH"
+	case ASSIGN:
+		return "ASSIGN"
 	case IS_EQUAL_TO:
 		return "IS_EQUAL_TO"
 	case IS_LESS_THAN:

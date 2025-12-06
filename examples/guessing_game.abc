@@ -1,0 +1,30 @@
+# Guessing Game Simulation
+# Simulates a number guessing game
+
+Print "=== Number Guessing Simulation ===".
+
+# The secret number
+Declare secret to be 42.
+Declare guesses to be [20, 50, 35, 45, 40, 42].
+Declare attempts to be 0.
+
+Print "Secret number is", the value of secret.
+Print "Simulating guesses: 20, 50, 35, 45, 40, 42".
+
+for each item in guesses, do the following:
+    Set attempts to be attempts + 1.
+    Print "Guess #", the value of attempts, ":", the value of item.
+    
+    If item is equal to secret, then
+        Print "Correct! You found the number!".
+        break out of this loop.
+    otherwise if item is less than secret, then
+        Print "Too low!".
+    otherwise
+        Print "Too high!".
+    thats it.
+thats it.
+
+Print "Game over! Total attempts:", the value of attempts.
+
+Print "=== Done! ===".

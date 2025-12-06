@@ -228,7 +228,20 @@ func (e *Encoder) encodeStatement(stmt ast.Statement) error {
 
 	case *ast.OutputStatement:
 		e.buf.WriteByte(NodeOutputStatement)
-		return e.encodeExpression(s.Value)
+		// Write number of values
+		e.writeUint32(uint32(len(s.Values)))
+		for _, value := range s.Values {
+			if err := e.encodeExpression(value); err != nil {
+				return err
+			}
+		}
+		// Write newline flag
+		if s.Newline {
+			e.buf.WriteByte(1)
+		} else {
+			e.buf.WriteByte(0)
+		}
+		return nil
 
 	case *ast.ToggleStatement:
 		e.buf.WriteByte(NodeToggleStatement)
@@ -634,11 +647,25 @@ func (d *Decoder) decodeStatement() (ast.Statement, error) {
 		return &ast.ReturnStatement{Value: value}, nil
 
 	case NodeOutputStatement:
-		value, err := d.decodeExpression()
+		// Read number of values
+		count, err := d.readUint32()
 		if err != nil {
 			return nil, err
 		}
-		return &ast.OutputStatement{Value: value}, nil
+		values := make([]ast.Expression, count)
+		for i := uint32(0); i < count; i++ {
+			value, err := d.decodeExpression()
+			if err != nil {
+				return nil, err
+			}
+			values[i] = value
+		}
+		// Read newline flag
+		newlineByte, err := d.readByte()
+		if err != nil {
+			return nil, err
+		}
+		return &ast.OutputStatement{Values: values, Newline: newlineByte == 1}, nil
 
 	case NodeToggleStatement:
 		name, err := d.readString()

@@ -1,0 +1,57 @@
+# Prime Number Checker Example
+# Checks if numbers are prime and lists first few primes
+
+Print "=== Prime Number Checker ===".
+
+# Function to check if a number is prime
+Declare function isPrime that takes n and does the following:
+    If n is less than 2, then
+        Return 0.
+    thats it.
+    If n is equal to 2, then
+        Return 1.
+    thats it.
+    
+    Declare divisor to be 2.
+    Declare rem to be 0.
+    repeat the following while divisor * divisor is less than or equal to n:
+        Set rem to be the remainder of n divided by divisor.
+        If rem is equal to 0, then
+            Return 0.
+        thats it.
+        Set divisor to be divisor + 1.
+    thats it.
+    
+    Return 1.
+thats it.
+
+# Test individual numbers
+Print "Testing individual numbers:".
+
+Declare num to be 2.
+Declare result to be 0.
+repeat the following while num is less than or equal to 20:
+    Set result to be the result of calling isPrime with num.
+    If result is equal to 1, then
+        Print the value of num, "is prime".
+    otherwise
+        Print the value of num, "is not prime".
+    thats it.
+    Set num to be num + 1.
+thats it.
+
+# Count primes up to 50
+Print "Counting primes up to 50:".
+Declare count to be 0.
+Declare i to be 2.
+Declare check to be 0.
+repeat the following while i is less than or equal to 50:
+    Set check to be the result of calling isPrime with i.
+    If check is equal to 1, then
+        Set count to be count + 1.
+    thats it.
+    Set i to be i + 1.
+thats it.
+Print "Total prime numbers found:", the value of count.
+
+Print "=== Done! ===".

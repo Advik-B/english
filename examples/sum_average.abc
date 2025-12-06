@@ -1,0 +1,41 @@
+# Sum and Average Example
+# Calculates sum and average of numbers
+
+Print "=== Sum and Average Calculator ===".
+
+Declare numbers to be [10, 20, 30, 40, 50, 60, 70, 80, 90, 100].
+
+Print "Numbers: 10, 20, 30, 40, 50, 60, 70, 80, 90, 100".
+
+# Calculate sum
+Declare sum to be 0.
+for each item in numbers, do the following:
+    Set sum to be sum + item.
+thats it.
+
+Print "Sum:", the value of sum.
+
+# Calculate average
+Declare count to be 10.
+Declare average to be sum / count.
+
+Print "Count:", the value of count.
+Print "Average:", the value of average.
+
+# Find minimum and maximum
+Declare minimum to be the item at position 0 in numbers.
+Declare maximum to be the item at position 0 in numbers.
+
+for each item in numbers, do the following:
+    If item is less than minimum, then
+        Set minimum to be item.
+    thats it.
+    If item is greater than maximum, then
+        Set maximum to be item.
+    thats it.
+thats it.
+
+Print "Minimum:", the value of minimum.
+Print "Maximum:", the value of maximum.
+
+Print "=== Done! ===".

@@ -314,13 +314,14 @@ func TestReturnStatement(t *testing.T) {
 // TestOutputStatement tests OutputStatement node
 func TestOutputStatement(t *testing.T) {
 	os := &OutputStatement{
-		Value: &StringLiteral{Value: "Hello"},
+		Values:  []Expression{&StringLiteral{Value: "Hello"}},
+		Newline: true,
 	}
 	os.node()
 	os.statementNode()
 
-	if os.Value == nil {
-		t.Error("OutputStatement.Value should not be nil")
+	if len(os.Values) == 0 {
+		t.Error("OutputStatement.Values should not be empty")
 	}
 }
 

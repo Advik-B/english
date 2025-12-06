@@ -830,9 +830,9 @@ func TestParserIndexExpression(t *testing.T) {
 			continue
 		}
 
-		_, ok = output.Value.(*ast.IndexExpression)
+		_, ok = output.Values[0].(*ast.IndexExpression)
 		if !ok {
-			t.Errorf("Input %q: expected IndexExpression, got %T", input, output.Value)
+			t.Errorf("Input %q: expected IndexExpression, got %T", input, output.Values[0])
 		}
 	}
 }
@@ -866,9 +866,9 @@ func TestParserLengthExpression(t *testing.T) {
 		t.Fatalf("Expected OutputStatement, got %T", program.Statements[0])
 	}
 
-	_, ok = output.Value.(*ast.LengthExpression)
+	_, ok = output.Values[0].(*ast.LengthExpression)
 	if !ok {
-		t.Errorf("Expected LengthExpression, got %T", output.Value)
+		t.Errorf("Expected LengthExpression, got %T", output.Values[0])
 	}
 }
 
@@ -884,9 +884,9 @@ func TestParserLocationExpression(t *testing.T) {
 		t.Fatalf("Expected OutputStatement, got %T", program.Statements[0])
 	}
 
-	loc, ok := output.Value.(*ast.LocationExpression)
+	loc, ok := output.Values[0].(*ast.LocationExpression)
 	if !ok {
-		t.Errorf("Expected LocationExpression, got %T", output.Value)
+		t.Errorf("Expected LocationExpression, got %T", output.Values[0])
 	}
 
 	if loc.Name != "x" {
@@ -913,9 +913,9 @@ func TestParserRemainderExpression(t *testing.T) {
 			continue
 		}
 
-		binary, ok := output.Value.(*ast.BinaryExpression)
+		binary, ok := output.Values[0].(*ast.BinaryExpression)
 		if !ok {
-			t.Errorf("Input %q: expected BinaryExpression, got %T", input, output.Value)
+			t.Errorf("Input %q: expected BinaryExpression, got %T", input, output.Values[0])
 			continue
 		}
 
@@ -1003,9 +1003,9 @@ func TestParserFunctionCallWithParens(t *testing.T) {
 		t.Fatalf("Expected OutputStatement, got %T", program.Statements[0])
 	}
 
-	funcCall, ok := output.Value.(*ast.FunctionCall)
+	funcCall, ok := output.Values[0].(*ast.FunctionCall)
 	if !ok {
-		t.Errorf("Expected FunctionCall, got %T", output.Value)
+		t.Errorf("Expected FunctionCall, got %T", output.Values[0])
 	}
 
 	if funcCall.Name != "add" {

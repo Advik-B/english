@@ -62,13 +62,37 @@ func (l *Lexer) skipComment() {
 
 func (l *Lexer) readString(quote byte) string {
 	l.readChar() // skip opening quote
-	start := l.position
+	var result strings.Builder
 	for l.ch != quote && l.ch != 0 {
+		if l.ch == '\\' {
+			l.readChar() // skip backslash
+			switch l.ch {
+			case 'n':
+				result.WriteByte('\n')
+			case 't':
+				result.WriteByte('\t')
+			case 'r':
+				result.WriteByte('\r')
+			case '\\':
+				result.WriteByte('\\')
+			case '"':
+				result.WriteByte('"')
+			case '\'':
+				result.WriteByte('\'')
+			default:
+				// For unrecognized escape sequences (e.g., \x), preserve the backslash
+				// and the character as-is. This allows unknown sequences to pass through
+				// without error, though they won't have special meaning.
+				result.WriteByte('\\')
+				result.WriteByte(l.ch)
+			}
+		} else {
+			result.WriteByte(l.ch)
+		}
 		l.readChar()
 	}
-	result := l.input[start:l.position]
 	l.readChar() // skip closing quote
-	return result
+	return result.String()
 }
 
 func (l *Lexer) readNumber() string {
@@ -97,6 +121,8 @@ func (l *Lexer) readIdentifier() string {
 // keywords maps lowercase keywords to their token types
 var keywords = map[string]token.Type{
 	"declare":   token.DECLARE,
+	"let":       token.LET,
+	"equal":     token.EQUAL,
 	"function":  token.FUNCTION,
 	"that":      token.THAT,
 	"does":      token.DOES,
@@ -142,6 +168,7 @@ var keywords = map[string]token.Type{
 	"false":     token.FALSE,
 	"toggle":    token.TOGGLE,
 	"location":  token.LOCATION,
+	"write":     token.WRITE,
 }
 
 func (l *Lexer) lookupKeyword(word string) token.Type {
@@ -205,6 +232,9 @@ func (l *Lexer) NextToken() token.Token {
 		l.readChar()
 	case '/':
 		tok = token.Token{Type: token.SLASH, Value: "/", Line: line, Col: col}
+		l.readChar()
+	case '=':
+		tok = token.Token{Type: token.ASSIGN, Value: "=", Line: line, Col: col}
 		l.readChar()
 	case '"', '\'':
 		quote := l.ch

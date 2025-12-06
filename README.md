@@ -76,6 +76,25 @@ Declare x to be 5.
 Declare name to be "John".
 Declare pi to always be 3.14159.  # Constant (immutable)
 Set x to 10.
+
+# Alternative 'let' syntax
+let y be 10.
+let y be equal to 10.
+let y = 10.
+let y equal 10.
+let constant always be 100.  # Constant
+let constant be always 100.  # Constant (alternative)
+```
+
+### Scoped Variables
+
+Variables can be declared inside blocks, loops, and functions. Each iteration of a loop creates a new scope:
+
+```english
+repeat the following 3 times:
+    let temp be 42.  # 'temp' is scoped to each iteration
+    Print temp.
+thats it.
 ```
 
 ### Boolean Values
@@ -122,6 +141,19 @@ Print the remainder of 10 / 3.            # Alternative syntax
 Print "Hello, World!".
 Print the value of x.
 Print the value of x plus 5.
+
+# Multiple arguments (space-separated)
+Print "Hello", "World".           # Outputs: Hello World
+Print "x =", the value of x.      # Outputs: x = 10
+
+# Write (no newline)
+Write "Hello ".
+Write "World".
+Write "\n".                       # Manual newline
+
+# Escape sequences in strings
+Print "Line1\nLine2".             # \n = newline
+Print "Tab\tSeparated".           # \t = tab
 ```
 
 ### Functions
@@ -239,8 +271,18 @@ The interactive REPL (Read-Eval-Print Loop) features:
 ├── bytecode/
 │   ├── bytecode.go      # Binary serialization of AST
 │   └── bytecode_test.go # Bytecode tests
+├── examples/            # Example programs
+│   ├── hello_world.abc  # Simple hello world
+│   ├── fibonacci.abc    # Fibonacci sequence
+│   ├── fizzbuzz.abc     # Classic FizzBuzz challenge
+│   ├── factorial.abc    # Recursive factorial
+│   ├── arrays.abc       # Array operations
+│   ├── conditionals.abc # If/else examples
+│   ├── loops.abc        # Loop constructs
+│   ├── functions.abc    # Function examples
+│   ├── turing_machine.abc # Turing completeness demo
+│   └── ...              # And many more!
 ├── go.mod               # Go module definition
-├── *.abc                # Example source files
 └── *.101                # Compiled bytecode files
 ```
 
@@ -280,13 +322,13 @@ go test ./vm/... -v
 go test ./bytecode/... -v
 
 # Run example programs
-./english run syntax.abc
-./english run test_simple.abc
-./english run turing_machine.abc
+./english run examples/hello_world.abc
+./english run examples/fibonacci.abc
+./english run examples/turing_machine.abc
 
 # Compile and run bytecode
-./english compile syntax.abc
-./english run syntax.101
+./english compile examples/fibonacci.abc
+./english run examples/fibonacci.101
 ```
 
 ## 📦 Dependencies

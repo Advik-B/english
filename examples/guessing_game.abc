@@ -8,15 +8,12 @@ Declare secret to be 42.
 Declare guesses to be [20, 50, 35, 45, 40, 42].
 Declare attempts to be 0.
 
-Print "Secret number is 42".
+Print "Secret number is", the value of secret.
 Print "Simulating guesses: 20, 50, 35, 45, 40, 42".
 
 for each item in guesses, do the following:
     Set attempts to be attempts + 1.
-    Print "Guess #".
-    Print the value of attempts.
-    Print ":".
-    Print the value of item.
+    Print "Guess #", the value of attempts, ":", the value of item.
     
     If item is equal to secret, then
         Print "Correct! You found the number!".
@@ -28,7 +25,6 @@ for each item in guesses, do the following:
     thats it.
 thats it.
 
-Print "Game over! Total attempts:".
-Print the value of attempts.
+Print "Game over! Total attempts:", the value of attempts.
 
 Print "=== Done! ===".

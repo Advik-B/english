@@ -21,9 +21,7 @@ Declare i to be 0.
 Declare result to be 0.
 repeat the following while i is less than or equal to 7:
     Set result to be the result of calling factorial with i.
-    Print the value of i.
-    Print "! = ".
-    Print the value of result.
+    Print the value of i, "! =", the value of result.
     Set i to be i + 1.
 thats it.
 

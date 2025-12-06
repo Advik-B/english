@@ -13,7 +13,7 @@ thats it.
 Print "While loop (count from 1 to 5):".
 Declare counter to be 1.
 repeat the following while counter is less than or equal to 5:
-    Print the value of counter.
+    Print "Count:", the value of counter.
     Set counter to be counter + 1.
 thats it.
 
@@ -21,7 +21,7 @@ thats it.
 Print "For-each loop with array:".
 Declare fruits to be ["Apple", "Banana", "Cherry"].
 for each item in fruits, do the following:
-    Print the value of item.
+    Print "Fruit:", the value of item.
 thats it.
 
 # Forever loop with break
@@ -29,7 +29,7 @@ Print "Forever loop with break at 3:".
 Declare n to be 0.
 repeat forever:
     Set n to be n + 1.
-    Print the value of n.
+    Print "n =", the value of n.
     If n is equal to 3, then
         break out of this loop.
     thats it.
@@ -43,10 +43,7 @@ Declare col to be 1.
 repeat the following while row is less than or equal to 2:
     Set col to be 1.
     repeat the following while col is less than or equal to 3:
-        Print "Row".
-        Print the value of row.
-        Print "Col".
-        Print the value of col.
+        Print "Row", the value of row, "Col", the value of col.
         Set col to be col + 1.
     thats it.
     Set row to be row + 1.

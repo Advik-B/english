@@ -30,8 +30,7 @@ Set pos1 to be the result of calling linearSearch with size and 45.
 If pos1 is equal to -1, then
     Print "Not found".
 otherwise
-    Print "Found at index:".
-    Print the value of pos1.
+    Print "Found at index:", the value of pos1.
 thats it.
 
 Print "Searching for 100:".
@@ -40,8 +39,7 @@ Set pos2 to be the result of calling linearSearch with size and 100.
 If pos2 is equal to -1, then
     Print "Not found".
 otherwise
-    Print "Found at index:".
-    Print the value of pos2.
+    Print "Found at index:", the value of pos2.
 thats it.
 
 Print "Searching for 10:".
@@ -50,8 +48,7 @@ Set pos3 to be the result of calling linearSearch with size and 10.
 If pos3 is equal to -1, then
     Print "Not found".
 otherwise
-    Print "Found at index:".
-    Print the value of pos3.
+    Print "Found at index:", the value of pos3.
 thats it.
 
 Print "=== Done! ===".

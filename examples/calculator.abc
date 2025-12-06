@@ -7,44 +7,35 @@ Print "=== Simple Calculator ===".
 Declare a to be 20.
 Declare b to be 5.
 
-Print "a = 20, b = 5".
+Print "a =", the value of a, ", b =", the value of b.
 
 # Addition
-Print "Addition (a + b):".
-Print a + b.
+Print "Addition (a + b):", a + b.
 
 # Subtraction
-Print "Subtraction (a - b):".
-Print a - b.
+Print "Subtraction (a - b):", a - b.
 
 # Multiplication
-Print "Multiplication (a * b):".
-Print a * b.
+Print "Multiplication (a * b):", a * b.
 
 # Division
-Print "Division (a / b):".
-Print a / b.
+Print "Division (a / b):", a / b.
 
 # Remainder (modulo)
-Print "Remainder (a mod b):".
-Print the remainder of a divided by 5.
+Print "Remainder (a mod b):", the remainder of a divided by 5.
 
 # Complex expression
-Print "Complex expression (a + b * 2):".
-Print a + b * 2.
+Print "Complex expression (a + b * 2):", a + b * 2.
 
 # With parentheses
-Print "With grouping ((a + b) * 2):".
-Print (a + b) * 2.
+Print "With grouping ((a + b) * 2):", (a + b) * 2.
 
 # Negative numbers
-Print "Negative number (-a):".
-Print -a.
+Print "Negative number (-a):", -a.
 
 # Decimal numbers
 Declare pi to be 3.14159.
 Declare radius to be 5.
-Print "Area of circle with radius 5:".
-Print pi * radius * radius.
+Print "Area of circle with radius 5:", pi * radius * radius.
 
 Print "=== Done! ===".

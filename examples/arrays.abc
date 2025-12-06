@@ -8,19 +8,13 @@ Declare numbers to be [10, 20, 30, 40, 50].
 Print "Original array: [10, 20, 30, 40, 50]".
 
 # Access elements
-Print "First element:".
-Print the item at position 0 in numbers.
-
-Print "Third element:".
-Print the item at position 2 in numbers.
-
-Print "Last element:".
-Print the item at position 4 in numbers.
+Print "First element:", the item at position 0 in numbers.
+Print "Third element:", the item at position 2 in numbers.
+Print "Last element:", the item at position 4 in numbers.
 
 # Modify an element
 Set the item at position 2 in numbers to be 99.
-Print "After setting position 2 to 99:".
-Print the item at position 2 in numbers.
+Print "After setting position 2 to 99:", the item at position 2 in numbers.
 
 # Iterate through the array
 Print "All elements:".
@@ -37,8 +31,7 @@ repeat the following while idx is less than 5:
     Set sum to be sum + current.
     Set idx to be idx + 1.
 thats it.
-Print "Sum of all elements:".
-Print the value of sum.
+Print "Sum of all elements:", the value of sum.
 
 # String array example
 Declare names to be ["Alice", "Bob", "Charlie"].

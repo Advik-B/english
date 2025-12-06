@@ -13,9 +13,7 @@ Call sayHello.
 
 # Function with parameters
 Declare function greet that takes name and does the following:
-    Print "Hello, ".
-    Print the value of name.
-    Print "! Nice to meet you.".
+    Print "Hello,", the value of name, "! Nice to meet you.".
 thats it.
 
 Print "Calling greet with 'Alice':".
@@ -30,7 +28,7 @@ thats it.
 Print "Adding 5 and 7:".
 Declare sum to be 0.
 Set sum to be the result of calling add with 5 and 7.
-Print the value of sum.
+Print "Result:", the value of sum.
 
 # Function with multiple parameters
 Declare function multiply that takes x and y and does the following:
@@ -40,7 +38,7 @@ thats it.
 Print "Multiplying 6 and 8:".
 Declare product to be 0.
 Set product to be the result of calling multiply with 6 and 8.
-Print the value of product.
+Print "Result:", the value of product.
 
 # Nested function calls
 Print "Nested: add(multiply(2, 3), 4)".
@@ -48,7 +46,7 @@ Declare inner to be 0.
 Set inner to be the result of calling multiply with 2 and 3.
 Declare outer to be 0.
 Set outer to be the result of calling add with inner and 4.
-Print the value of outer.
+Print "Result:", the value of outer.
 
 # Function that uses conditionals
 Declare function max that takes a and b and does the following:
@@ -62,7 +60,7 @@ thats it.
 Print "Max of 10 and 25:".
 Declare maximum to be 0.
 Set maximum to be the result of calling max with 10 and 25.
-Print the value of maximum.
+Print "Result:", the value of maximum.
 
 # Function that calculates average
 Declare function average that takes x and y and z and does the following:
@@ -73,6 +71,6 @@ thats it.
 Print "Average of 10, 20, 30:".
 Declare avg to be 0.
 Set avg to be the result of calling average with 10 and 20 and 30.
-Print the value of avg.
+Print "Result:", the value of avg.
 
 Print "=== Done! ===".

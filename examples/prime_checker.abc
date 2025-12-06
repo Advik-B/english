@@ -33,11 +33,9 @@ Declare result to be 0.
 repeat the following while num is less than or equal to 20:
     Set result to be the result of calling isPrime with num.
     If result is equal to 1, then
-        Print the value of num.
-        Print "is prime".
+        Print the value of num, "is prime".
     otherwise
-        Print the value of num.
-        Print "is not prime".
+        Print the value of num, "is not prime".
     thats it.
     Set num to be num + 1.
 thats it.
@@ -54,7 +52,6 @@ repeat the following while i is less than or equal to 50:
     thats it.
     Set i to be i + 1.
 thats it.
-Print "Total prime numbers found:".
-Print the value of count.
+Print "Total prime numbers found:", the value of count.
 
 Print "=== Done! ===".

@@ -10,35 +10,28 @@ Declare MAX_SIZE to always be 100.
 Declare APP_NAME to be always "English Calculator".
 
 Print "Mathematical Constants:".
-Print "PI =".
-Print the value of PI.
-Print "E =".
-Print the value of E.
+Print "PI =", the value of PI.
+Print "E =", the value of E.
 
 Print "Application Constants:".
-Print "MAX_SIZE =".
-Print the value of MAX_SIZE.
-Print "APP_NAME =".
-Print the value of APP_NAME.
+Print "MAX_SIZE =", the value of MAX_SIZE.
+Print "APP_NAME =", the value of APP_NAME.
 
 # Using constants in calculations
 Print "Circle calculations using PI:".
 Declare radius to be 5.
-Print "For radius = 5:".
+Print "For radius =", the value of radius.
 
 Declare circumference to be 2 * PI * radius.
-Print "Circumference =".
-Print the value of circumference.
+Print "Circumference =", the value of circumference.
 
 Declare area to be PI * radius * radius.
-Print "Area =".
-Print the value of area.
+Print "Area =", the value of area.
 
 # Regular variable can be changed
 Declare counter to be 0.
 Set counter to be counter + 1.
-Print "Counter (mutable):".
-Print the value of counter.
+Print "Counter (mutable):", the value of counter.
 
 # Note: Attempting to change a constant would cause a runtime error
 # Set PI to be 3.  # This would fail!

@@ -7,11 +7,8 @@ Print "=== Boolean Operations ===".
 Declare isRaining to be true.
 Declare isSunny to be false.
 
-Print "isRaining:".
-Print the value of isRaining.
-
-Print "isSunny:".
-Print the value of isSunny.
+Print "isRaining:", the value of isRaining.
+Print "isSunny:", the value of isSunny.
 
 # Boolean in conditionals
 Print "Checking boolean conditions:".
@@ -27,18 +24,15 @@ If isSunny is equal to false, then
 thats it.
 
 # Toggle operation
-Print "Before toggle - isRaining:".
-Print the value of isRaining.
+Print "Before toggle - isRaining:", the value of isRaining.
 
 Toggle isRaining.
 
-Print "After toggle - isRaining:".
-Print the value of isRaining.
+Print "After toggle - isRaining:", the value of isRaining.
 
 Toggle the value of isRaining.
 
-Print "After second toggle - isRaining:".
-Print the value of isRaining.
+Print "After second toggle - isRaining:", the value of isRaining.
 
 # Boolean in array
 Declare flags to be [true, false, true, true, false].
@@ -54,7 +48,6 @@ for each item in flags, do the following:
         Set trueCount to be trueCount + 1.
     thats it.
 thats it.
-Print "Number of true values:".
-Print the value of trueCount.
+Print "Number of true values:", the value of trueCount.
 
 Print "=== Done! ===".

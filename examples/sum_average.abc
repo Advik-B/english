@@ -13,18 +13,14 @@ for each item in numbers, do the following:
     Set sum to be sum + item.
 thats it.
 
-Print "Sum:".
-Print the value of sum.
+Print "Sum:", the value of sum.
 
 # Calculate average
 Declare count to be 10.
 Declare average to be sum / count.
 
-Print "Count:".
-Print the value of count.
-
-Print "Average:".
-Print the value of average.
+Print "Count:", the value of count.
+Print "Average:", the value of average.
 
 # Find minimum and maximum
 Declare minimum to be the item at position 0 in numbers.
@@ -39,10 +35,7 @@ for each item in numbers, do the following:
     thats it.
 thats it.
 
-Print "Minimum:".
-Print the value of minimum.
-
-Print "Maximum:".
-Print the value of maximum.
+Print "Minimum:", the value of minimum.
+Print "Maximum:", the value of maximum.
 
 Print "=== Done! ===".

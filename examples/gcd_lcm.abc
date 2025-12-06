@@ -27,29 +27,23 @@ Declare g1 to be 0.
 Set g1 to be the result of calling gcd with 48 and 18.
 Declare l1 to be 0.
 Set l1 to be the result of calling lcm with 48 and 18.
-Print "GCD(48, 18) =".
-Print the value of g1.
-Print "LCM(48, 18) =".
-Print the value of l1.
+Print "GCD(48, 18) =", the value of g1.
+Print "LCM(48, 18) =", the value of l1.
 
 Print "Testing with 12 and 15:".
 Declare g2 to be 0.
 Set g2 to be the result of calling gcd with 12 and 15.
 Declare l2 to be 0.
 Set l2 to be the result of calling lcm with 12 and 15.
-Print "GCD(12, 15) =".
-Print the value of g2.
-Print "LCM(12, 15) =".
-Print the value of l2.
+Print "GCD(12, 15) =", the value of g2.
+Print "LCM(12, 15) =", the value of l2.
 
 Print "Testing with 100 and 25:".
 Declare g3 to be 0.
 Set g3 to be the result of calling gcd with 100 and 25.
 Declare l3 to be 0.
 Set l3 to be the result of calling lcm with 100 and 25.
-Print "GCD(100, 25) =".
-Print the value of g3.
-Print "LCM(100, 25) =".
-Print the value of l3.
+Print "GCD(100, 25) =", the value of g3.
+Print "LCM(100, 25) =", the value of l3.
 
 Print "=== Done! ===".

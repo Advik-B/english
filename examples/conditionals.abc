@@ -5,7 +5,7 @@ Print "=== Conditionals ===".
 
 # Simple if-else
 Declare x to be 15.
-Print "Testing with x = 15".
+Print "Testing with x =", the value of x.
 
 If x is greater than 10, then
     Print "x is greater than 10".
@@ -16,8 +16,7 @@ thats it.
 # Else-if chain
 Print "Testing grade classification:".
 Declare score to be 85.
-Print "Score:".
-Print the value of score.
+Print "Score:", the value of score.
 
 If score is greater than or equal to 90, then
     Print "Grade: A".

@@ -312,3 +312,124 @@ func (p *Parser) parseStructMethod() (*ast.FunctionDecl, error) {
 		Body:       body,
 	}, nil
 }
+
+// parseStructInstantiation parses creating a new struct instance
+// This is called from parsePrimary when we see "new"
+// Syntax: a new instance of Person
+//         a new instance of Person with the following fields: ...
+func (p *Parser) parseStructInstantiation() (ast.Expression, error) {
+	// We're at "new"
+	p.nextToken()
+
+	// Expect "instance"
+	if err := p.expectToken(token.INSTANCE); err != nil {
+		return nil, err
+	}
+	p.nextToken()
+
+	// Expect "of"
+	if err := p.expectToken(token.OF); err != nil {
+		return nil, err
+	}
+	p.nextToken()
+
+	// Get struct name
+	if p.curToken.Type != token.IDENTIFIER {
+		return nil, fmt.Errorf("expected struct name, got %v", p.curToken.Type)
+	}
+	structName := p.curToken.Value
+	p.nextToken()
+
+	fieldValues := make(map[string]ast.Expression)
+	var fieldOrder []string
+
+	// Check if we have "with the following fields:"
+	if p.curToken.Type == token.WITH {
+		p.nextToken()
+
+		// Skip "the"
+		if p.curToken.Type == token.THE {
+			p.nextToken()
+		}
+
+		// Expect "following"
+		if err := p.expectToken(token.FOLLOWING); err != nil {
+			return nil, err
+		}
+		p.nextToken()
+
+		// Expect "fields" or "field"
+		if p.curToken.Type != token.FIELDS && p.curToken.Type != token.FIELD {
+			return nil, fmt.Errorf("expected 'fields' or 'field', got %v", p.curToken.Type)
+		}
+		p.nextToken()
+
+		// Expect ":"
+		if err := p.expectToken(token.COLON); err != nil {
+			return nil, err
+		}
+		p.nextToken()
+
+		// Skip optional newline
+		if p.curToken.Type == token.NEWLINE {
+			p.nextToken()
+		}
+
+		// Parse field assignments
+		for p.curToken.Type != token.THATS && p.curToken.Type != token.EOF {
+			// Skip newlines and indentation
+			for p.curToken.Type == token.NEWLINE {
+				p.nextToken()
+			}
+
+			if p.curToken.Type == token.THATS {
+				break
+			}
+
+			// Parse field assignment: name is "John".
+			if p.curToken.Type != token.IDENTIFIER {
+				return nil, fmt.Errorf("expected field name, got %v", p.curToken.Type)
+			}
+			fieldName := p.curToken.Value
+			p.nextToken()
+
+			// Expect "is"
+			if err := p.expectToken(token.IS); err != nil {
+				return nil, err
+			}
+			p.nextToken()
+
+			// Parse value expression
+			value, err := p.parseExpression()
+			if err != nil {
+				return nil, err
+			}
+
+			// Expect period
+			if err := p.expectToken(token.PERIOD); err != nil {
+				return nil, err
+			}
+			p.nextToken()
+
+			fieldValues[fieldName] = value
+			fieldOrder = append(fieldOrder, fieldName)
+		}
+
+		// Expect "thats it."
+		if err := p.expectToken(token.THATS); err != nil {
+			return nil, err
+		}
+		p.nextToken()
+
+		if err := p.expectToken(token.IT); err != nil {
+			return nil, err
+		}
+		p.nextToken()
+	}
+
+	return &ast.StructInstantiation{
+		StructName:  structName,
+		FieldValues: fieldValues,
+		FieldOrder:  fieldOrder,
+	}, nil
+}

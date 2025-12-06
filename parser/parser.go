@@ -304,10 +304,10 @@ func (p *Parser) parseAssignment() (ast.Statement, error) {
 	}
 	p.nextToken()
 
-	if err := p.expectToken(token.BE); err != nil {
-		return nil, err
+	// "be" is optional - "set x to 10" and "set x to be 10" are both valid
+	if p.curToken.Type == token.BE {
+		p.nextToken()
 	}
-	p.nextToken()
 
 	// Check for function call result
 	if p.curToken.Type == token.THE {
@@ -401,10 +401,10 @@ func (p *Parser) parseIndexAssignment() (ast.Statement, error) {
 	}
 	p.nextToken()
 
-	if err := p.expectToken(token.BE); err != nil {
-		return nil, err
+	// "be" is optional - "set item to 10" and "set item to be 10" are both valid
+	if p.curToken.Type == token.BE {
+		p.nextToken()
 	}
-	p.nextToken()
 
 	value, err := p.parseExpression()
 	if err != nil {

@@ -338,6 +338,37 @@ func TestParserAssignment(t *testing.T) {
 	}
 }
 
+func TestParserAssignmentWithoutBe(t *testing.T) {
+	// Test "set x to 10" syntax (without "be")
+	input := "Set x to 15."
+	program, err := parse(input)
+	if err != nil {
+		t.Fatalf("Parse error: %v", err)
+	}
+
+	if len(program.Statements) != 1 {
+		t.Fatalf("Expected 1 statement, got %d", len(program.Statements))
+	}
+
+	assignment, ok := program.Statements[0].(*ast.Assignment)
+	if !ok {
+		t.Fatalf("Expected Assignment, got %T", program.Statements[0])
+	}
+
+	if assignment.Name != "x" {
+		t.Errorf("Expected name 'x', got %q", assignment.Name)
+	}
+
+	// Verify the value is correct
+	numLit, ok := assignment.Value.(*ast.NumberLiteral)
+	if !ok {
+		t.Fatalf("Expected NumberLiteral, got %T", assignment.Value)
+	}
+	if numLit.Value != 15 {
+		t.Errorf("Expected value 15, got %v", numLit.Value)
+	}
+}
+
 func TestParserFunctionDeclarationWithoutParams(t *testing.T) {
 	input := `Declare function greet that does the following:
     Print "Hello".

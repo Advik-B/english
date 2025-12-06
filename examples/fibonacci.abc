@@ -1,0 +1,20 @@
+# Fibonacci Sequence Example
+# Calculates and prints the first 10 Fibonacci numbers
+
+Print "=== Fibonacci Sequence ===".
+Print "Calculating the first 10 Fibonacci numbers:".
+
+Declare a to be 0.
+Declare b to be 1.
+Declare temp to be 0.
+Declare count to be 0.
+
+repeat the following while count is less than 10:
+    Print the value of a.
+    Set temp to be a + b.
+    Set a to be b.
+    Set b to be temp.
+    Set count to be count + 1.
+thats it.
+
+Print "=== Done! ===".

@@ -17,9 +17,12 @@ Declare steps to be 0.
 Print "Initial tape position 4:".
 Print the item at position 4 in tape.
 
+# Declare current_symbol before the loop
+Declare current_symbol to be 0.
+
 # Main Turing machine loop
 repeat forever:
-    Declare current_symbol to be the item at position head in tape.
+    Set current_symbol to be the item at position head in tape.
     Set steps to be steps + 1.
     
     # State 1: find_right - move to the rightmost digit

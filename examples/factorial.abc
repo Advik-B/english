@@ -1,0 +1,30 @@
+# Factorial Example
+# Calculates factorial using a recursive function
+
+Print "=== Factorial Calculator ===".
+
+# Define a recursive factorial function
+Declare function factorial that takes n and does the following:
+    If n is less than or equal to 1, then
+        Return 1.
+    thats it.
+    
+    Declare smaller to be 0.
+    Set smaller to be the result of calling factorial with n - 1.
+    Return n * smaller.
+thats it.
+
+# Calculate and print factorials for 0 through 7
+Print "Calculating factorials:".
+
+Declare i to be 0.
+Declare result to be 0.
+repeat the following while i is less than or equal to 7:
+    Set result to be the result of calling factorial with i.
+    Print the value of i.
+    Print "! = ".
+    Print the value of result.
+    Set i to be i + 1.
+thats it.
+
+Print "=== Done! ===".

@@ -1,0 +1,15 @@
+# Countdown Example
+# A simple countdown demonstration
+
+Print "=== Countdown ===".
+Print "Counting down from 10...".
+
+Declare count to be 10.
+
+repeat the following while count is greater than 0:
+    Print the value of count.
+    Set count to be count - 1.
+thats it.
+
+Print "Blast off!".
+Print "=== Done! ===".

@@ -1,0 +1,62 @@
+# Conditionals Example
+# Demonstrates if/else/else-if statements
+
+Print "=== Conditionals ===".
+
+# Simple if-else
+Declare x to be 15.
+Print "Testing with x = 15".
+
+If x is greater than 10, then
+    Print "x is greater than 10".
+otherwise
+    Print "x is not greater than 10".
+thats it.
+
+# Else-if chain
+Print "Testing grade classification:".
+Declare score to be 85.
+Print "Score:".
+Print the value of score.
+
+If score is greater than or equal to 90, then
+    Print "Grade: A".
+otherwise if score is greater than or equal to 80, then
+    Print "Grade: B".
+otherwise if score is greater than or equal to 70, then
+    Print "Grade: C".
+otherwise if score is greater than or equal to 60, then
+    Print "Grade: D".
+otherwise
+    Print "Grade: F".
+thats it.
+
+# Nested conditionals
+Print "Testing nested conditions:".
+Declare age to be 25.
+Declare hasLicense to be true.
+
+If age is greater than or equal to 18, then
+    Print "Adult".
+    If hasLicense is equal to true, then
+        Print "Can drive".
+    otherwise
+        Print "Cannot drive without license".
+    thats it.
+otherwise
+    Print "Minor - cannot drive".
+thats it.
+
+# Equality and inequality checks
+Declare a to be 5.
+Declare b to be 5.
+
+If a is equal to b, then
+    Print "a equals b".
+thats it.
+
+If a is not equal to 10, then
+    Print "a is not 10".
+thats it.
+
+Print "=== Done! ===".

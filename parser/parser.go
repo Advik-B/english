@@ -309,39 +309,37 @@ func (p *Parser) parseAssignment() (ast.Statement, error) {
 		p.nextToken()
 	}
 
-	// Check for function call result
-	if p.curToken.Type == token.THE {
-		p.nextToken()
-		if p.curToken.Type == token.IDENTIFIER && strings.EqualFold(p.curToken.Value, resultKeyword) {
+	// Check for function call result: "the result of calling ..."
+	if p.curToken.Type == token.THE && p.peekToken.Type == token.IDENTIFIER && strings.EqualFold(p.peekToken.Value, resultKeyword) {
+		p.nextToken() // consume THE
+		p.nextToken() // consume "result"
+		if p.curToken.Type == token.OF {
 			p.nextToken()
-			if p.curToken.Type == token.OF {
+			if p.curToken.Type == token.CALLING {
 				p.nextToken()
-				if p.curToken.Type == token.CALLING {
-					p.nextToken()
-					funcName := p.curToken.Value
-					if p.curToken.Type != token.IDENTIFIER {
-						return nil, fmt.Errorf("expected function name")
-					}
-					p.nextToken()
-
-					args, err := p.parseFunctionArguments()
-					if err != nil {
-						return nil, err
-					}
-
-					if err := p.expectToken(token.PERIOD); err != nil {
-						return nil, err
-					}
-					p.nextToken()
-
-					return &ast.Assignment{
-						Name: nameToken.Value,
-						Value: &ast.FunctionCall{
-							Name:      funcName,
-							Arguments: args,
-						},
-					}, nil
+				funcName := p.curToken.Value
+				if p.curToken.Type != token.IDENTIFIER {
+					return nil, fmt.Errorf("expected function name")
 				}
+				p.nextToken()
+
+				args, err := p.parseFunctionArguments()
+				if err != nil {
+					return nil, err
+				}
+
+				if err := p.expectToken(token.PERIOD); err != nil {
+					return nil, err
+				}
+				p.nextToken()
+
+				return &ast.Assignment{
+					Name: nameToken.Value,
+					Value: &ast.FunctionCall{
+						Name:      funcName,
+						Arguments: args,
+					},
+				}, nil
 			}
 		}
 	}
@@ -793,10 +791,15 @@ func (p *Parser) parseBreak() (ast.Statement, error) {
 	}
 	p.nextToken()
 
-	if err := p.expectToken(token.THE); err != nil {
-		return nil, err
+	// Accept "the" or "this" (as IDENTIFIER)
+	if p.curToken.Type == token.THE {
+		p.nextToken()
+	} else if p.curToken.Type == token.IDENTIFIER && strings.EqualFold(p.curToken.Value, "this") {
+		p.nextToken()
+	} else {
+		return nil, fmt.Errorf("expected 'the' or 'this', got %v at line %d, column %d",
+			p.curToken.Type, p.curToken.Line, p.curToken.Col)
 	}
-	p.nextToken()
 
 	if err := p.expectToken(token.LOOP); err != nil {
 		return nil, err

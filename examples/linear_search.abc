@@ -1,0 +1,57 @@
+# Linear Search Example
+# Searches for elements in an array
+
+Print "=== Linear Search ===".
+
+# Create array to search
+Declare arr to be [10, 25, 30, 45, 50, 65, 70, 85, 90].
+Print "Array: 10, 25, 30, 45, 50, 65, 70, 85, 90".
+
+# Function to perform linear search
+Declare function linearSearch that takes arr_size and target and does the following:
+    Declare idx to be 0.
+    Declare current to be 0.
+    repeat the following while idx is less than arr_size:
+        Set current to be the item at position idx in arr.
+        If current is equal to target, then
+            Return idx.
+        thats it.
+        Set idx to be idx + 1.
+    thats it.
+    Return -1.
+thats it.
+
+# Search for various values
+Declare size to be 9.
+
+Print "Searching for 45:".
+Declare pos1 to be 0.
+Set pos1 to be the result of calling linearSearch with size and 45.
+If pos1 is equal to -1, then
+    Print "Not found".
+otherwise
+    Print "Found at index:".
+    Print the value of pos1.
+thats it.
+
+Print "Searching for 100:".
+Declare pos2 to be 0.
+Set pos2 to be the result of calling linearSearch with size and 100.
+If pos2 is equal to -1, then
+    Print "Not found".
+otherwise
+    Print "Found at index:".
+    Print the value of pos2.
+thats it.
+
+Print "Searching for 10:".
+Declare pos3 to be 0.
+Set pos3 to be the result of calling linearSearch with size and 10.
+If pos3 is equal to -1, then
+    Print "Not found".
+otherwise
+    Print "Found at index:".
+    Print the value of pos3.
+thats it.
+
+Print "=== Done! ===".

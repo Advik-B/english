@@ -1,0 +1,50 @@
+# Calculator Example
+# Demonstrates arithmetic operations
+
+Print "=== Simple Calculator ===".
+
+# Basic arithmetic operations
+Declare a to be 20.
+Declare b to be 5.
+
+Print "a = 20, b = 5".
+
+# Addition
+Print "Addition (a + b):".
+Print a + b.
+
+# Subtraction
+Print "Subtraction (a - b):".
+Print a - b.
+
+# Multiplication
+Print "Multiplication (a * b):".
+Print a * b.
+
+# Division
+Print "Division (a / b):".
+Print a / b.
+
+# Remainder (modulo)
+Print "Remainder (a mod b):".
+Print the remainder of a divided by 5.
+
+# Complex expression
+Print "Complex expression (a + b * 2):".
+Print a + b * 2.
+
+# With parentheses
+Print "With grouping ((a + b) * 2):".
+Print (a + b) * 2.
+
+# Negative numbers
+Print "Negative number (-a):".
+Print -a.
+
+# Decimal numbers
+Declare pi to be 3.14159.
+Declare radius to be 5.
+Print "Area of circle with radius 5:".
+Print pi * radius * radius.
+
+Print "=== Done! ===".

@@ -1,0 +1,60 @@
+# Boolean Operations Example
+# Demonstrates boolean values and operations
+
+Print "=== Boolean Operations ===".
+
+# Boolean declarations
+Declare isRaining to be true.
+Declare isSunny to be false.
+
+Print "isRaining:".
+Print the value of isRaining.
+
+Print "isSunny:".
+Print the value of isSunny.
+
+# Boolean in conditionals
+Print "Checking boolean conditions:".
+
+If isRaining is equal to true, then
+    Print "Bring an umbrella!".
+otherwise
+    Print "No umbrella needed.".
+thats it.
+
+If isSunny is equal to false, then
+    Print "It's cloudy.".
+thats it.
+
+# Toggle operation
+Print "Before toggle - isRaining:".
+Print the value of isRaining.
+
+Toggle isRaining.
+
+Print "After toggle - isRaining:".
+Print the value of isRaining.
+
+Toggle the value of isRaining.
+
+Print "After second toggle - isRaining:".
+Print the value of isRaining.
+
+# Boolean in array
+Declare flags to be [true, false, true, true, false].
+Print "Boolean array:".
+for each item in flags, do the following:
+    Print the value of item.
+thats it.
+
+# Count true values
+Declare trueCount to be 0.
+for each item in flags, do the following:
+    If item is equal to true, then
+        Set trueCount to be trueCount + 1.
+    thats it.
+thats it.
+Print "Number of true values:".
+Print the value of trueCount.
+
+Print "=== Done! ===".

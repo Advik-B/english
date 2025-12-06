@@ -239,8 +239,18 @@ The interactive REPL (Read-Eval-Print Loop) features:
 ├── bytecode/
 │   ├── bytecode.go      # Binary serialization of AST
 │   └── bytecode_test.go # Bytecode tests
+├── examples/            # Example programs
+│   ├── hello_world.abc  # Simple hello world
+│   ├── fibonacci.abc    # Fibonacci sequence
+│   ├── fizzbuzz.abc     # Classic FizzBuzz challenge
+│   ├── factorial.abc    # Recursive factorial
+│   ├── arrays.abc       # Array operations
+│   ├── conditionals.abc # If/else examples
+│   ├── loops.abc        # Loop constructs
+│   ├── functions.abc    # Function examples
+│   ├── turing_machine.abc # Turing completeness demo
+│   └── ...              # And many more!
 ├── go.mod               # Go module definition
-├── *.abc                # Example source files
 └── *.101                # Compiled bytecode files
 ```
 
@@ -280,13 +290,13 @@ go test ./vm/... -v
 go test ./bytecode/... -v
 
 # Run example programs
-./english run syntax.abc
-./english run test_simple.abc
-./english run turing_machine.abc
+./english run examples/hello_world.abc
+./english run examples/fibonacci.abc
+./english run examples/turing_machine.abc
 
 # Compile and run bytecode
-./english compile syntax.abc
-./english run syntax.101
+./english compile examples/fibonacci.abc
+./english run examples/fibonacci.101
 ```
 
 ## 📦 Dependencies

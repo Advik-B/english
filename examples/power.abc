@@ -1,0 +1,56 @@
+# Power Function Example
+# Calculates x^n using iteration
+
+Print "=== Power Calculator ===".
+
+# Function to calculate power
+Declare function power that takes base and exponent and does the following:
+    Declare result to be 1.
+    Declare i to be 0.
+    repeat the following while i is less than exponent:
+        Set result to be result * base.
+        Set i to be i + 1.
+    thats it.
+    Return result.
+thats it.
+
+# Test various powers
+Print "2^0 =".
+Declare p1 to be 0.
+Set p1 to be the result of calling power with 2 and 0.
+Print the value of p1.
+
+Print "2^5 =".
+Declare p2 to be 0.
+Set p2 to be the result of calling power with 2 and 5.
+Print the value of p2.
+
+Print "3^4 =".
+Declare p3 to be 0.
+Set p3 to be the result of calling power with 3 and 4.
+Print the value of p3.
+
+Print "10^3 =".
+Declare p4 to be 0.
+Set p4 to be the result of calling power with 10 and 3.
+Print the value of p4.
+
+Print "5^2 =".
+Declare p5 to be 0.
+Set p5 to be the result of calling power with 5 and 2.
+Print the value of p5.
+
+# Powers of 2 table
+Print "Powers of 2 table:".
+Declare n to be 0.
+Declare val to be 0.
+repeat the following while n is less than or equal to 10:
+    Set val to be the result of calling power with 2 and n.
+    Print "2^".
+    Print the value of n.
+    Print "=".
+    Print the value of val.
+    Set n to be n + 1.
+thats it.
+
+Print "=== Done! ===".

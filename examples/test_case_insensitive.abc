@@ -3,18 +3,18 @@
 DECLARE x TO BE 5.
 declare y to be ALWAYS 10.
 
-SAY "Testing case insensitivity...".
+Print "Testing case insensitivity...".
 print the value of x.
 Print THE VALUE OF y.
 
 SET x TO BE 20.
 print "x is now:".
-SAY the value of x.
+Print the value of x.
 
 # Mixed case function
 DECLARE FUNCTION greet THAT TAKES name AND DOES THE FOLLOWING:
     print "Hello, ".
-    SAY the value of name.
+    Print the value of name.
 THATS IT.
 
 SET result TO BE the result of CALLING greet WITH "World".
@@ -27,5 +27,5 @@ THATS it.
 IF x IS EQUAL TO 20, THEN
     print "x equals 20!".
 OTHERWISE
-    SAY "x is not 20".
+    Print "x is not 20".
 thats IT.

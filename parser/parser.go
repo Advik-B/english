@@ -517,11 +517,92 @@ func (p *Parser) parseCall() (ast.Statement, error) {
 	}
 	p.nextToken()
 
-	funcName := p.curToken.Value
+	// First identifier could be:
+	// 1. Function name: "call greet with args."
+	// 2. Method name: "call talk from p2." or "call talk on p2."
+	// 3. Object name with possessive: "call p2's talk."
+	
+	firstIdent := p.curToken.Value
 	if p.curToken.Type != token.IDENTIFIER {
-		return nil, fmt.Errorf("expected function name after 'Call'")
+		return nil, fmt.Errorf("expected identifier after 'Call'")
 	}
 	p.nextToken()
+
+	// Check for possessive syntax: "call p2's talk."
+	if p.curToken.Type == token.IDENTIFIER && p.curToken.Value == "s" {
+		// This is possessive: p2's
+		p.nextToken() // skip 's
+		
+		if p.curToken.Type != token.IDENTIFIER {
+			return nil, fmt.Errorf("expected method name after possessive")
+		}
+		methodName := p.curToken.Value
+		p.nextToken()
+		
+		// Parse optional arguments
+		var args []ast.Expression
+		if p.curToken.Type == token.WITH {
+			p.nextToken()
+			args = p.parseCallArguments()
+		}
+		
+		if err := p.expectToken(token.PERIOD); err != nil {
+			return nil, err
+		}
+		p.nextToken()
+		
+		// Return as method call
+		return &ast.CallStatement{
+			MethodCall: &ast.MethodCall{
+				Object:     &ast.Identifier{Name: firstIdent},
+				MethodName: methodName,
+				Arguments:  args,
+			},
+		}, nil
+	}
+
+	// Check for "from" or "on" (method call syntax)
+	if p.curToken.Type == token.FROM || p.curToken.Type == token.ON {
+		methodName := firstIdent
+		p.nextToken() // skip FROM/ON
+		
+		// Get object
+		if p.curToken.Type != token.IDENTIFIER {
+			return nil, fmt.Errorf("expected object name after 'from'/'on'")
+		}
+		objectName := p.curToken.Value
+		p.nextToken()
+		
+		// Parse optional arguments
+		var args []ast.Expression
+		if p.curToken.Type == token.WITH {
+			p.nextToken()
+			args = p.parseCallArguments()
+		}
+		
+		if err := p.expectToken(token.PERIOD); err != nil {
+			return nil, err
+		}
+		p.nextToken()
+		
+		// Return as method call
+		return &ast.CallStatement{
+			MethodCall: &ast.MethodCall{
+				Object:     &ast.Identifier{Name: objectName},
+				MethodName: methodName,
+				Arguments:  args,
+			},
+		}, nil
+	}
+
+	// Regular function call: "call greet with args."
+	funcName := firstIdent
+	var args []ast.Expression
+	
+	if p.curToken.Type == token.WITH {
+		p.nextToken()
+		args = p.parseCallArguments()
+	}
 
 	if err := p.expectToken(token.PERIOD); err != nil {
 		return nil, err
@@ -531,9 +612,29 @@ func (p *Parser) parseCall() (ast.Statement, error) {
 	return &ast.CallStatement{
 		FunctionCall: &ast.FunctionCall{
 			Name:      funcName,
-			Arguments: []ast.Expression{},
+			Arguments: args,
 		},
 	}, nil
+}
+
+// parseCallArguments parses comma-separated call arguments
+func (p *Parser) parseCallArguments() []ast.Expression {
+	var args []ast.Expression
+	
+	for {
+		arg, err := p.parseExpression()
+		if err != nil {
+			break
+		}
+		args = append(args, arg)
+		
+		if p.curToken.Type != token.AND && p.curToken.Type != token.COMMA {
+			break
+		}
+		p.nextToken()
+	}
+	
+	return args
 }
 
 func (p *Parser) parseIfStatement() (ast.Statement, error) {

@@ -306,6 +306,22 @@ func (p *Parser) parseStructMethod() (*ast.FunctionDecl, error) {
 		return nil, err
 	}
 
+	// Expect "thats it." at the end of the method
+	if err := p.expectToken(token.THATS); err != nil {
+		return nil, err
+	}
+	p.nextToken()
+
+	if err := p.expectToken(token.IT); err != nil {
+		return nil, err
+	}
+	p.nextToken()
+
+	if err := p.expectToken(token.PERIOD); err != nil {
+		return nil, err
+	}
+	p.nextToken()
+
 	return &ast.FunctionDecl{
 		Name:       nameToken.Value,
 		Parameters: parameters,

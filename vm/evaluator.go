@@ -74,6 +74,8 @@ func (ev *Evaluator) Eval(node interface{}) (Value, error) {
 		return ev.evalUnaryExpression(node)
 	case *ast.FunctionCall:
 		return ev.evalFunctionCall(node)
+	case *ast.MethodCall:
+		return ev.evalMethodCall(node)
 	case *ast.IndexExpression:
 		return ev.evalIndexExpression(node)
 	case *ast.LengthExpression:
@@ -265,6 +267,10 @@ func (ev *Evaluator) evalFunctionDecl(fd *ast.FunctionDecl) (Value, error) {
 }
 
 func (ev *Evaluator) evalCallStatement(cs *ast.CallStatement) (Value, error) {
+	if cs.MethodCall != nil {
+		_, err := ev.evalMethodCall(cs.MethodCall)
+		return nil, err
+	}
 	_, err := ev.evalFunctionCall(cs.FunctionCall)
 	return nil, err
 }

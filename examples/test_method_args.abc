@@ -1,0 +1,15 @@
+# Method call with arguments test
+
+declare Person as a structure with the following fields:
+    name is a string.
+    
+    let greet be a function that takes other and does the following:
+        print name, "says hello to", other.
+    thats it.
+thats it.
+
+let p be a new instance of Person with the following fields:
+    name is "Alice".
+thats it.
+
+call greet from p with "Bob".

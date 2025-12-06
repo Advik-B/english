@@ -67,6 +67,7 @@ func (fc *FunctionCall) expressionNode() {}
 // CallStatement represents a function call as a statement
 type CallStatement struct {
 	FunctionCall *FunctionCall
+	MethodCall   *MethodCall
 }
 
 func (cs *CallStatement) node()          {}

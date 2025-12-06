@@ -175,3 +175,90 @@ func (ev *Evaluator) evalFieldAssignment(node *ast.FieldAssignment) (Value, erro
 
 	return nil, nil
 }
+
+// evalMethodCall evaluates calling a method on an object
+func (ev *Evaluator) evalMethodCall(node *ast.MethodCall) (Value, error) {
+	// Evaluate the object
+	obj, err := ev.Eval(node.Object)
+	if err != nil {
+		return nil, err
+	}
+
+	// Check if it's a struct instance
+	structInst, ok := obj.(*StructInstance)
+	if !ok {
+		return nil, ev.runtimeError(fmt.Sprintf("cannot call method on non-struct value"))
+	}
+
+	// Get method from struct definition
+	method, ok := structInst.Definition.Methods[node.MethodName]
+	if !ok {
+		return nil, ev.runtimeError(fmt.Sprintf("struct '%s' has no method '%s'", structInst.Definition.Name, node.MethodName))
+	}
+
+	// Evaluate arguments
+	args := make([]Value, len(node.Arguments))
+	for i, arg := range node.Arguments {
+		val, err := ev.Eval(arg)
+		if err != nil {
+			return nil, err
+		}
+		args[i] = val
+	}
+
+	// Check parameter count
+	if len(args) != len(method.Parameters) {
+		return nil, ev.runtimeError(fmt.Sprintf("method '%s' expects %d arguments, got %d", node.MethodName, len(method.Parameters), len(args)))
+	}
+
+	// Create new environment for method execution
+	// The method has access to struct fields as well as parameters
+	methodEnv := method.Closure.NewChild()
+
+	// Bind struct fields to method environment
+	for fieldName, fieldValue := range structInst.Fields {
+		methodEnv.Define(fieldName, fieldValue, false)
+	}
+
+	// Bind parameters
+	for i, param := range method.Parameters {
+		methodEnv.Define(param, args[i], false)
+	}
+
+	// Save current environment and switch to method environment
+	oldEnv := ev.env
+	ev.env = methodEnv
+
+	// Add to call stack
+	ev.callStack = append(ev.callStack, fmt.Sprintf("%s.%s()", structInst.Definition.Name, node.MethodName))
+
+	// Execute method body
+	var result Value
+	for _, stmt := range method.Body {
+		val, err := ev.Eval(stmt)
+		if err != nil {
+			// Restore environment and call stack before returning error
+			ev.env = oldEnv
+			ev.callStack = ev.callStack[:len(ev.callStack)-1]
+			return nil, err
+		}
+		if retVal, ok := val.(*ReturnValue); ok {
+			result = retVal.Value
+			break
+		}
+		result = val
+	}
+
+	// Restore environment and call stack
+	ev.env = oldEnv
+	ev.callStack = ev.callStack[:len(ev.callStack)-1]
+
+	// Update struct fields from method environment (in case method modified them)
+	for fieldName := range structInst.Fields {
+		if val, ok := methodEnv.Get(fieldName); ok {
+			structInst.Fields[fieldName] = val
+		}
+	}
+
+	return result, nil
+}

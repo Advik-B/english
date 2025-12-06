@@ -40,3 +40,11 @@ func (e *RuntimeError) Error() string {
 	}
 	return result
 }
+
+// NewRuntimeError creates a new runtime error
+func NewRuntimeError(message string) error {
+	return &RuntimeError{
+		Message:   message,
+		CallStack: []string{"<stdlib>"},
+	}
+}

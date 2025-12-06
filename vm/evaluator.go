@@ -14,6 +14,9 @@ type Evaluator struct {
 
 // NewEvaluator creates a new evaluator with the given environment
 func NewEvaluator(env *Environment) *Evaluator {
+	// Register standard library functions
+	RegisterStdlib(env)
+	
 	return &Evaluator{
 		env:       env,
 		callStack: []string{"<main>"},
@@ -567,6 +570,12 @@ func (ev *Evaluator) evalFunctionCall(fc *ast.FunctionCall) (Value, error) {
 			return nil, err
 		}
 		args[i] = val
+	}
+
+	// Check if it's a built-in function (stdlib)
+	if fn.Body == nil {
+		// This is a built-in function, delegate to stdlib
+		return ev.evalBuiltinFunction(fc.Name, args)
 	}
 
 	// Check parameter count

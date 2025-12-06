@@ -120,6 +120,12 @@ func (p *Parser) parseStatement() (ast.Statement, error) {
 		return p.parseReturn()
 	case token.TOGGLE:
 		return p.parseToggle()
+	case token.TRY:
+		return p.parseTryStatement()
+	case token.RAISE:
+		return p.parseRaiseStatement()
+	case token.SWAP:
+		return p.parseSwapStatement()
 	default:
 		suggestion := ""
 		switch p.curToken.Type {
@@ -217,6 +223,13 @@ func (p *Parser) parseDeclaration() (ast.Statement, error) {
 	// Check if it's a function declaration
 	if p.curToken.Type == token.FUNCTION {
 		return p.parseFunctionDeclaration()
+	}
+
+	// Check if it's a struct declaration: "Declare Person as a structure..."
+	// We need to peek ahead to see if we have "as" followed by "structure"/"struct"
+	if p.curToken.Type == token.IDENTIFIER && p.peekToken.Type == token.AS {
+		// Save position and try struct parsing
+		return p.parseStructDeclaration()
 	}
 
 	// Variable or constant declaration

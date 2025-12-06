@@ -923,7 +923,11 @@ func (p *Parser) parseBreak() (ast.Statement, error) {
 func (p *Parser) parseBlock() ([]ast.Statement, error) {
 	var statements []ast.Statement
 
-	for p.curToken.Type != token.THATS && p.curToken.Type != token.OTHERWISE && p.curToken.Type != token.EOF {
+	for p.curToken.Type != token.THATS && 
+		p.curToken.Type != token.OTHERWISE && 
+		p.curToken.Type != token.ON && 
+		p.curToken.Type != token.BUT && 
+		p.curToken.Type != token.EOF {
 		stmt, err := p.parseStatement()
 		if err != nil {
 			return nil, err

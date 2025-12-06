@@ -58,8 +58,9 @@ func (p *Parser) parseTryStatement() (ast.Statement, error) {
 	if p.curToken.Type == token.ON {
 		p.nextToken()
 
-		if err := p.expectToken(token.ONERROR); err != nil {
-			return nil, err
+		// Expect "error" as an identifier
+		if p.curToken.Type != token.IDENTIFIER || p.curToken.Value != "error" {
+			return nil, fmt.Errorf("expected 'error' after 'on', got %v", p.curToken.Type)
 		}
 		p.nextToken()
 

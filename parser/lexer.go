@@ -179,7 +179,6 @@ var keywords = map[string]token.Type{
 	"try":       token.TRY,
 	"doing":     token.DOING,
 	"on":        token.ON,
-	"error":     token.ONERROR,
 	"finally":   token.FINALLY,
 	"raise":     token.RAISE,
 	"reference": token.REFERENCE,

@@ -80,6 +80,29 @@ func (ev *Evaluator) Eval(node interface{}) (Value, error) {
 		return ev.evalLengthExpression(node)
 	case *ast.LocationExpression:
 		return ev.evalLocationExpression(node)
+	// New AST node types
+	case *ast.StructDecl:
+		return ev.evalStructDecl(node)
+	case *ast.StructInstantiation:
+		return ev.evalStructInstantiation(node)
+	case *ast.FieldAccess:
+		return ev.evalFieldAccess(node)
+	case *ast.FieldAssignment:
+		return ev.evalFieldAssignment(node)
+	case *ast.TryStatement:
+		return ev.evalTryStatement(node)
+	case *ast.RaiseStatement:
+		return ev.evalRaiseStatement(node)
+	case *ast.SwapStatement:
+		return ev.evalSwapStatement(node)
+	case *ast.TypeExpression:
+		return ev.evalTypeExpression(node)
+	case *ast.CastExpression:
+		return ev.evalCastExpression(node)
+	case *ast.ReferenceExpression:
+		return ev.evalReferenceExpression(node)
+	case *ast.CopyExpression:
+		return ev.evalCopyExpression(node)
 	default:
 		return nil, fmt.Errorf("unknown node type: %T", node)
 	}

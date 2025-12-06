@@ -141,6 +141,19 @@ Print the remainder of 10 / 3.            # Alternative syntax
 Print "Hello, World!".
 Print the value of x.
 Print the value of x plus 5.
+
+# Multiple arguments (space-separated)
+Print "Hello", "World".           # Outputs: Hello World
+Print "x =", the value of x.      # Outputs: x = 10
+
+# Write (no newline)
+Write "Hello ".
+Write "World".
+Write "\n".                       # Manual newline
+
+# Escape sequences in strings
+Print "Line1\nLine2".             # \n = newline
+Print "Tab\tSeparated".           # \t = tab
 ```
 
 ### Functions

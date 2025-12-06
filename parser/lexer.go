@@ -62,13 +62,35 @@ func (l *Lexer) skipComment() {
 
 func (l *Lexer) readString(quote byte) string {
 	l.readChar() // skip opening quote
-	start := l.position
+	var result strings.Builder
 	for l.ch != quote && l.ch != 0 {
+		if l.ch == '\\' {
+			l.readChar() // skip backslash
+			switch l.ch {
+			case 'n':
+				result.WriteByte('\n')
+			case 't':
+				result.WriteByte('\t')
+			case 'r':
+				result.WriteByte('\r')
+			case '\\':
+				result.WriteByte('\\')
+			case '"':
+				result.WriteByte('"')
+			case '\'':
+				result.WriteByte('\'')
+			default:
+				// Keep the backslash and character as-is if not recognized
+				result.WriteByte('\\')
+				result.WriteByte(l.ch)
+			}
+		} else {
+			result.WriteByte(l.ch)
+		}
 		l.readChar()
 	}
-	result := l.input[start:l.position]
 	l.readChar() // skip closing quote
-	return result
+	return result.String()
 }
 
 func (l *Lexer) readNumber() string {
@@ -144,6 +166,7 @@ var keywords = map[string]token.Type{
 	"false":     token.FALSE,
 	"toggle":    token.TOGGLE,
 	"location":  token.LOCATION,
+	"write":     token.WRITE,
 }
 
 func (l *Lexer) lookupKeyword(word string) token.Type {

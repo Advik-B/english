@@ -65,6 +65,7 @@ const (
 	FALSE
 	TOGGLE
 	LOCATION
+	WRITE
 
 	// Operators and Punctuation
 	PERIOD
@@ -208,6 +209,8 @@ func (t Type) String() string {
 		return "TOGGLE"
 	case LOCATION:
 		return "LOCATION"
+	case WRITE:
+		return "WRITE"
 	case PERIOD:
 		return "PERIOD"
 	case COMMA:

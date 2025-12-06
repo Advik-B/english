@@ -1,0 +1,38 @@
+# Print and Write Example
+# Demonstrates enhanced print and write statements
+
+Print "=== Print and Write Examples ===".
+
+# Multiple arguments with comma
+Print "Hello", "World".
+
+# Print with variable
+Declare name to be "Alice".
+Print "Hello,", the value of name.
+
+# Print with expression
+Declare x to be 10.
+Declare y to be 20.
+Print "The sum of", the value of x, "and", the value of y, "is", x + y.
+
+# Write statement (no newline)
+Write "Loading".
+Write ".".
+Write ".".
+Write ".".
+Write "\n".
+
+# Write for inline output
+Declare items to be ["Apple", "Banana", "Cherry"].
+Write "Items: ".
+for each item in items, do the following:
+    Write the value of item.
+    Write " ".
+thats it.
+Write "\n".
+
+# Escape sequences in strings
+Print "Line 1\nLine 2\nLine 3".
+Print "Tab\tSeparated\tValues".
+
+Print "=== Done! ===".

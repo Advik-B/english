@@ -280,7 +280,9 @@ func (a *Analyzer) extractFromStatement(stmt ast.Statement, result *AnalysisResu
 		}
 
 	case *ast.OutputStatement:
-		a.extractReferencesFromExpr(s.Value, result, doc)
+		for _, value := range s.Values {
+			a.extractReferencesFromExpr(value, result, doc)
+		}
 
 	case *ast.ReturnStatement:
 		a.extractReferencesFromExpr(s.Value, result, doc)

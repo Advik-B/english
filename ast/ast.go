@@ -205,7 +205,8 @@ func (rs *ReturnStatement) statementNode() {}
 
 // OutputStatement represents a print statement
 type OutputStatement struct {
-	Value Expression
+	Values  []Expression
+	Newline bool // true for Print, false for Write
 }
 
 func (os *OutputStatement) node()          {}

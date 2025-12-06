@@ -389,11 +389,20 @@ func (ev *Evaluator) evalCallStatement(cs *ast.CallStatement) (Value, error) {
 }
 
 func (ev *Evaluator) evalOutput(os *ast.OutputStatement) (Value, error) {
-	value, err := ev.Eval(os.Value)
-	if err != nil {
-		return nil, err
+	var parts []string
+	for _, expr := range os.Values {
+		value, err := ev.Eval(expr)
+		if err != nil {
+			return nil, err
+		}
+		parts = append(parts, ToString(value))
 	}
-	fmt.Println(ToString(value))
+	output := strings.Join(parts, " ")
+	if os.Newline {
+		fmt.Println(output)
+	} else {
+		fmt.Print(output)
+	}
 	return nil, nil
 }
 

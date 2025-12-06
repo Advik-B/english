@@ -113,7 +113,9 @@ func (p *Parser) parseStatement() (ast.Statement, error) {
 	case token.FOR:
 		return p.parseForEach()
 	case token.PRINT:
-		return p.parseOutput()
+		return p.parseOutput(true)
+	case token.WRITE:
+		return p.parseOutput(false)
 	case token.RETURN:
 		return p.parseReturn()
 	case token.TOGGLE:
@@ -808,15 +810,30 @@ func (p *Parser) parseForEach() (ast.Statement, error) {
 	}, nil
 }
 
-func (p *Parser) parseOutput() (ast.Statement, error) {
-	if err := p.expectToken(token.PRINT); err != nil {
-		return nil, err
+func (p *Parser) parseOutput(newline bool) (ast.Statement, error) {
+	// Accept either PRINT or WRITE token
+	if p.curToken.Type != token.PRINT && p.curToken.Type != token.WRITE {
+		return nil, fmt.Errorf("expected 'Print' or 'Write', got %v", p.curToken.Type)
 	}
 	p.nextToken()
 
+	var values []ast.Expression
+
+	// Parse first expression
 	value, err := p.parseExpression()
 	if err != nil {
 		return nil, err
+	}
+	values = append(values, value)
+
+	// Parse additional comma-separated expressions
+	for p.curToken.Type == token.COMMA {
+		p.nextToken() // consume comma
+		value, err := p.parseExpression()
+		if err != nil {
+			return nil, err
+		}
+		values = append(values, value)
 	}
 
 	if err := p.expectToken(token.PERIOD); err != nil {
@@ -825,7 +842,8 @@ func (p *Parser) parseOutput() (ast.Statement, error) {
 	p.nextToken()
 
 	return &ast.OutputStatement{
-		Value: value,
+		Values:  values,
+		Newline: newline,
 	}, nil
 }
 

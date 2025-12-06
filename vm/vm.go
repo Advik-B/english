@@ -91,16 +91,9 @@ func (e *Environment) Set(name string, value Value) error {
 		e.variables[name] = value
 		return nil
 	}
-	// Look up the scope chain for the variable
+	// Look up the scope chain for the variable and set it where it's found
 	if e.parent != nil {
-		// Check if variable exists anywhere in parent chain
-		parentEnv := e.parent
-		for parentEnv != nil {
-			if _, exists := parentEnv.variables[name]; exists {
-				return e.parent.Set(name, value)
-			}
-			parentEnv = parentEnv.parent
-		}
+		return e.parent.Set(name, value)
 	}
 	e.variables[name] = value
 	return nil

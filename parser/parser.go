@@ -813,7 +813,7 @@ func (p *Parser) parseForEach() (ast.Statement, error) {
 func (p *Parser) parseOutput(newline bool) (ast.Statement, error) {
 	// Accept either PRINT or WRITE token
 	if p.curToken.Type != token.PRINT && p.curToken.Type != token.WRITE {
-		return nil, fmt.Errorf("expected 'Print' or 'Write', got %v", p.curToken.Type)
+		return nil, fmt.Errorf("expected %v or %v, got %v", token.PRINT, token.WRITE, p.curToken.Type)
 	}
 	p.nextToken()
 

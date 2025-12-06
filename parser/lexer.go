@@ -80,7 +80,9 @@ func (l *Lexer) readString(quote byte) string {
 			case '\'':
 				result.WriteByte('\'')
 			default:
-				// Keep the backslash and character as-is if not recognized
+				// For unrecognized escape sequences (e.g., \x), preserve the backslash
+				// and the character as-is. This allows unknown sequences to pass through
+				// without error, though they won't have special meaning.
 				result.WriteByte('\\')
 				result.WriteByte(l.ch)
 			}

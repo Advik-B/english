@@ -3,7 +3,6 @@ package cmd
 import (
 	"english/bytecode"
 	"english/parser"
-	"english/repl"
 	"english/vm"
 	"fmt"
 	"os"
@@ -30,20 +29,9 @@ Write code using English keywords and natural language constructs.`,
 var replCmd = &cobra.Command{
 	Use:   "repl",
 	Short: "Start the interactive REPL",
-	Long: `Start the Read-Eval-Print Loop for interactive programming.
-By default, starts with a beautiful TUI interface using Charm Bracelet libraries.
-Use --simple flag for a plain REPL suitable for pipes, scripts, or automation.`,
+	Long:  "Start the Read-Eval-Print Loop with beautiful TUI interface for interactive programming",
 	Run: func(cmd *cobra.Command, args []string) {
-		simple, err := cmd.Flags().GetBool("simple")
-		if err != nil {
-			// Programming error - flag should be defined in init()
-			panic(fmt.Sprintf("internal error: failed to read --simple flag: %v (please report this bug)", err))
-		}
-		if simple {
-			StartSimpleREPL()
-		} else {
-			StartREPL()
-		}
+		StartREPL()
 	},
 }
 
@@ -96,7 +84,6 @@ func init() {
 	rootCmd.AddCommand(compileCmd)
 	rootCmd.AddCommand(versionCmd)
 
-	replCmd.Flags().BoolP("simple", "s", false, "Start simple REPL (no TUI) for pipes, scripts, or automation")
 	compileCmd.Flags().StringP("output", "o", "", "Output file name (default: input file with .101 extension)")
 }
 
@@ -191,15 +178,6 @@ func RunBytecode(filename string) {
 	_, err = evaluator.Eval(program)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Runtime error: %v\n", err)
-		os.Exit(1)
-	}
-}
-
-// StartSimpleREPL starts the simple non-TUI REPL
-func StartSimpleREPL() {
-	console := repl.NewConsole()
-	if err := console.Start(); err != nil {
-		fmt.Fprintf(os.Stderr, "REPL error: %v\n", err)
 		os.Exit(1)
 	}
 }

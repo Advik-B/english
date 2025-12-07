@@ -387,22 +387,21 @@ func (m *model) executeCode(code string) {
 		return
 	}
 
-	// Set up cleanup to ensure stdout is always restored
+	// Set up cleanup to ensure resources are always released
 	os.Stdout = w
 	defer func() {
+		w.Close()
 		os.Stdout = oldStdout
+		r.Close()
 	}()
 
 	// Execute
 	_, execErr := m.evaluator.Eval(program)
 
-	// Close writer to signal completion
-	w.Close()
-
+	// Close writer to signal completion (already handled by defer)
 	// Read captured output using io.Copy
 	var capturedOutput strings.Builder
 	_, _ = io.Copy(&capturedOutput, r)
-	r.Close()
 
 	// Handle execution errors
 	if execErr != nil {

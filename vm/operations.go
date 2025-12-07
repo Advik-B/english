@@ -90,18 +90,17 @@ func Add(left, right Value) (Value, error) {
 	switch l := left.(type) {
 	case float64:
 		// When left is a number, right must also be a number
-		switch right.(type) {
+		switch r := right.(type) {
 		case float64:
-			r, _ := ToNumber(right)
 			return l + r, nil
 		case string:
 			return nil, fmt.Errorf("mismatched types %s and %s for operation \"add\"", getTypeName(left), getTypeName(right))
 		default:
-			r, err := ToNumber(right)
+			rNum, err := ToNumber(right)
 			if err != nil {
 				return nil, fmt.Errorf("mismatched types %s and %s for operation \"add\"", getTypeName(left), getTypeName(right))
 			}
-			return l + r, nil
+			return l + rNum, nil
 		}
 	case string:
 		// When left is a string, concatenate with string representation of right

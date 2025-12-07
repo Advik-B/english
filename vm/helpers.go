@@ -61,7 +61,8 @@ func getTypeName(v Value) string {
 	switch val := v.(type) {
 	case float64:
 		// Check if it's a whole number (integer)
-		if val == float64(int64(val)) {
+		// Use a safe range check to avoid precision issues with large numbers
+		if val >= -9007199254740992 && val <= 9007199254740992 && val == float64(int64(val)) {
 			return "i32"
 		}
 		return "f64"

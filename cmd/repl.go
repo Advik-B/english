@@ -4,6 +4,7 @@ import (
 	"english/parser"
 	"english/vm"
 	"fmt"
+	"io"
 	"os"
 	"sort"
 	"strings"
@@ -300,6 +301,15 @@ func (m *model) getHelp() string {
 	return help.String()
 }
 
+// formatVariableEntry formats a single variable for display
+func (m *model) formatVariableEntry(name string, value vm.Value) string {
+	valStr := formatValue(value)
+	if m.env.IsConstant(name) {
+		return "  " + varNameStyle.Render(name) + " = " + varValueStyle.Render(valStr) + " " + helpStyle.Render("(const)")
+	}
+	return "  " + varNameStyle.Render(name) + " = " + varValueStyle.Render(valStr)
+}
+
 // listVariables returns formatted list of variables and functions
 func (m *model) listVariables() string {
 	vars := m.env.GetAllVariables()
@@ -321,13 +331,7 @@ func (m *model) listVariables() string {
 
 		result.WriteString(infoStyle.Render("📦 Variables:") + "\n")
 		for _, name := range varNames {
-			val := vars[name]
-			valStr := formatValue(val)
-			if m.env.IsConstant(name) {
-				result.WriteString("  " + varNameStyle.Render(name) + " = " + varValueStyle.Render(valStr) + " " + helpStyle.Render("(const)") + "\n")
-			} else {
-				result.WriteString("  " + varNameStyle.Render(name) + " = " + varValueStyle.Render(valStr) + "\n")
-			}
+			result.WriteString(m.formatVariableEntry(name, vars[name]) + "\n")
 		}
 	}
 
@@ -382,33 +386,34 @@ func (m *model) executeCode(code string) {
 
 	// Capture stdout during execution
 	oldStdout := os.Stdout
-	r, w, _ := os.Pipe()
+	r, w, err := os.Pipe()
+	if err != nil {
+		// Fallback to execution without capture if pipe fails
+		_, execErr := m.evaluator.Eval(program)
+		if execErr != nil {
+			m.output = append(m.output, errorStyle.Render("✗ Runtime error: ")+execErr.Error())
+		} else {
+			m.output = append(m.output, successStyle.Render("✓ Success"))
+		}
+		return
+	}
 	os.Stdout = w
 
 	// Execute
-	_, err = m.evaluator.Eval(program)
+	_, execErr := m.evaluator.Eval(program)
 
 	// Restore stdout
 	w.Close()
 	os.Stdout = oldStdout
 
-	// Read captured output
+	// Read captured output using io.Copy
 	var capturedOutput strings.Builder
-	buf := make([]byte, 1024)
-	for {
-		n, readErr := r.Read(buf)
-		if n > 0 {
-			capturedOutput.Write(buf[:n])
-		}
-		if readErr != nil {
-			break
-		}
-	}
+	_, _ = io.Copy(&capturedOutput, r)
 	r.Close()
 
 	// Handle execution errors
-	if err != nil {
-		m.output = append(m.output, errorStyle.Render("✗ Runtime error: ")+err.Error())
+	if execErr != nil {
+		m.output = append(m.output, errorStyle.Render("✗ Runtime error: ")+execErr.Error())
 		return
 	}
 

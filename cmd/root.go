@@ -29,24 +29,16 @@ Write code using English keywords and natural language constructs.`,
 
 var replCmd = &cobra.Command{
 	Use:   "repl",
-	Short: "Start the interactive REPL (TUI mode)",
-	Long:  "Start the Read-Eval-Print Loop with TUI interface for interactive programming",
+	Short: "Start the interactive REPL",
+	Long: `Start the Read-Eval-Print Loop for interactive programming.
+By default, starts with a beautiful TUI interface using Charm Bracelet libraries.
+Use --simple flag for a plain REPL suitable for pipes, scripts, or automation.`,
 	Run: func(cmd *cobra.Command, args []string) {
-		StartREPL()
-	},
-}
-
-var replSimpleCmd = &cobra.Command{
-	Use:   "repl-simple",
-	Short: "Start the simple REPL (no TUI)",
-	Long: `Start a simple Read-Eval-Print Loop for interactive programming.
-This version works better in non-TTY environments (like pipes, scripts, or programmatic access).
-Use this for testing, automation, or when the TUI is not desired.`,
-	Run: func(cmd *cobra.Command, args []string) {
-		console := repl.NewConsole()
-		if err := console.Start(); err != nil {
-			fmt.Fprintf(os.Stderr, "REPL error: %v\n", err)
-			os.Exit(1)
+		simple, _ := cmd.Flags().GetBool("simple")
+		if simple {
+			StartSimpleREPL()
+		} else {
+			StartREPL()
 		}
 	},
 }
@@ -96,11 +88,11 @@ func Execute() {
 
 func init() {
 	rootCmd.AddCommand(replCmd)
-	rootCmd.AddCommand(replSimpleCmd)
 	rootCmd.AddCommand(runCmd)
 	rootCmd.AddCommand(compileCmd)
 	rootCmd.AddCommand(versionCmd)
 
+	replCmd.Flags().BoolP("simple", "s", false, "Start simple REPL (no TUI) for pipes, scripts, or automation")
 	compileCmd.Flags().StringP("output", "o", "", "Output file name (default: input file with .101 extension)")
 }
 
@@ -195,6 +187,15 @@ func RunBytecode(filename string) {
 	_, err = evaluator.Eval(program)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Runtime error: %v\n", err)
+		os.Exit(1)
+	}
+}
+
+// StartSimpleREPL starts the simple non-TUI REPL
+func StartSimpleREPL() {
+	console := repl.NewConsole()
+	if err := console.Start(); err != nil {
+		fmt.Fprintf(os.Stderr, "REPL error: %v\n", err)
 		os.Exit(1)
 	}
 }

@@ -389,15 +389,10 @@ func (m *model) executeCode(code string) {
 	r, w, err := os.Pipe()
 	if err != nil {
 		// Fallback to execution without capture if pipe fails
-		_, execErr := m.evaluator.Eval(program)
-		if execErr != nil {
-			m.output = append(m.output, errorStyle.Render("✗ Runtime error: ")+execErr.Error())
-		} else {
-			m.output = append(m.output, successStyle.Render("✓ Success"))
-		}
+		m.executeWithoutCapture(program)
 		return
 	}
-	
+
 	// Set up cleanup to ensure stdout is always restored
 	os.Stdout = w
 	defer func() {
@@ -406,14 +401,7 @@ func (m *model) executeCode(code string) {
 	}()
 
 	// Execute
-	execErr := func() error {
-		_, err := m.evaluator.Eval(program)
-		return err
-	}()
-
-	// Close writer to signal completion
-	w.Close()
-	os.Stdout = oldStdout
+	_, execErr := m.evaluator.Eval(program)
 
 	// Read captured output using io.Copy
 	var capturedOutput strings.Builder
@@ -430,6 +418,16 @@ func (m *model) executeCode(code string) {
 	output := strings.TrimSpace(capturedOutput.String())
 	if output != "" {
 		m.output = append(m.output, output)
+	} else {
+		m.output = append(m.output, successStyle.Render("✓ Success"))
+	}
+}
+
+// executeWithoutCapture executes code without capturing stdout (fallback)
+func (m *model) executeWithoutCapture(program interface{}) {
+	_, err := m.evaluator.Eval(program)
+	if err != nil {
+		m.output = append(m.output, errorStyle.Render("✗ Runtime error: ")+err.Error())
 	} else {
 		m.output = append(m.output, successStyle.Render("✓ Success"))
 	}

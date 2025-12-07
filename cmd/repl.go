@@ -397,12 +397,21 @@ func (m *model) executeCode(code string) {
 		}
 		return
 	}
+	
+	// Set up cleanup to ensure stdout is always restored
 	os.Stdout = w
+	defer func() {
+		w.Close()
+		os.Stdout = oldStdout
+	}()
 
 	// Execute
-	_, execErr := m.evaluator.Eval(program)
+	execErr := func() error {
+		_, err := m.evaluator.Eval(program)
+		return err
+	}()
 
-	// Restore stdout
+	// Close writer to signal completion
 	w.Close()
 	os.Stdout = oldStdout
 

@@ -1,0 +1,15 @@
+# Possessive method call test
+
+declare Person as a structure with the following fields:
+    name is a string.
+    
+    let talk be a function that does the following:
+        print "Hello, my name is", name.
+    thats it.
+thats it.
+
+let p be a new instance of Person with the following fields:
+    name is "Alice".
+thats it.
+
+call p's talk.

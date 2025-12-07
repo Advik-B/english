@@ -120,6 +120,12 @@ func (p *Parser) parseStatement() (ast.Statement, error) {
 		return p.parseReturn()
 	case token.TOGGLE:
 		return p.parseToggle()
+	case token.TRY:
+		return p.parseTryStatement()
+	case token.RAISE:
+		return p.parseRaiseStatement()
+	case token.SWAP:
+		return p.parseSwapStatement()
 	default:
 		suggestion := ""
 		switch p.curToken.Type {
@@ -217,6 +223,13 @@ func (p *Parser) parseDeclaration() (ast.Statement, error) {
 	// Check if it's a function declaration
 	if p.curToken.Type == token.FUNCTION {
 		return p.parseFunctionDeclaration()
+	}
+
+	// Check if it's a struct declaration: "Declare Person as a structure..."
+	// We need to peek ahead to see if we have "as" followed by "structure"/"struct"
+	if p.curToken.Type == token.IDENTIFIER && p.peekToken.Type == token.AS {
+		// Save position and try struct parsing
+		return p.parseStructDeclaration()
 	}
 
 	// Variable or constant declaration
@@ -504,11 +517,93 @@ func (p *Parser) parseCall() (ast.Statement, error) {
 	}
 	p.nextToken()
 
-	funcName := p.curToken.Value
+	// First identifier could be:
+	// 1. Function name: "call greet with args."
+	// 2. Method name: "call talk from p2." or "call talk on p2."
+	// 3. Object name with possessive: "call p2's talk." (p2's is a single token)
+	
+	firstIdent := p.curToken.Value
 	if p.curToken.Type != token.IDENTIFIER {
-		return nil, fmt.Errorf("expected function name after 'Call'")
+		return nil, fmt.Errorf("expected identifier after 'Call'")
 	}
 	p.nextToken()
+
+	// Check for possessive syntax: "call p2's talk."
+	// The identifier will end with 's (e.g., "p2's")
+	if len(firstIdent) > 2 && firstIdent[len(firstIdent)-2:] == "'s" {
+		// This is possessive: extract object name (remove 's)
+		objectName := firstIdent[:len(firstIdent)-2]
+		
+		if p.curToken.Type != token.IDENTIFIER {
+			return nil, fmt.Errorf("expected method name after possessive")
+		}
+		methodName := p.curToken.Value
+		p.nextToken()
+		
+		// Parse optional arguments
+		var args []ast.Expression
+		if p.curToken.Type == token.WITH {
+			p.nextToken()
+			args = p.parseCallArguments()
+		}
+		
+		if err := p.expectToken(token.PERIOD); err != nil {
+			return nil, err
+		}
+		p.nextToken()
+		
+		// Return as method call
+		return &ast.CallStatement{
+			MethodCall: &ast.MethodCall{
+				Object:     &ast.Identifier{Name: objectName},
+				MethodName: methodName,
+				Arguments:  args,
+			},
+		}, nil
+	}
+
+	// Check for "from" or "on" (method call syntax)
+	if p.curToken.Type == token.FROM || p.curToken.Type == token.ON {
+		methodName := firstIdent
+		p.nextToken() // skip FROM/ON
+		
+		// Get object
+		if p.curToken.Type != token.IDENTIFIER {
+			return nil, fmt.Errorf("expected object name after 'from'/'on'")
+		}
+		objectName := p.curToken.Value
+		p.nextToken()
+		
+		// Parse optional arguments
+		var args []ast.Expression
+		if p.curToken.Type == token.WITH {
+			p.nextToken()
+			args = p.parseCallArguments()
+		}
+		
+		if err := p.expectToken(token.PERIOD); err != nil {
+			return nil, err
+		}
+		p.nextToken()
+		
+		// Return as method call
+		return &ast.CallStatement{
+			MethodCall: &ast.MethodCall{
+				Object:     &ast.Identifier{Name: objectName},
+				MethodName: methodName,
+				Arguments:  args,
+			},
+		}, nil
+	}
+
+	// Regular function call: "call greet with args."
+	funcName := firstIdent
+	var args []ast.Expression
+	
+	if p.curToken.Type == token.WITH {
+		p.nextToken()
+		args = p.parseCallArguments()
+	}
 
 	if err := p.expectToken(token.PERIOD); err != nil {
 		return nil, err
@@ -518,9 +613,29 @@ func (p *Parser) parseCall() (ast.Statement, error) {
 	return &ast.CallStatement{
 		FunctionCall: &ast.FunctionCall{
 			Name:      funcName,
-			Arguments: []ast.Expression{},
+			Arguments: args,
 		},
 	}, nil
+}
+
+// parseCallArguments parses comma-separated call arguments
+func (p *Parser) parseCallArguments() []ast.Expression {
+	var args []ast.Expression
+	
+	for {
+		arg, err := p.parseExpression()
+		if err != nil {
+			break
+		}
+		args = append(args, arg)
+		
+		if p.curToken.Type != token.AND && p.curToken.Type != token.COMMA {
+			break
+		}
+		p.nextToken()
+	}
+	
+	return args
 }
 
 func (p *Parser) parseIfStatement() (ast.Statement, error) {
@@ -910,7 +1025,11 @@ func (p *Parser) parseBreak() (ast.Statement, error) {
 func (p *Parser) parseBlock() ([]ast.Statement, error) {
 	var statements []ast.Statement
 
-	for p.curToken.Type != token.THATS && p.curToken.Type != token.OTHERWISE && p.curToken.Type != token.EOF {
+	for p.curToken.Type != token.THATS && 
+		p.curToken.Type != token.OTHERWISE && 
+		p.curToken.Type != token.ON && 
+		p.curToken.Type != token.BUT && 
+		p.curToken.Type != token.EOF {
 		stmt, err := p.parseStatement()
 		if err != nil {
 			return nil, err
@@ -1028,7 +1147,7 @@ func (p *Parser) parsePrimary() (ast.Expression, error) {
 		return p.parseList()
 
 	case token.THE:
-		// Handle "the item at position X in Y" or "the length of X" or "the remainder of X divided by Y" or "the location of X"
+		// Handle "the item at position X in Y" or "the length of X" or "the remainder of X divided by Y" or "the location of X" or "the type of X" or "the name of person" (field access)
 		p.nextToken()
 		if p.curToken.Type == token.ITEM {
 			return p.parseIndexExpression()
@@ -1041,6 +1160,28 @@ func (p *Parser) parsePrimary() (ast.Expression, error) {
 		}
 		if p.curToken.Type == token.LOCATION {
 			return p.parseLocationExpression()
+		}
+		if p.curToken.Type == token.TYPE {
+			return p.parseTypeExpression()
+		}
+		// Check for field access: "the name of person"
+		if p.curToken.Type == token.IDENTIFIER {
+			fieldName := p.curToken.Value
+			p.nextToken()
+			if p.curToken.Type == token.OF {
+				p.nextToken()
+				// Parse the object expression
+				obj, err := p.parseExpression()
+				if err != nil {
+					return nil, err
+				}
+				return &ast.FieldAccess{
+					Object: obj,
+					Field:  fieldName,
+				}, nil
+			}
+			// Not field access, restore identifier
+			return &ast.Identifier{Name: fieldName}, nil
 		}
 		// Fall back to treating "the" as part of other constructs
 		// Put back THE token context - this is for "the value of" pattern
@@ -1060,6 +1201,26 @@ func (p *Parser) parsePrimary() (ast.Expression, error) {
 
 	case token.IDENTIFIER:
 		name := p.curToken.Value
+		
+		// Check for special identifier phrases
+		if name == "a" || name == "an" {
+			p.nextToken()
+			if p.curToken.Type == token.NEW {
+				// "a new instance of Person"
+				return p.parseStructInstantiation()
+			}
+			if p.curToken.Type == token.REFERENCE {
+				// "a reference to x"
+				return p.parseReferenceExpression()
+			}
+			if p.curToken.Type == token.COPY {
+				// "a copy of x"
+				return p.parseCopyExpression()
+			}
+			// Not a special phrase, treat "a"/"an" as identifier
+			return &ast.Identifier{Name: name}, nil
+		}
+		
 		p.nextToken()
 
 		// Check if it's a function call
@@ -1120,6 +1281,10 @@ func (p *Parser) parsePrimary() (ast.Expression, error) {
 			Operator: "-",
 			Right:    expr,
 		}, nil
+
+	case token.NEW:
+		// "new instance of Person" (without "a")
+		return p.parseStructInstantiation()
 
 	default:
 		return nil, fmt.Errorf("unexpected token in expression: %v at line %d", p.curToken.Type, p.curToken.Line)
@@ -1256,6 +1421,72 @@ func (p *Parser) parseLocationExpression() (ast.Expression, error) {
 	return &ast.LocationExpression{
 		Name: name,
 	}, nil
+}
+
+// parseTypeExpression parses "the type of x"
+func (p *Parser) parseTypeExpression() (ast.Expression, error) {
+	// Already consumed "the", now at "type"
+	if err := p.expectToken(token.TYPE); err != nil {
+		return nil, err
+	}
+	p.nextToken()
+
+	if err := p.expectToken(token.OF); err != nil {
+		return nil, err
+	}
+	p.nextToken()
+
+	// Parse the expression whose type we want
+	expr, err := p.parseExpression()
+	if err != nil {
+		return nil, err
+	}
+
+	return &ast.TypeExpression{Value: expr}, nil
+}
+
+// parseReferenceExpression parses "a reference to x"
+func (p *Parser) parseReferenceExpression() (ast.Expression, error) {
+	// Already consumed "a", now at "reference"
+	if err := p.expectToken(token.REFERENCE); err != nil {
+		return nil, err
+	}
+	p.nextToken()
+
+	if err := p.expectToken(token.TO); err != nil {
+		return nil, err
+	}
+	p.nextToken()
+
+	if p.curToken.Type != token.IDENTIFIER {
+		return nil, fmt.Errorf("expected variable name after 'reference to', got %v", p.curToken.Type)
+	}
+	name := p.curToken.Value
+	p.nextToken()
+
+	return &ast.ReferenceExpression{Name: name}, nil
+}
+
+// parseCopyExpression parses "a copy of x"
+func (p *Parser) parseCopyExpression() (ast.Expression, error) {
+	// Already consumed "a", now at "copy"
+	if err := p.expectToken(token.COPY); err != nil {
+		return nil, err
+	}
+	p.nextToken()
+
+	if err := p.expectToken(token.OF); err != nil {
+		return nil, err
+	}
+	p.nextToken()
+
+	// Parse the expression to copy
+	expr, err := p.parseExpression()
+	if err != nil {
+		return nil, err
+	}
+
+	return &ast.CopyExpression{Value: expr}, nil
 }
 
 // parseToggle parses "Toggle x." or "Toggle the value of x."

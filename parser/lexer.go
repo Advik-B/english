@@ -115,6 +115,14 @@ func (l *Lexer) readIdentifier() string {
 	for unicode.IsLetter(rune(l.ch)) || unicode.IsDigit(rune(l.ch)) || l.ch == '_' {
 		l.readChar()
 	}
+	
+	// Check for possessive form: identifier's
+	// If we see an apostrophe followed by 's', include it in the identifier
+	if l.ch == '\'' && l.peekChar() == 's' {
+		l.readChar() // consume apostrophe
+		l.readChar() // consume 's'
+	}
+	
 	return l.input[start:l.position]
 }
 
@@ -169,6 +177,30 @@ var keywords = map[string]token.Type{
 	"toggle":    token.TOGGLE,
 	"location":  token.LOCATION,
 	"write":     token.WRITE,
+	"as":        token.AS,
+	"structure": token.STRUCTURE,
+	"struct":    token.STRUCT,
+	"fields":    token.FIELDS,
+	"field":     token.FIELD,
+	"instance":  token.INSTANCE,
+	"new":       token.NEW,
+	"try":       token.TRY,
+	"doing":     token.DOING,
+	"on":        token.ON,
+	"finally":   token.FINALLY,
+	"raise":     token.RAISE,
+	"reference": token.REFERENCE,
+	"copy":      token.COPY,
+	"swap":      token.SWAP,
+	"casted":    token.CASTED,
+	"type":      token.TYPE,
+	"which":     token.WHICH,
+	"is":        token.IS,
+	"from":      token.FROM,
+	"unsigned":  token.UNSIGNED,
+	"integer":   token.INTEGER,
+	"default":   token.DEFAULT,
+	"but":       token.BUT,
 }
 
 func (l *Lexer) lookupKeyword(word string) token.Type {

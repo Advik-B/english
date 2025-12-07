@@ -66,6 +66,31 @@ const (
 	TOGGLE
 	LOCATION
 	WRITE
+	AS
+	STRUCTURE
+	STRUCT
+	FIELDS
+	FIELD
+	INSTANCE
+	NEW
+	TRY
+	DOING
+	ON
+	ONERROR
+	FINALLY
+	RAISE
+	REFERENCE
+	COPY
+	SWAP
+	CASTED
+	TYPE
+	WHICH
+	IS
+	FROM
+	UNSIGNED
+	INTEGER
+	DEFAULT
+	BUT
 
 	// Operators and Punctuation
 	PERIOD
@@ -211,6 +236,56 @@ func (t Type) String() string {
 		return "LOCATION"
 	case WRITE:
 		return "WRITE"
+	case AS:
+		return "AS"
+	case STRUCTURE:
+		return "STRUCTURE"
+	case STRUCT:
+		return "STRUCT"
+	case FIELDS:
+		return "FIELDS"
+	case FIELD:
+		return "FIELD"
+	case INSTANCE:
+		return "INSTANCE"
+	case NEW:
+		return "NEW"
+	case TRY:
+		return "TRY"
+	case DOING:
+		return "DOING"
+	case ON:
+		return "ON"
+	case ONERROR:
+		return "ONERROR"
+	case FINALLY:
+		return "FINALLY"
+	case RAISE:
+		return "RAISE"
+	case REFERENCE:
+		return "REFERENCE"
+	case COPY:
+		return "COPY"
+	case SWAP:
+		return "SWAP"
+	case CASTED:
+		return "CASTED"
+	case TYPE:
+		return "TYPE"
+	case WHICH:
+		return "WHICH"
+	case IS:
+		return "IS"
+	case FROM:
+		return "FROM"
+	case UNSIGNED:
+		return "UNSIGNED"
+	case INTEGER:
+		return "INTEGER"
+	case DEFAULT:
+		return "DEFAULT"
+	case BUT:
+		return "BUT"
 	case PERIOD:
 		return "PERIOD"
 	case COMMA:

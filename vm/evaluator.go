@@ -14,6 +14,9 @@ type Evaluator struct {
 
 // NewEvaluator creates a new evaluator with the given environment
 func NewEvaluator(env *Environment) *Evaluator {
+	// Register standard library functions
+	RegisterStdlib(env)
+	
 	return &Evaluator{
 		env:       env,
 		callStack: []string{"<main>"},
@@ -74,12 +77,37 @@ func (ev *Evaluator) Eval(node interface{}) (Value, error) {
 		return ev.evalUnaryExpression(node)
 	case *ast.FunctionCall:
 		return ev.evalFunctionCall(node)
+	case *ast.MethodCall:
+		return ev.evalMethodCall(node)
 	case *ast.IndexExpression:
 		return ev.evalIndexExpression(node)
 	case *ast.LengthExpression:
 		return ev.evalLengthExpression(node)
 	case *ast.LocationExpression:
 		return ev.evalLocationExpression(node)
+	// New AST node types
+	case *ast.StructDecl:
+		return ev.evalStructDecl(node)
+	case *ast.StructInstantiation:
+		return ev.evalStructInstantiation(node)
+	case *ast.FieldAccess:
+		return ev.evalFieldAccess(node)
+	case *ast.FieldAssignment:
+		return ev.evalFieldAssignment(node)
+	case *ast.TryStatement:
+		return ev.evalTryStatement(node)
+	case *ast.RaiseStatement:
+		return ev.evalRaiseStatement(node)
+	case *ast.SwapStatement:
+		return ev.evalSwapStatement(node)
+	case *ast.TypeExpression:
+		return ev.evalTypeExpression(node)
+	case *ast.CastExpression:
+		return ev.evalCastExpression(node)
+	case *ast.ReferenceExpression:
+		return ev.evalReferenceExpression(node)
+	case *ast.CopyExpression:
+		return ev.evalCopyExpression(node)
 	default:
 		return nil, fmt.Errorf("unknown node type: %T", node)
 	}
@@ -242,6 +270,10 @@ func (ev *Evaluator) evalFunctionDecl(fd *ast.FunctionDecl) (Value, error) {
 }
 
 func (ev *Evaluator) evalCallStatement(cs *ast.CallStatement) (Value, error) {
+	if cs.MethodCall != nil {
+		_, err := ev.evalMethodCall(cs.MethodCall)
+		return nil, err
+	}
 	_, err := ev.evalFunctionCall(cs.FunctionCall)
 	return nil, err
 }
@@ -538,6 +570,12 @@ func (ev *Evaluator) evalFunctionCall(fc *ast.FunctionCall) (Value, error) {
 			return nil, err
 		}
 		args[i] = val
+	}
+
+	// Check if it's a built-in function (stdlib)
+	if fn.Body == nil {
+		// This is a built-in function, delegate to stdlib
+		return ev.evalBuiltinFunction(fc.Name, args)
 	}
 
 	// Check parameter count

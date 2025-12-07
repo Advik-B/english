@@ -1,0 +1,46 @@
+# Test struct and type system features
+
+# Define a Person struct
+declare Person as a structure with the following fields:
+    name is a string.
+    age is an unsigned integer with 18 being the default.
+thats it.
+
+# Create an instance with default values
+let p1 be a new instance of Person.
+print "Created p1 with defaults".
+
+# Create an instance with specific values
+let p2 be a new instance of Person with the following fields:
+    name is "John Doe".
+    age is 25.
+thats it.
+
+print "Created p2 with name:", the name of p2, "and age:", the age of p2.
+
+# Test type expressions
+let x be 10.
+print "Type of x:", the type of x.
+
+let word be "hello".
+print "Type of word:", the type of word.
+
+# Test swap
+let a be 1.
+let b be 2.
+print "Before swap: a =", a, "b =", b.
+swap a and b.
+print "After swap: a =", a, "b =", b.
+
+# Test error handling
+try doing the following:
+    print "About to cause an error...".
+    raise "This is a test error" as RuntimeError.
+    print "This should not print".
+on error:
+    print "Caught error:", error.
+but finally:
+    print "Finally block executed".
+thats it.
+
+print "Program completed successfully!".

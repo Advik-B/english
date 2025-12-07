@@ -36,8 +36,8 @@ Use --simple flag for a plain REPL suitable for pipes, scripts, or automation.`,
 	Run: func(cmd *cobra.Command, args []string) {
 		simple, err := cmd.Flags().GetBool("simple")
 		if err != nil {
-			// Should never happen - indicates a programming error
-			panic(fmt.Sprintf("failed to read --simple flag: %v", err))
+			// Programming error - flag should be defined in init()
+			panic(fmt.Sprintf("internal error: failed to read --simple flag: %v (please report this bug)", err))
 		}
 		if simple {
 			StartSimpleREPL()

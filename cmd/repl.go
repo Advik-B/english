@@ -53,13 +53,7 @@ var (
 	numberStyle = lipgloss.NewStyle().
 			Foreground(lipgloss.Color("#00D7FF"))
 
-	// Panel styles
-	panelStyle = lipgloss.NewStyle().
-			Border(lipgloss.RoundedBorder()).
-			BorderForeground(lipgloss.Color("#7D56F4")).
-			Padding(0, 1).
-			MarginTop(1)
-
+	// Variable display styles
 	varNameStyle = lipgloss.NewStyle().
 			Foreground(lipgloss.Color("#FFB86C")).
 			Bold(true)
@@ -396,12 +390,14 @@ func (m *model) executeCode(code string) {
 	// Set up cleanup to ensure stdout is always restored
 	os.Stdout = w
 	defer func() {
-		w.Close()
 		os.Stdout = oldStdout
 	}()
 
 	// Execute
 	_, execErr := m.evaluator.Eval(program)
+
+	// Close writer to signal completion
+	w.Close()
 
 	// Read captured output using io.Copy
 	var capturedOutput strings.Builder

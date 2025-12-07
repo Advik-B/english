@@ -3,7 +3,6 @@ package cmd
 import (
 	"english/bytecode"
 	"english/parser"
-	"english/repl"
 	"english/vm"
 	"fmt"
 	"os"
@@ -29,25 +28,10 @@ Write code using English keywords and natural language constructs.`,
 
 var replCmd = &cobra.Command{
 	Use:   "repl",
-	Short: "Start the interactive REPL (TUI mode)",
-	Long:  "Start the Read-Eval-Print Loop with TUI interface for interactive programming",
+	Short: "Start the interactive REPL",
+	Long:  "Start the Read-Eval-Print Loop with beautiful TUI interface for interactive programming",
 	Run: func(cmd *cobra.Command, args []string) {
 		StartREPL()
-	},
-}
-
-var replSimpleCmd = &cobra.Command{
-	Use:   "repl-simple",
-	Short: "Start the simple REPL (no TUI)",
-	Long: `Start a simple Read-Eval-Print Loop for interactive programming.
-This version works better in non-TTY environments (like pipes, scripts, or programmatic access).
-Use this for testing, automation, or when the TUI is not desired.`,
-	Run: func(cmd *cobra.Command, args []string) {
-		console := repl.NewConsole()
-		if err := console.Start(); err != nil {
-			fmt.Fprintf(os.Stderr, "REPL error: %v\n", err)
-			os.Exit(1)
-		}
 	},
 }
 
@@ -96,7 +80,6 @@ func Execute() {
 
 func init() {
 	rootCmd.AddCommand(replCmd)
-	rootCmd.AddCommand(replSimpleCmd)
 	rootCmd.AddCommand(runCmd)
 	rootCmd.AddCommand(compileCmd)
 	rootCmd.AddCommand(versionCmd)

@@ -37,7 +37,8 @@ Use --simple flag for a plain REPL suitable for pipes, scripts, or automation.`,
 		simple, err := cmd.Flags().GetBool("simple")
 		if err != nil {
 			// This should never happen for a boolean flag defined in init()
-			fmt.Fprintf(os.Stderr, "Error reading simple flag: %v\n", err)
+			fmt.Fprintf(os.Stderr, "Internal error: failed to read --simple flag: %v\n", err)
+			fmt.Fprintf(os.Stderr, "This is unexpected. Please report this issue.\n")
 			os.Exit(1)
 		}
 		if simple {

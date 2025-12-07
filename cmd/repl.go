@@ -97,11 +97,7 @@ func initialModel() model {
 		env:       env,
 		evaluator: vm.NewEvaluator(env),
 		history:   []string{},
-		output: []string{
-			titleStyle.Render("✨ English Language Interpreter ✨"),
-			helpStyle.Render("Type :help for commands • Ctrl+C to exit"),
-			"",
-		},
+		output:    []string{},
 		multiline: false,
 		buffer:    []string{},
 		width:     80,

@@ -94,11 +94,11 @@ func Add(left, right Value) (Value, error) {
 		case float64:
 			return l + r, nil
 		case string:
-			return nil, fmt.Errorf("mismatched types %s and %s for operation \"add\"", getTypeName(left), getTypeName(right))
+			return nil, typeMismatchError(left, right, "add")
 		default:
 			rNum, err := ToNumber(right)
 			if err != nil {
-				return nil, fmt.Errorf("mismatched types %s and %s for operation \"add\"", getTypeName(left), getTypeName(right))
+				return nil, typeMismatchError(left, right, "add")
 			}
 			return l + rNum, nil
 		}

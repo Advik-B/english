@@ -34,7 +34,12 @@ var replCmd = &cobra.Command{
 By default, starts with a beautiful TUI interface using Charm Bracelet libraries.
 Use --simple flag for a plain REPL suitable for pipes, scripts, or automation.`,
 	Run: func(cmd *cobra.Command, args []string) {
-		simple, _ := cmd.Flags().GetBool("simple")
+		simple, err := cmd.Flags().GetBool("simple")
+		if err != nil {
+			// This should never happen for a boolean flag defined in init()
+			fmt.Fprintf(os.Stderr, "Error reading simple flag: %v\n", err)
+			os.Exit(1)
+		}
 		if simple {
 			StartSimpleREPL()
 		} else {

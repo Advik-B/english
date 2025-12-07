@@ -1,0 +1,35 @@
+# Test possessive syntax doesn't interfere with other features
+
+declare Book as a structure with the following fields:
+    title is a string.
+    author is a string.
+    
+    let describe be a function that does the following:
+        print "Book:", title, "by", author.
+    thats it.
+thats it.
+
+# Create instance
+let mybook be a new instance of Book with the following fields:
+    title is "The Great Gatsby".
+    author is "F. Scott Fitzgerald".
+thats it.
+
+# Test field access (no possessive)
+print "Title:", the title of mybook.
+print "Author:", the author of mybook.
+
+# Test possessive method call
+print "Using possessive syntax:".
+call mybook's describe.
+
+# Test that regular variables with 's' in the name still work
+let persons be [1, 2, 3].
+print "List persons:", persons.
+
+# Test identifiers ending with 's'
+let items be 5.
+let class be "A".
+print "items:", items, "class:", class.
+
+print "All tests passed!".

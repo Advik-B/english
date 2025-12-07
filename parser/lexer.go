@@ -115,6 +115,14 @@ func (l *Lexer) readIdentifier() string {
 	for unicode.IsLetter(rune(l.ch)) || unicode.IsDigit(rune(l.ch)) || l.ch == '_' {
 		l.readChar()
 	}
+	
+	// Check for possessive form: identifier's
+	// If we see an apostrophe followed by 's', include it in the identifier
+	if l.ch == '\'' && l.peekChar() == 's' {
+		l.readChar() // consume apostrophe
+		l.readChar() // consume 's'
+	}
+	
 	return l.input[start:l.position]
 }
 

@@ -520,7 +520,7 @@ func (p *Parser) parseCall() (ast.Statement, error) {
 	// First identifier could be:
 	// 1. Function name: "call greet with args."
 	// 2. Method name: "call talk from p2." or "call talk on p2."
-	// 3. Object name with possessive: "call p2's talk."
+	// 3. Object name with possessive: "call p2's talk." (p2's is a single token)
 	
 	firstIdent := p.curToken.Value
 	if p.curToken.Type != token.IDENTIFIER {
@@ -529,9 +529,10 @@ func (p *Parser) parseCall() (ast.Statement, error) {
 	p.nextToken()
 
 	// Check for possessive syntax: "call p2's talk."
-	if p.curToken.Type == token.IDENTIFIER && p.curToken.Value == "s" {
-		// This is possessive: p2's
-		p.nextToken() // skip 's
+	// The identifier will end with 's (e.g., "p2's")
+	if len(firstIdent) > 2 && firstIdent[len(firstIdent)-2:] == "'s" {
+		// This is possessive: extract object name (remove 's)
+		objectName := firstIdent[:len(firstIdent)-2]
 		
 		if p.curToken.Type != token.IDENTIFIER {
 			return nil, fmt.Errorf("expected method name after possessive")
@@ -554,7 +555,7 @@ func (p *Parser) parseCall() (ast.Statement, error) {
 		// Return as method call
 		return &ast.CallStatement{
 			MethodCall: &ast.MethodCall{
-				Object:     &ast.Identifier{Name: firstIdent},
+				Object:     &ast.Identifier{Name: objectName},
 				MethodName: methodName,
 				Arguments:  args,
 			},

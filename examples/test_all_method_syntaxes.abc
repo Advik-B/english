@@ -1,0 +1,41 @@
+# Test all method call syntaxes including possessive
+
+declare Person as a structure with the following fields:
+    name is a string.
+    
+    let talk be a function that does the following:
+        print "Hello, my name is", name.
+    thats it.
+    
+    let greet be a function that takes other and does the following:
+        print name, "says hello to", other.
+    thats it.
+thats it.
+
+let alice be a new instance of Person with the following fields:
+    name is "Alice".
+thats it.
+
+let bob be a new instance of Person with the following fields:
+    name is "Bob".
+thats it.
+
+# Test all three method call syntaxes
+print "=== Testing possessive syntax ===".
+call alice's talk.
+call bob's talk.
+
+print "=== Testing 'from' syntax ===".
+call talk from alice.
+call talk from bob.
+
+print "=== Testing 'on' syntax ===".
+call talk on alice.
+call talk on bob.
+
+print "=== Testing with arguments ===".
+call alice's greet with "Charlie".
+call greet from bob with "Diana".
+call greet on alice with "Eve".
+
+print "All method call syntaxes work!".

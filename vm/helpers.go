@@ -6,8 +6,8 @@ import (
 )
 
 // maxSafeInteger is the largest integer that can be exactly represented as float64
-// This corresponds to 2^53 in JavaScript/IEEE 754 double precision
-const maxSafeInteger = 9007199254740992
+// This corresponds to 2^53 - 1 in JavaScript/IEEE 754 double precision
+const maxSafeInteger = 9007199254740991
 
 // levenshteinDistance calculates the Levenshtein distance between two strings
 func levenshteinDistance(s1, s2 string) int {

@@ -55,3 +55,27 @@ func findSimilarName(name string, candidates []string) string {
 
 	return ""
 }
+
+// getTypeName returns the type name for a value
+func getTypeName(v Value) string {
+	switch val := v.(type) {
+	case float64:
+		// Check if it's a whole number (integer)
+		if val == float64(int64(val)) {
+			return "i32"
+		}
+		return "f64"
+	case string:
+		return "string"
+	case bool:
+		return "bool"
+	case []interface{}:
+		return "list"
+	case *FunctionValue:
+		return "function"
+	case nil:
+		return "nil"
+	default:
+		return "unknown"
+	}
+}

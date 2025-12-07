@@ -196,7 +196,7 @@ func (m model) handleEnter() (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
-	// Handle commands
+	// Handle commands (don't add to history)
 	if strings.HasPrefix(trimmed, ":") {
 		output := m.handleCommand(trimmed)
 		if output != "" {
@@ -205,16 +205,13 @@ func (m model) handleEnter() (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
-	// Handle exit
+	// Handle exit (don't add to history)
 	if trimmed == "exit" || trimmed == "quit" {
 		m.quitting = true
 		return m, tea.Quit
 	}
 
-	// Add to history
-	m.history = append(m.history, line)
-
-	// Handle multiline input
+	// Add to buffer for execution
 	m.buffer = append(m.buffer, line)
 
 	lower := strings.ToLower(trimmed)
@@ -230,6 +227,8 @@ func (m model) handleEnter() (tea.Model, tea.Cmd) {
 		m.multiline = false
 		code := strings.Join(m.buffer, "\n")
 		m.buffer = []string{}
+		// Add complete multiline code to history
+		m.history = append(m.history, code)
 		m.executeCode(code)
 		return m, nil
 	}
@@ -238,7 +237,13 @@ func (m model) handleEnter() (tea.Model, tea.Cmd) {
 	if !m.multiline && strings.HasSuffix(trimmed, ".") {
 		code := strings.Join(m.buffer, "\n")
 		m.buffer = []string{}
+		// Add complete single-line code to history
+		m.history = append(m.history, code)
 		m.executeCode(code)
+	} else if !m.multiline {
+		// If not in multiline and doesn't end with period, clear buffer to prevent accumulation
+		m.buffer = []string{}
+		m.output = append(m.output, helpStyle.Render("(Incomplete statement - statements must end with '.')"))
 	}
 
 	return m, nil
@@ -375,14 +380,45 @@ func (m *model) executeCode(code string) {
 		return
 	}
 
+	// Capture stdout during execution
+	oldStdout := os.Stdout
+	r, w, _ := os.Pipe()
+	os.Stdout = w
+
 	// Execute
 	_, err = m.evaluator.Eval(program)
+
+	// Restore stdout
+	w.Close()
+	os.Stdout = oldStdout
+
+	// Read captured output
+	var capturedOutput strings.Builder
+	buf := make([]byte, 1024)
+	for {
+		n, readErr := r.Read(buf)
+		if n > 0 {
+			capturedOutput.Write(buf[:n])
+		}
+		if readErr != nil {
+			break
+		}
+	}
+	r.Close()
+
+	// Handle execution errors
 	if err != nil {
 		m.output = append(m.output, errorStyle.Render("✗ Runtime error: ")+err.Error())
 		return
 	}
 
-	m.output = append(m.output, successStyle.Render("✓ Success"))
+	// Show captured output or success message
+	output := strings.TrimSpace(capturedOutput.String())
+	if output != "" {
+		m.output = append(m.output, output)
+	} else {
+		m.output = append(m.output, successStyle.Render("✓ Success"))
+	}
 }
 
 // formatValue converts a value to display string

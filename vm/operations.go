@@ -89,12 +89,21 @@ func Equals(left, right Value) bool {
 func Add(left, right Value) (Value, error) {
 	switch l := left.(type) {
 	case float64:
-		r, err := ToNumber(right)
-		if err != nil {
-			return nil, err
+		// When left is a number, right must also be a number
+		switch r := right.(type) {
+		case float64:
+			return l + r, nil
+		case string:
+			return nil, typeMismatchError(left, right, "add")
+		default:
+			rNum, err := ToNumber(right)
+			if err != nil {
+				return nil, typeMismatchError(left, right, "add")
+			}
+			return l + rNum, nil
 		}
-		return l + r, nil
 	case string:
+		// When left is a string, concatenate with string representation of right
 		return l + ToString(right), nil
 	case []interface{}:
 		switch r := right.(type) {

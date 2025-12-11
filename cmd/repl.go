@@ -97,11 +97,7 @@ func initialModel() model {
 		env:       env,
 		evaluator: vm.NewEvaluator(env),
 		history:   []string{},
-		output: []string{
-			titleStyle.Render("✨ English Language Interpreter ✨"),
-			helpStyle.Render("Type :help for commands • Ctrl+C to exit"),
-			"",
-		},
+		output:    []string{},
 		multiline: false,
 		buffer:    []string{},
 		width:     80,
@@ -387,21 +383,19 @@ func (m *model) executeCode(code string) {
 		return
 	}
 
-	// Set up cleanup to ensure resources are always released
 	os.Stdout = w
-	defer func() {
-		w.Close()
-		os.Stdout = oldStdout
-		r.Close()
-	}()
 
 	// Execute
 	_, execErr := m.evaluator.Eval(program)
 
-	// Close writer to signal completion (already handled by defer)
+	// Close writer to signal completion and restore stdout
+	w.Close()
+	os.Stdout = oldStdout
+
 	// Read captured output using io.Copy
 	var capturedOutput strings.Builder
 	_, _ = io.Copy(&capturedOutput, r)
+	r.Close()
 
 	// Handle execution errors
 	if execErr != nil {

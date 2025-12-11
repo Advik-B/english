@@ -1,6 +1,13 @@
 package vm
 
-import "strings"
+import (
+	"fmt"
+	"strings"
+)
+
+// maxSafeInteger is the largest integer that can be exactly represented as float64
+// This corresponds to 2^53 - 1 in JavaScript/IEEE 754 double precision
+const maxSafeInteger = 9007199254740991
 
 // levenshteinDistance calculates the Levenshtein distance between two strings
 func levenshteinDistance(s1, s2 string) int {
@@ -54,4 +61,34 @@ func findSimilarName(name string, candidates []string) string {
 	}
 
 	return ""
+}
+
+// getTypeName returns the type name for a value
+func getTypeName(v Value) string {
+	switch val := v.(type) {
+	case float64:
+		// Check if it's a whole number (integer)
+		// Use a safe range check to avoid precision issues with large numbers
+		if val >= -maxSafeInteger && val <= maxSafeInteger && val == float64(int64(val)) {
+			return "i32"
+		}
+		return "f64"
+	case string:
+		return "string"
+	case bool:
+		return "bool"
+	case []interface{}:
+		return "list"
+	case *FunctionValue:
+		return "function"
+	case nil:
+		return "nil"
+	default:
+		return "unknown"
+	}
+}
+
+// typeMismatchError creates a type mismatch error for binary operations
+func typeMismatchError(left, right Value, operation string) error {
+	return fmt.Errorf("mismatched types %s and %s for operation %q", getTypeName(left), getTypeName(right), operation)
 }

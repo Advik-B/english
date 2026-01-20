@@ -6,7 +6,6 @@ package bytecode
 
 import (
 	"bytes"
-	"crypto/sha256"
 	"encoding/binary"
 	"encoding/hex"
 	"english/ast"
@@ -15,6 +14,8 @@ import (
 	"math"
 	"os"
 	"path/filepath"
+
+	"github.com/dchest/siphash"
 )
 
 // Magic bytes to identify .101 files (binary identifier)
@@ -25,9 +26,11 @@ const FormatVersion uint8 = 1
 
 // Cache configuration
 const (
-	// CacheHashBytes is the number of bytes from SHA-256 hash used for cache filenames.
-	// 16 bytes (128 bits) provides good collision resistance while keeping filenames readable.
-	CacheHashBytes = 16
+	// CacheHashBytes is the number of bytes from SipHash used for cache filenames.
+	// SipHash produces an 8-byte (64-bit) hash, which provides good collision resistance
+	// while being much faster than cryptographic hashes like SHA-256.
+	// Using the full 8 bytes as per PEP 552 recommendations.
+	CacheHashBytes = 8
 )
 
 // Node type identifiers
@@ -920,11 +923,21 @@ func (d *Decoder) decodeExpression() (ast.Expression, error) {
 const CacheDir = "__engcache__"
 
 // GetCachePath returns the cache file path for a given source file.
-// For example: "examples/math_library.abc" -> "__engcache__/23b9e3d68a65de8b9c1a2f3e_math_library.abc.101"
+// For example: "examples/math_library.abc" -> "__engcache__/23b9e3d68a65de8b_math_library.abc.101"
+// Uses SipHash for fast, non-cryptographic hashing as per PEP 552.
 func GetCachePath(sourcePath string) string {
-	// Compute a hash-based filename to handle absolute and relative paths
-	hash := sha256.Sum256([]byte(sourcePath))
-	hashStr := hex.EncodeToString(hash[:CacheHashBytes])
+	// Use SipHash for fast hashing (as recommended by PEP 552)
+	// Using a fixed key for deterministic hashing across runs
+	key0 := uint64(0x0706050403020100)
+	key1 := uint64(0x0f0e0d0c0b0a0908)
+	
+	// Compute SipHash of the source path
+	hash := siphash.Hash(key0, key1, []byte(sourcePath))
+	
+	// Convert to bytes for hex encoding
+	hashBytes := make([]byte, 8)
+	binary.LittleEndian.PutUint64(hashBytes, hash)
+	hashStr := hex.EncodeToString(hashBytes[:CacheHashBytes])
 	
 	// Get the base name for readability
 	baseName := filepath.Base(sourcePath)

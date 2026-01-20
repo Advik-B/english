@@ -194,7 +194,7 @@ Call myFunction with 10.
 
 Imported files are automatically compiled to bytecode and cached in the `__engcache__/` directory for faster loading. The cache:
 - Automatically regenerates when source files are modified
-- Uses SHA-256 hashing to handle different file paths
+- Uses SipHash (as per PEP 552) for fast, efficient hashing
 - Works transparently - no manual compilation needed
 - Similar to Python's `__pycache__` behavior
 

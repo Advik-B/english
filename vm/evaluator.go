@@ -2,6 +2,7 @@ package vm
 
 import (
 	"english/ast"
+	"english/bytecode"
 	"english/parser"
 	"fmt"
 	"os"
@@ -135,20 +136,24 @@ func (ev *Evaluator) evalProgram(prog *ast.Program) (Value, error) {
 func (ev *Evaluator) evalImport(is *ast.ImportStatement) (Value, error) {
 	// Import evaluates another English file and executes it in the current environment.
 	// Supports selective imports, import all, and safe imports.
+	// Uses bytecode caching (__engcache__) for faster loading.
 	
-	// Read the file content
-	content, err := os.ReadFile(is.Path)
+	// Try to load from cache or parse the source file
+	parseFunc := func(path string) (*ast.Program, error) {
+		content, err := os.ReadFile(path)
+		if err != nil {
+			return nil, fmt.Errorf("failed to read file: %w", err)
+		}
+		
+		lexer := parser.NewLexer(string(content))
+		tokens := lexer.TokenizeAll()
+		p := parser.NewParser(tokens)
+		return p.Parse()
+	}
+	
+	program, _, err := bytecode.LoadCachedOrParse(is.Path, parseFunc)
 	if err != nil {
 		return nil, ev.runtimeError(fmt.Sprintf("failed to import '%s': %v", is.Path, err))
-	}
-
-	// Parse the imported file
-	lexer := parser.NewLexer(string(content))
-	tokens := lexer.TokenizeAll()
-	p := parser.NewParser(tokens)
-	program, err := p.Parse()
-	if err != nil {
-		return nil, ev.runtimeError(fmt.Sprintf("failed to parse imported file '%s': %v", is.Path, err))
 	}
 
 	// Handle different import modes

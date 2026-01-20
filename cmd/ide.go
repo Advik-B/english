@@ -288,9 +288,10 @@ func (m ideModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		case EditorPane:
 			if m.editor != nil {
-				var model tea.Model
-				model, cmd = m.editor.Update(msg)
-				m.editor = model.(vimtea.Editor)
+				model, cmd := m.editor.Update(msg)
+				if editor, ok := model.(vimtea.Editor); ok {
+					m.editor = editor
+				}
 				cmds = append(cmds, cmd)
 			}
 
@@ -357,9 +358,10 @@ func (m ideModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			cmds = append(cmds, cmd)
 		}
 		if m.focusedPane == EditorPane && m.editor != nil {
-			var model tea.Model
-			model, cmd = m.editor.Update(msg)
-			m.editor = model.(vimtea.Editor)
+			model, cmd := m.editor.Update(msg)
+			if editor, ok := model.(vimtea.Editor); ok {
+				m.editor = editor
+			}
 			cmds = append(cmds, cmd)
 		}
 	}
@@ -583,10 +585,10 @@ func (m *ideModel) setEditorSize() tea.Cmd {
 	middleWidth := m.width / 2
 	mainHeight := m.height - 4
 	
-	var editorModel tea.Model
-	var cmd tea.Cmd
-	editorModel, cmd = m.editor.SetSize(middleWidth-4, mainHeight-2)
-	m.editor = editorModel.(vimtea.Editor)
+	editorModel, cmd := m.editor.SetSize(middleWidth-4, mainHeight-2)
+	if editor, ok := editorModel.(vimtea.Editor); ok {
+		m.editor = editor
+	}
 	return cmd
 }
 

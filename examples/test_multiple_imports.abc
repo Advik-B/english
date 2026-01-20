@@ -1,0 +1,27 @@
+# Advanced Import Example
+# Demonstrates multiple imports and complex interactions
+
+Print "=== Advanced Import Example ===".
+
+# Import multiple libraries
+Import "examples/math_library.abc".
+Import "examples/string_utils.abc".
+
+# Use functions from both libraries
+Declare squared to be 0.
+Set squared to the result of calling square with 4.
+Print "4 squared is:", the value of squared.
+
+Declare greeting to be "".
+Set greeting to the result of calling makeGreeting with "World".
+Print the value of greeting.
+
+# Combine results from different libraries
+Declare cubed to be 0.
+Set cubed to the result of calling cube with 2.
+Declare msg to be "".
+Set msg to the result of calling makeFarewell with "Numbers".
+Print the value of msg.
+Print "2 cubed is:", the value of cubed.
+
+Print "=== All libraries working together! ===".

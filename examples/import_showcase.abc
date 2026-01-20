@@ -1,0 +1,42 @@
+# Import Syntax Showcase
+# Demonstrates all supported import syntax variations in the English language
+
+Print "=== Import Syntax Variations ===".
+Print "".
+
+# Variation 1: Simple import
+Print "1. Simple import syntax:".
+Print "   Import \"library.abc\".".
+Import "examples/math_library.abc".
+Declare result1 to be 0.
+Set result1 to the result of calling square with 3.
+Print "   -> square(3) = ", the value of result1.
+Print "".
+
+# Variation 2: Import with "from"
+Print "2. Import with 'from' keyword (more natural):".
+Print "   Import from \"library.abc\".".
+Import from "examples/string_utils.abc".
+Declare result2 to be "".
+Set result2 to the result of calling makeGreeting with "Developer".
+Print "   -> ", the value of result2.
+Print "".
+
+# Variation 3: Import with "code from" (very natural English)
+Print "3. Import with 'code from' (very natural English):".
+Print "   Import code from \"library.abc\".".
+Print "   (Already imported, using existing functions)".
+Declare result3 to be 0.
+Set result3 to the result of calling cube with 2.
+Print "   -> cube(2) = ", the value of result3.
+Print "".
+
+# Show that all imported content is available
+Print "=== All imports work together ===".
+Print "Constants from math_library: pi =", the value of pi.
+Declare farewell to be "".
+Set farewell to the result of calling makeFarewell with "User".
+Print the value of farewell.
+Print "".
+
+Print "=== Import feature complete! ===".

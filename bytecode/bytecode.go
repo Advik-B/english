@@ -913,11 +913,11 @@ func (d *Decoder) decodeExpression() (ast.Expression, error) {
 const CacheDir = "__engcache__"
 
 // GetCachePath returns the cache file path for a given source file.
-// For example: "examples/math_library.abc" -> "__engcache__/examples_math_library.abc.101"
+// For example: "examples/math_library.abc" -> "__engcache__/23b9e3d68a65de8b9c1a2f3e_math_library.abc.101"
 func GetCachePath(sourcePath string) string {
 	// Compute a hash-based filename to handle absolute and relative paths
 	hash := sha256.Sum256([]byte(sourcePath))
-	hashStr := hex.EncodeToString(hash[:8]) // Use first 8 bytes of hash
+	hashStr := hex.EncodeToString(hash[:16]) // Use first 16 bytes (128 bits) of hash for better collision resistance
 	
 	// Get the base name for readability
 	baseName := filepath.Base(sourcePath)
@@ -971,6 +971,7 @@ func ReadBytecodeCache(cachePath string) ([]byte, error) {
 }
 
 // LoadCachedOrParse attempts to load bytecode from cache, or parses the source file if cache is invalid.
+// The parseFunc parameter receives the sourcePath and should parse it into an AST Program.
 // Returns the parsed Program AST and a boolean indicating whether cache was used.
 func LoadCachedOrParse(sourcePath string, parseFunc func(string) (*ast.Program, error)) (*ast.Program, bool, error) {
 	cachePath := GetCachePath(sourcePath)
@@ -1000,7 +1001,8 @@ func LoadCachedOrParse(sourcePath string, parseFunc func(string) (*ast.Program, 
 	encoder := NewEncoder()
 	data, err := encoder.Encode(program)
 	if err == nil {
-		// Ignore cache write errors - not critical
+		// Ignore cache write errors - caching is an optimization, not critical for correctness
+		// Failures might occur due to permissions, disk space, etc., but shouldn't block execution
 		_ = WriteBytecodeCache(cachePath, data)
 	}
 	

@@ -151,13 +151,10 @@ func (ev *Evaluator) evalImport(is *ast.ImportStatement) (Value, error) {
 		return p.Parse()
 	}
 	
-	program, fromCache, err := bytecode.LoadCachedOrParse(is.Path, parseFunc)
+	program, _, err := bytecode.LoadCachedOrParse(is.Path, parseFunc)
 	if err != nil {
 		return nil, ev.runtimeError(fmt.Sprintf("failed to import '%s': %v", is.Path, err))
 	}
-	
-	// Optional: Log cache hit/miss for debugging (can be removed in production)
-	_ = fromCache // Suppress unused variable warning
 
 	// Handle different import modes
 	if is.IsSafe {

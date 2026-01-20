@@ -92,6 +92,9 @@ const (
 	DEFAULT
 	BUT
 	IMPORT
+	EVERYTHING
+	ALL
+	SAFELY
 
 	// Operators and Punctuation
 	PERIOD
@@ -289,6 +292,12 @@ func (t Type) String() string {
 		return "BUT"
 	case IMPORT:
 		return "IMPORT"
+	case EVERYTHING:
+		return "EVERYTHING"
+	case ALL:
+		return "ALL"
+	case SAFELY:
+		return "SAFELY"
 	case PERIOD:
 		return "PERIOD"
 	case COMMA:

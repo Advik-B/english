@@ -1,0 +1,19 @@
+# Test selective imports
+
+Print "=== Testing Selective Imports ===".
+
+# Import only specific functions
+Import square and cube from "examples/math_library.abc".
+
+Declare result to be 0.
+Set result to the result of calling square with 4.
+Print "square(4) =", the value of result.
+
+Set result to the result of calling cube with 2.
+Print "cube(2) =", the value of result.
+
+# Try to use isEven which should not be available
+# This would cause an error if uncommented:
+# Set result to the result of calling isEven with 4.
+
+Print "=== Selective import works! ===".

@@ -678,13 +678,21 @@ func TestParserCallStatement(t *testing.T) {
 
 func TestParserImportStatement(t *testing.T) {
 	tests := []struct {
-		input    string
-		expected string
+		input       string
+		expectedPath string
+		expectedItems []string
+		expectedAll  bool
+		expectedSafe bool
 	}{
-		{`Import "library.abc".`, "library.abc"},
-		{`Import from "utils.abc".`, "utils.abc"},
-		{`Import code from "helpers.abc".`, "helpers.abc"},
-		{`Import the code from "module.abc".`, "module.abc"},
+		{`Import "library.abc".`, "library.abc", nil, false, false},
+		{`Import from "utils.abc".`, "utils.abc", nil, false, false},
+		{`Import square from "math.abc".`, "math.abc", []string{"square"}, false, false},
+		{`Import square and cube from "math.abc".`, "math.abc", []string{"square", "cube"}, false, false},
+		{`Import add, multiply and divide from "ops.abc".`, "ops.abc", []string{"add", "multiply", "divide"}, false, false},
+		{`Import everything from "lib.abc".`, "lib.abc", nil, true, false},
+		{`Import all from "lib.abc".`, "lib.abc", nil, true, false},
+		{`Import all from "lib.abc" safely.`, "lib.abc", nil, true, true},
+		{`Import square and cube from "math.abc" safely.`, "math.abc", []string{"square", "cube"}, false, true},
 	}
 
 	for _, test := range tests {
@@ -700,8 +708,26 @@ func TestParserImportStatement(t *testing.T) {
 			continue
 		}
 
-		if importStmt.Path != test.expected {
-			t.Errorf("Input %q: expected path %q, got %q", test.input, test.expected, importStmt.Path)
+		if importStmt.Path != test.expectedPath {
+			t.Errorf("Input %q: expected path %q, got %q", test.input, test.expectedPath, importStmt.Path)
+		}
+
+		if len(importStmt.Items) != len(test.expectedItems) {
+			t.Errorf("Input %q: expected %d items, got %d", test.input, len(test.expectedItems), len(importStmt.Items))
+		} else {
+			for i, item := range test.expectedItems {
+				if importStmt.Items[i] != item {
+					t.Errorf("Input %q: expected item[%d] %q, got %q", test.input, i, item, importStmt.Items[i])
+				}
+			}
+		}
+
+		if importStmt.ImportAll != test.expectedAll {
+			t.Errorf("Input %q: expected ImportAll %v, got %v", test.input, test.expectedAll, importStmt.ImportAll)
+		}
+
+		if importStmt.IsSafe != test.expectedSafe {
+			t.Errorf("Input %q: expected IsSafe %v, got %v", test.input, test.expectedSafe, importStmt.IsSafe)
 		}
 	}
 }

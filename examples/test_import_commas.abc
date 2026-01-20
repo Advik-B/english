@@ -1,0 +1,19 @@
+# Test selective imports with commas
+
+Print "=== Testing Selective Imports with Commas ===".
+
+# Import with commas
+Import square, cube, isEven from "examples/math_library.abc".
+
+Declare result to be 0.
+Set result to the result of calling square with 3.
+Print "square(3) =", the value of result.
+
+Set result to the result of calling cube with 2.
+Print "cube(2) =", the value of result.
+
+Declare check to be false.
+Set check to the result of calling isEven with 10.
+Print "isEven(10) =", the value of check.
+
+Print "=== Comma syntax works! ===".

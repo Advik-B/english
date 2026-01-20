@@ -28,7 +28,10 @@ func (p *Program) node() {}
 
 // ImportStatement represents an import statement
 type ImportStatement struct {
-	Path string // The file path to import
+	Path       string   // The file path to import
+	Items      []string // Specific items to import (empty means import all)
+	ImportAll  bool     // True for "import everything/all"
+	IsSafe     bool     // True for safe imports (don't run top-level code)
 }
 
 func (is *ImportStatement) node()          {}

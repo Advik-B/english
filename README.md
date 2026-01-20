@@ -158,25 +158,42 @@ Print "Tab\tSeparated".           # \t = tab
 
 ### Import Files
 
-Import code from other files to reuse functions and variables:
+Import code from other files to reuse functions and variables. The English import system supports several natural syntax variations and modes:
 
 ```english
-# Import using simple syntax
+# Simple import (imports everything from the file)
 Import "math_library.abc".
 
-# Import using "from" syntax (more natural)
+# Import with "from" syntax
 Import from "utilities.abc".
 
-# Import using "code from" syntax (very natural)
-Import code from "helpers.abc".
+# Selective imports (import only specific items)
+Import square, cube and isEven from "math_library.abc".
+Import add, multiply from "helpers.abc".  # Comma without "and" also works
+
+# Import everything explicitly
+Import everything from "library.abc".
+Import all from "library.abc".
+
+# Safe imports (don't run top-level code, only load declarations)
+Import all from "library.abc" safely.
+Import square and cube from "math.abc" safely.
 
 # Once imported, all functions and variables from the file are available
 Call myFunction with 10.
 ```
 
+**Import Modes:**
+
+- **Normal Import**: Executes all code in the imported file, including top-level statements
+- **Selective Import**: Runs the file in an isolated environment and imports only specified items
+- **Safe Import**: Only loads declarations (functions, variables) without executing top-level statements
+
 Example library file (`math_library.abc`):
 ```english
 # Math Library
+
+Print "Initializing math library...".  # This runs on normal import, not on safe import
 
 Declare function square that takes x and does the following:
     Return x * x.
@@ -187,12 +204,15 @@ Declare pi to always be 3.14159.
 
 Example usage:
 ```english
-Import "math_library.abc".
+# Selective import - only gets what you specify
+Import square from "math_library.abc".
 
 Declare result to be 0.
 Set result to the result of calling square with 5.
 Print "Result:", the value of result.  # Outputs: Result: 25
 
+# Safe import - doesn't print "Initializing math library..."
+Import all from "math_library.abc" safely.
 Print "Pi:", the value of pi.          # Outputs: Pi: 3.14159
 ```
 

@@ -4,8 +4,8 @@
 Print "=== Import Syntax Variations ===".
 Print "".
 
-# Variation 1: Simple import
-Print "1. Simple import syntax:".
+# Variation 1: Simple import (import everything)
+Print "1. Simple import syntax (imports everything):".
 Print "   Import \"library.abc\".".
 Import "examples/math_library.abc".
 Declare result1 to be 0.
@@ -14,7 +14,7 @@ Print "   -> square(3) = ", the value of result1.
 Print "".
 
 # Variation 2: Import with "from"
-Print "2. Import with 'from' keyword (more natural):".
+Print "2. Import with 'from' keyword:".
 Print "   Import from \"library.abc\".".
 Import from "examples/string_utils.abc".
 Declare result2 to be "".
@@ -22,13 +22,20 @@ Set result2 to the result of calling makeGreeting with "Developer".
 Print "   -> ", the value of result2.
 Print "".
 
-# Variation 3: Import with "code from" (very natural English)
-Print "3. Import with 'code from' (very natural English):".
-Print "   Import code from \"library.abc\".".
+# Variation 3: Selective import
+Print "3. Selective import (import specific items):".
+Print "   Import square and cube from \"library.abc\".".
 Print "   (Already imported, using existing functions)".
 Declare result3 to be 0.
 Set result3 to the result of calling cube with 2.
 Print "   -> cube(2) = ", the value of result3.
+Print "".
+
+# Variation 4: Import everything explicitly
+Print "4. Import everything explicitly:".
+Print "   Import everything from \"library.abc\".".
+Print "   or: Import all from \"library.abc\".".
+Print "   (Already imported all from math_library)".
 Print "".
 
 # Show that all imported content is available

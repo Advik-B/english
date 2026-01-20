@@ -1,0 +1,21 @@
+# Test import everything
+
+Print "=== Testing Import Everything ===".
+
+# Import all from the library
+Import everything from "examples/math_library.abc".
+
+Declare result to be 0.
+Set result to the result of calling square with 5.
+Print "square(5) =", the value of result.
+
+Set result to the result of calling cube with 3.
+Print "cube(3) =", the value of result.
+
+Declare evenCheck to be false.
+Set evenCheck to the result of calling isEven with 8.
+Print "isEven(8) =", the value of evenCheck.
+
+Print "pi =", the value of pi.
+
+Print "=== Import everything works! ===".

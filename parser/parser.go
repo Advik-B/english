@@ -217,23 +217,57 @@ func (p *Parser) parseLetDeclaration() (ast.Statement, error) {
 }
 
 // parseImport parses import statements with natural English syntax:
-// - Import code from "file.abc".
-// - Import "utilities.abc".
+// - Import "file.abc".
+// - Import from "file.abc".
+// - Import func1, func2 and func3 from "file.abc".
+// - Import everything from "file.abc".
+// - Import all from "file.abc".
+// - Import all from "file.abc" safely.
 func (p *Parser) parseImport() (ast.Statement, error) {
 	if err := p.expectToken(token.IMPORT); err != nil {
 		return nil, err
 	}
 	p.nextToken()
 
-	// Handle optional "code" or "the" keywords for natural language
-	// "Import code from file.abc" or "Import the code from file.abc"
+	var items []string
+	var importAll bool
+	var isSafe bool
+
+	// Handle optional "the" keyword
 	if p.curToken.Type == token.THE {
 		p.nextToken()
 	}
-	
-	// Skip optional "code" keyword
-	if p.curToken.Type == token.IDENTIFIER && strings.ToLower(p.curToken.Value) == "code" {
+
+	// Check for "everything" or "all"
+	if p.curToken.Type == token.EVERYTHING || p.curToken.Type == token.ALL {
+		importAll = true
 		p.nextToken()
+	} else if p.curToken.Type == token.IDENTIFIER {
+		// Parse list of items to import
+		// Support: func1, func2 and func3
+		for {
+			items = append(items, p.curToken.Value)
+			p.nextToken()
+
+			// Check for comma or "and"
+			if p.curToken.Type == token.COMMA {
+				p.nextToken()
+				// Optional "and" after comma
+				if p.curToken.Type == token.AND {
+					p.nextToken()
+				}
+			} else if p.curToken.Type == token.AND {
+				p.nextToken()
+			} else {
+				// No more items
+				break
+			}
+
+			// Expect another identifier
+			if p.curToken.Type != token.IDENTIFIER {
+				break
+			}
+		}
 	}
 
 	// Handle optional "from" keyword
@@ -249,6 +283,12 @@ func (p *Parser) parseImport() (ast.Statement, error) {
 	filePath := p.curToken.Value
 	p.nextToken()
 
+	// Check for "safely" keyword
+	if p.curToken.Type == token.SAFELY {
+		isSafe = true
+		p.nextToken()
+	}
+
 	// Expect period to end the statement
 	if err := p.expectToken(token.PERIOD); err != nil {
 		return nil, err
@@ -256,7 +296,10 @@ func (p *Parser) parseImport() (ast.Statement, error) {
 	p.nextToken()
 
 	return &ast.ImportStatement{
-		Path: filePath,
+		Path:      filePath,
+		Items:     items,
+		ImportAll: importAll,
+		IsSafe:    isSafe,
 	}, nil
 }
 

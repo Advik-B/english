@@ -1,0 +1,16 @@
+# Library with top-level code
+# This should print when imported normally, but not when imported safely
+
+Print "Initializing library...".
+
+Declare function add that takes a and b and does the following:
+    Return a + b.
+thats it.
+
+Declare function multiply that takes a and b and does the following:
+    Return a * b.
+thats it.
+
+Declare version to always be "1.0".
+
+Print "Library initialized!".

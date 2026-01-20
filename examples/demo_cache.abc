@@ -1,0 +1,11 @@
+# Demo: Bytecode Caching
+# This file demonstrates the __engcache__ feature
+
+Print "First import (will create cache):".
+Import from "examples/math_library.abc".
+
+Declare result to be 0.
+Set result to the result of calling square with 5.
+Print "Square of 5 =", the value of result.
+
+Print "Done! Check the __engcache__ directory for cached bytecode.".

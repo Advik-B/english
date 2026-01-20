@@ -11,6 +11,7 @@ A programming language interpreter with natural English syntax, built using Go w
 - **Interactive REPL**: Beautiful terminal UI with syntax highlighting powered by Bubble Tea
 - **Flexible Syntax**: Multiple ways to express the same thing (e.g., `to be always` or `to always be`)
 - **Bytecode Compilation**: Compile source files to binary format for faster loading
+- **Automatic Bytecode Caching**: Imported files are automatically cached in `__engcache__/` for faster loading
 
 ## 🚀 Quick Start
 
@@ -188,6 +189,14 @@ Call myFunction with 10.
 - **Normal Import**: Executes all code in the imported file, including top-level statements
 - **Selective Import**: Runs the file in an isolated environment and imports only specified items
 - **Safe Import**: Only loads declarations (functions, variables) without executing top-level statements
+
+**Bytecode Caching:**
+
+Imported files are automatically compiled to bytecode and cached in the `__engcache__/` directory for faster loading. The cache:
+- Automatically regenerates when source files are modified
+- Uses SHA-256 hashing to handle different file paths
+- Works transparently - no manual compilation needed
+- Similar to Python's `__pycache__` behavior
 
 Example library file (`math_library.abc`):
 ```english

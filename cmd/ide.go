@@ -236,6 +236,15 @@ func (m ideModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.outline.SetSize(rightWidth-4, outlineHeight-3)
 		m.console.Width = rightWidth - 4
 		m.console.Height = consoleHeight - 3
+		
+		// Update editor size
+		if m.editor != nil {
+			var editorModel tea.Model
+			var cmd tea.Cmd
+			editorModel, cmd = m.editor.SetSize(middleWidth-4, mainHeight-2)
+			m.editor = editorModel.(vimtea.Editor)
+			return m, cmd
+		}
 
 		return m, nil
 
@@ -298,9 +307,30 @@ func (m ideModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 	case fileOpenSuccess:
-		// File opened successfully, update console
+		// File opened successfully, update model state
+		m.currentFile = msg.path
+		m.editor = vimtea.NewEditor(
+			vimtea.WithContent(msg.content),
+			vimtea.WithFileName(filepath.Base(msg.path)),
+		)
+		
+		// Set editor size if window size is known
+		if m.ready {
+			middleWidth := m.width / 2
+			mainHeight := m.height - 4
+			var editorModel tea.Model
+			editorModel, cmd = m.editor.SetSize(middleWidth-4, mainHeight-2)
+			m.editor = editorModel.(vimtea.Editor)
+			cmds = append(cmds, cmd)
+		}
+		
+		// Analyze file with LSP
+		if strings.HasSuffix(msg.path, ".abc") {
+			m.analyzeFile(msg.content)
+		}
+		
 		m.console.SetContent(fmt.Sprintf("Opened: %s\n", msg.path))
-		return m, nil
+		return m, tea.Batch(cmds...)
 
 	case fileOpenError:
 		// Error opening file
@@ -559,19 +589,7 @@ func (m *ideModel) openFile(path string) tea.Cmd {
 			return fileOpenError{err}
 		}
 
-		// Create new editor with content
-		m.currentFile = path
-		m.editor = vimtea.NewEditor(
-			vimtea.WithContent(string(content)),
-			vimtea.WithFileName(filepath.Base(path)),
-		)
-
-		// Analyze file with LSP
-		if strings.HasSuffix(path, ".abc") {
-			m.analyzeFile(string(content))
-		}
-
-		return fileOpenSuccess{path}
+		return fileOpenSuccess{path: path, content: string(content)}
 	}
 }
 
@@ -679,7 +697,10 @@ func runFileWithoutExit(filename string) error {
 }
 
 // Messages
-type fileOpenSuccess struct{ path string }
+type fileOpenSuccess struct{ 
+	path    string
+	content string
+}
 type fileOpenError struct{ err error }
 type fileSaveSuccess struct{ path string }
 type fileSaveError struct{ err error }

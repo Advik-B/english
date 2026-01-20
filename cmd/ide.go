@@ -2,6 +2,8 @@ package cmd
 
 import (
 	"english/lsp"
+	"english/parser"
+	"english/vm"
 	"fmt"
 	"io"
 	"os"
@@ -624,19 +626,56 @@ func (m *ideModel) runCurrentFile() tea.Cmd {
 
 		// Capture output
 		oldStdout := os.Stdout
-		r, w, _ := os.Pipe()
+		r, w, err := os.Pipe()
+		if err != nil {
+			return fileRunError{fmt.Errorf("failed to create pipe: %v", err)}
+		}
 		os.Stdout = w
 
-		// Run the file
-		RunFile(m.currentFile)
+		// Run the file using a safe version that returns errors
+		runErr := runFileWithoutExit(m.currentFile)
 
 		// Restore stdout and read output
 		w.Close()
 		os.Stdout = oldStdout
-		output, _ := io.ReadAll(r)
+		output, readErr := io.ReadAll(r)
+		if readErr != nil {
+			return fileRunError{fmt.Errorf("failed to read output: %v", readErr)}
+		}
+
+		// Check if there was an error running the file
+		if runErr != nil {
+			return fileRunError{runErr}
+		}
 
 		return fileRunSuccess{string(output)}
 	}
+}
+
+// runFileWithoutExit runs a file without calling os.Exit on errors
+func runFileWithoutExit(filename string) error {
+	content, err := os.ReadFile(filename)
+	if err != nil {
+		return fmt.Errorf("error reading file: %v", err)
+	}
+
+	env := vm.NewEnvironment()
+	lexer := parser.NewLexer(string(content))
+	tokens := lexer.TokenizeAll()
+
+	p := parser.NewParser(tokens)
+	program, err := p.Parse()
+	if err != nil {
+		return fmt.Errorf("parse error: %v", err)
+	}
+
+	evaluator := vm.NewEvaluator(env)
+	_, err = evaluator.Eval(program)
+	if err != nil {
+		return fmt.Errorf("runtime error: %v", err)
+	}
+
+	return nil
 }
 
 // Messages

@@ -7,7 +7,6 @@ package bytecode
 import (
 	"bytes"
 	"encoding/binary"
-	"encoding/hex"
 	"english/ast"
 	"fmt"
 	"io"
@@ -923,21 +922,19 @@ func (d *Decoder) decodeExpression() (ast.Expression, error) {
 const CacheDir = "__engcache__"
 
 // GetCachePath returns the cache file path for a given source file.
-// For example: "examples/math_library.abc" -> "__engcache__/23b9e3d68a65de8b_math_library.abc.101"
+// For example: "examples/math_library.abc" -> "__engcache__/39ccbccfa9db97df_math_library.abc.101"
 // Uses SipHash for fast, non-cryptographic hashing as per PEP 552.
 func GetCachePath(sourcePath string) string {
 	// Use SipHash for fast hashing (as recommended by PEP 552)
-	// Using a fixed key for deterministic hashing across runs
+	// Using fixed keys for deterministic hashing across runs (required for cache persistence)
 	key0 := uint64(0x0706050403020100)
 	key1 := uint64(0x0f0e0d0c0b0a0908)
 	
 	// Compute SipHash of the source path
 	hash := siphash.Hash(key0, key1, []byte(sourcePath))
 	
-	// Convert to bytes for hex encoding
-	hashBytes := make([]byte, 8)
-	binary.LittleEndian.PutUint64(hashBytes, hash)
-	hashStr := hex.EncodeToString(hashBytes[:CacheHashBytes])
+	// Convert hash to hex string directly (more efficient than byte array conversion)
+	hashStr := fmt.Sprintf("%016x", hash)
 	
 	// Get the base name for readability
 	baseName := filepath.Base(sourcePath)

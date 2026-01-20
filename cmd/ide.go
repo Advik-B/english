@@ -350,20 +350,6 @@ func (m ideModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Error running file
 		m.console.SetContent(fmt.Sprintf("Error running file: %v\n", msg.err))
 		return m, nil
-
-	default:
-		// Update all components
-		if m.focusedPane == FileBrowserPane {
-			m.filePicker, cmd = m.filePicker.Update(msg)
-			cmds = append(cmds, cmd)
-		}
-		if m.focusedPane == EditorPane && m.editor != nil {
-			model, cmd := m.editor.Update(msg)
-			if editor, ok := model.(vimtea.Editor); ok {
-				m.editor = editor
-			}
-			cmds = append(cmds, cmd)
-		}
 	}
 
 	return m, tea.Batch(cmds...)

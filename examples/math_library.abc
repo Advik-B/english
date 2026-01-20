@@ -1,0 +1,25 @@
+# Math Library
+# A collection of useful math functions
+
+# Function to calculate the square of a number
+Declare function square that takes x and does the following:
+    Return x * x.
+thats it.
+
+# Function to calculate the cube of a number
+Declare function cube that takes x and does the following:
+    Return x * x * x.
+thats it.
+
+# Function to check if a number is even
+Declare function isEven that takes n and does the following:
+    Declare rem to be the remainder of n divided by 2.
+    If rem is equal to 0, then
+        Return true.
+    otherwise
+        Return false.
+    thats it.
+thats it.
+
+# A useful constant
+Declare pi to always be 3.14159.

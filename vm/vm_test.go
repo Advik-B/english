@@ -1047,3 +1047,218 @@ func TestRuntimeErrorFormat(t *testing.T) {
 		t.Error("Error should contain function name")
 	}
 }
+
+func TestEvaluatorImport(t *testing.T) {
+	// Create a temporary file for import testing
+	tempDir := t.TempDir()
+	libFile := tempDir + "/testlib.abc"
+	
+	// Create a library file with functions and variables
+	libContent := `# Test library
+Declare function double that takes x and does the following:
+    Return x * 2.
+thats it.
+
+Declare magicNumber to always be 42.
+`
+	err := os.WriteFile(libFile, []byte(libContent), 0644)
+	if err != nil {
+		t.Fatalf("Failed to create test library file: %v", err)
+	}
+
+	// Test importing the library
+	code := `Import "` + libFile + `".
+Declare result to be 0.
+Set result to the result of calling double with 5.
+Print the value of result.
+Print the value of magicNumber.`
+
+	output := captureOutput(func() {
+		evaluate(code)
+	})
+	
+	expected := "10\n42\n"
+	if output != expected {
+		t.Errorf("Expected %q, got %q", expected, output)
+	}
+}
+
+func TestEvaluatorImportWithFrom(t *testing.T) {
+	// Create a temporary file for import testing
+	tempDir := t.TempDir()
+	libFile := tempDir + "/helpers.abc"
+	
+	// Create a library file
+	libContent := `Declare function square that takes n and does the following:
+    Return n * n.
+thats it.
+`
+	err := os.WriteFile(libFile, []byte(libContent), 0644)
+	if err != nil {
+		t.Fatalf("Failed to create test library file: %v", err)
+	}
+
+	// Test importing with "from" syntax
+	code := `Import from "` + libFile + `".
+Declare result to be 0.
+Set result to the result of calling square with 3.
+Print the value of result.`
+
+	output := captureOutput(func() {
+		evaluate(code)
+	})
+	
+	if output != "9\n" {
+		t.Errorf("Expected '9\\n', got %q", output)
+	}
+}
+
+func TestEvaluatorImportNonexistent(t *testing.T) {
+	code := `Import "nonexistent_file.abc".`
+	
+	_, err := evaluate(code)
+	if err == nil {
+		t.Error("Expected error when importing nonexistent file")
+	}
+	
+	// Check that error message contains helpful information
+	errStr := err.Error()
+	if !strings.Contains(errStr, "nonexistent_file.abc") {
+		t.Error("Error should mention the file that failed to import")
+	}
+}
+
+func TestEvaluatorSelectiveImport(t *testing.T) {
+	// Create a temporary file for import testing
+	tempDir := t.TempDir()
+	libFile := tempDir + "/testlib.abc"
+	
+	// Create a library file with multiple functions
+	libContent := `Declare function add that takes a and b and does the following:
+    Return a + b.
+thats it.
+
+Declare function multiply that takes a and b and does the following:
+    Return a * b.
+thats it.
+
+Declare version to always be "1.0".
+`
+	err := os.WriteFile(libFile, []byte(libContent), 0644)
+	if err != nil {
+		t.Fatalf("Failed to create test library file: %v", err)
+	}
+
+	// Test selective import - only import add
+	code := `Import add from "` + libFile + `".
+Declare result to be 0.
+Set result to the result of calling add with 3 and 5.
+Print the value of result.`
+
+	output := captureOutput(func() {
+		evaluate(code)
+	})
+	
+	if output != "8\n" {
+		t.Errorf("Expected '8\\n', got %q", output)
+	}
+}
+
+func TestEvaluatorImportEverything(t *testing.T) {
+	// Create a temporary file for import testing
+	tempDir := t.TempDir()
+	libFile := tempDir + "/testlib.abc"
+	
+	// Create a library file
+	libContent := `Declare function greet that takes name and does the following:
+    Print "Hello,", the value of name.
+thats it.
+
+Declare greeting to be "Welcome".
+`
+	err := os.WriteFile(libFile, []byte(libContent), 0644)
+	if err != nil {
+		t.Fatalf("Failed to create test library file: %v", err)
+	}
+
+	// Test import everything
+	code := `Import everything from "` + libFile + `".
+Call greet with "World".
+Print the value of greeting.`
+
+	output := captureOutput(func() {
+		evaluate(code)
+	})
+	
+	expected := "Hello, World\nWelcome\n"
+	if output != expected {
+		t.Errorf("Expected %q, got %q", expected, output)
+	}
+}
+
+func TestEvaluatorImportAll(t *testing.T) {
+	// Create a temporary file for import testing
+	tempDir := t.TempDir()
+	libFile := tempDir + "/testlib.abc"
+	
+	// Create a library file
+	libContent := `Declare myVar to be 42.
+`
+	err := os.WriteFile(libFile, []byte(libContent), 0644)
+	if err != nil {
+		t.Fatalf("Failed to create test library file: %v", err)
+	}
+
+	// Test import all (synonym for everything)
+	code := `Import all from "` + libFile + `".
+Print the value of myVar.`
+
+	output := captureOutput(func() {
+		evaluate(code)
+	})
+	
+	if output != "42\n" {
+		t.Errorf("Expected '42\\n', got %q", output)
+	}
+}
+
+func TestEvaluatorSafeImport(t *testing.T) {
+	// Create a temporary file for import testing
+	tempDir := t.TempDir()
+	libFile := tempDir + "/testlib.abc"
+	
+	// Create a library file with top-level code
+	libContent := `Print "This should not print in safe mode".
+
+Declare function test that does the following:
+    Print "Test function".
+thats it.
+
+Declare safeVar to be 100.
+`
+	err := os.WriteFile(libFile, []byte(libContent), 0644)
+	if err != nil {
+		t.Fatalf("Failed to create test library file: %v", err)
+	}
+
+	// Test safe import - should not print top-level statement
+	code := `Import all from "` + libFile + `" safely.
+Call test.
+Print the value of safeVar.`
+
+	output := captureOutput(func() {
+		evaluate(code)
+	})
+	
+	expected := "Test function\n100\n"
+	if output != expected {
+		t.Errorf("Expected %q, got %q", expected, output)
+	}
+	
+	// Verify that the top-level print did NOT execute
+	if strings.Contains(output, "This should not print") {
+		t.Error("Safe import should not execute top-level statements")
+	}
+}
+
+

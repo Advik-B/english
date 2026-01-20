@@ -1,0 +1,13 @@
+# Import with "from" syntax
+
+Print "=== Testing 'from' syntax ===".
+
+# Import using "from" syntax (more natural English)
+Import from "examples/math_library.abc".
+
+# Test imported function
+Declare squared to be 0.
+Set squared to the result of calling square with 7.
+Print "Square of 7:", the value of squared.
+
+Print "=== Done! ===".

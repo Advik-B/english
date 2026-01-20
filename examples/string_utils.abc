@@ -1,0 +1,12 @@
+# String Utilities
+# A collection of string manipulation functions
+
+# Function to create a greeting message
+Declare function makeGreeting that takes name and does the following:
+    Return "Hello, " + name + "!".
+thats it.
+
+# Function to create a farewell message
+Declare function makeFarewell that takes name and does the following:
+    Return "Goodbye, " + name + "!".
+thats it.

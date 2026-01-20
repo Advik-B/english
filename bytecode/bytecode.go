@@ -47,6 +47,7 @@ const (
 	NodeToggleStatement
 	NodeBreakStatement
 	NodeLocationExpression
+	NodeImportStatement
 )
 
 // Encoder serializes AST to binary format
@@ -250,6 +251,18 @@ func (e *Encoder) encodeStatement(stmt ast.Statement) error {
 
 	case *ast.BreakStatement:
 		e.buf.WriteByte(NodeBreakStatement)
+		return nil
+
+	case *ast.ImportStatement:
+		e.buf.WriteByte(NodeImportStatement)
+		e.writeString(s.Path)
+		// Write number of items
+		e.writeUint32(uint32(len(s.Items)))
+		for _, item := range s.Items {
+			e.writeString(item)
+		}
+		e.writeBool(s.ImportAll)
+		e.writeBool(s.IsSafe)
 		return nil
 
 	default:
@@ -676,6 +689,37 @@ func (d *Decoder) decodeStatement() (ast.Statement, error) {
 
 	case NodeBreakStatement:
 		return &ast.BreakStatement{}, nil
+
+	case NodeImportStatement:
+		path, err := d.readString()
+		if err != nil {
+			return nil, err
+		}
+		itemCount, err := d.readUint32()
+		if err != nil {
+			return nil, err
+		}
+		items := make([]string, itemCount)
+		for i := uint32(0); i < itemCount; i++ {
+			items[i], err = d.readString()
+			if err != nil {
+				return nil, err
+			}
+		}
+		importAll, err := d.readBool()
+		if err != nil {
+			return nil, err
+		}
+		isSafe, err := d.readBool()
+		if err != nil {
+			return nil, err
+		}
+		return &ast.ImportStatement{
+			Path:      path,
+			Items:     items,
+			ImportAll: importAll,
+			IsSafe:    isSafe,
+		}, nil
 
 	default:
 		return nil, fmt.Errorf("unknown statement node type: %d", nodeType)

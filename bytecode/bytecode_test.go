@@ -698,3 +698,38 @@ func TestFunctionCallExpression(t *testing.T) {
 		t.Errorf("Expected 2 arguments, got %d", len(funcCall.Arguments))
 	}
 }
+
+func TestEncodeDecodeImportStatement(t *testing.T) {
+	program := &ast.Program{
+		Statements: []ast.Statement{
+			&ast.ImportStatement{
+				Path: "library.abc",
+			},
+		},
+	}
+
+	encoder := NewEncoder()
+	data, err := encoder.Encode(program)
+	if err != nil {
+		t.Fatalf("Encode error: %v", err)
+	}
+
+	decoder := NewDecoder(data)
+	decoded, err := decoder.Decode()
+	if err != nil {
+		t.Fatalf("Decode error: %v", err)
+	}
+
+	if len(decoded.Statements) != 1 {
+		t.Errorf("Expected 1 statement, got %d", len(decoded.Statements))
+	}
+
+	importStmt, ok := decoded.Statements[0].(*ast.ImportStatement)
+	if !ok {
+		t.Fatalf("Expected ImportStatement, got %T", decoded.Statements[0])
+	}
+	if importStmt.Path != "library.abc" {
+		t.Errorf("Expected path 'library.abc', got %q", importStmt.Path)
+	}
+}
+

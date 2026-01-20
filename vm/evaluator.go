@@ -2,7 +2,9 @@ package vm
 
 import (
 	"english/ast"
+	"english/parser"
 	"fmt"
+	"os"
 	"strings"
 )
 
@@ -35,6 +37,8 @@ func (ev *Evaluator) Eval(node interface{}) (Value, error) {
 	switch node := node.(type) {
 	case *ast.Program:
 		return ev.evalProgram(node)
+	case *ast.ImportStatement:
+		return ev.evalImport(node)
 	case *ast.VariableDecl:
 		return ev.evalVariableDecl(node)
 	case *ast.Assignment:
@@ -126,6 +130,98 @@ func (ev *Evaluator) evalProgram(prog *ast.Program) (Value, error) {
 		result = val
 	}
 	return result, nil
+}
+
+func (ev *Evaluator) evalImport(is *ast.ImportStatement) (Value, error) {
+	// Import evaluates another English file and executes it in the current environment.
+	// Supports selective imports, import all, and safe imports.
+	
+	// Read the file content
+	content, err := os.ReadFile(is.Path)
+	if err != nil {
+		return nil, ev.runtimeError(fmt.Sprintf("failed to import '%s': %v", is.Path, err))
+	}
+
+	// Parse the imported file
+	lexer := parser.NewLexer(string(content))
+	tokens := lexer.TokenizeAll()
+	p := parser.NewParser(tokens)
+	program, err := p.Parse()
+	if err != nil {
+		return nil, ev.runtimeError(fmt.Sprintf("failed to parse imported file '%s': %v", is.Path, err))
+	}
+
+	// Handle different import modes
+	if is.IsSafe {
+		// Safe import: only execute declarations, skip top-level statements
+		return ev.evalSafeImport(program, is)
+	} else if len(is.Items) > 0 {
+		// Selective import: import specific items
+		return ev.evalSelectiveImport(program, is)
+	} else {
+		// Import all: execute everything in current scope
+		_, err = ev.evalProgram(program)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	// Import statements don't produce a value
+	return nil, nil
+}
+
+// evalSafeImport executes only declarations (functions, variables) and skips top-level statements
+func (ev *Evaluator) evalSafeImport(program *ast.Program, is *ast.ImportStatement) (Value, error) {
+	for _, stmt := range program.Statements {
+		// Only execute declarations, skip other statements
+		switch s := stmt.(type) {
+		case *ast.VariableDecl:
+			_, err := ev.evalVariableDecl(s)
+			if err != nil {
+				return nil, err
+			}
+		case *ast.FunctionDecl:
+			_, err := ev.evalFunctionDecl(s)
+			if err != nil {
+				return nil, err
+			}
+		// Skip all other statement types (Print, Call, etc.)
+		}
+	}
+	return nil, nil
+}
+
+// evalSelectiveImport imports only specific items from the file
+func (ev *Evaluator) evalSelectiveImport(program *ast.Program, is *ast.ImportStatement) (Value, error) {
+	// Create a temporary environment for the imported file
+	tempEnv := NewEnvironment()
+	tempEval := NewEvaluator(tempEnv)
+	
+	// Execute in temporary environment
+	_, err := tempEval.evalProgram(program)
+	if err != nil {
+		return nil, err
+	}
+
+	// Import only the requested items
+	for _, itemName := range is.Items {
+		// Try to get as variable
+		if val, ok := tempEnv.Get(itemName); ok {
+			// Check if it's constant
+			isConst := tempEnv.IsConstant(itemName)
+			err := ev.env.Define(itemName, val, isConst)
+			if err != nil {
+				return nil, ev.runtimeError(fmt.Sprintf("failed to import '%s' from '%s': %v", itemName, is.Path, err))
+			}
+		} else if fn, ok := tempEnv.GetFunction(itemName); ok {
+			// Import as function
+			ev.env.DefineFunction(itemName, fn)
+		} else {
+			return nil, ev.runtimeError(fmt.Sprintf("'%s' not found in '%s'", itemName, is.Path))
+		}
+	}
+
+	return nil, nil
 }
 
 func (ev *Evaluator) evalVariableDecl(vd *ast.VariableDecl) (Value, error) {

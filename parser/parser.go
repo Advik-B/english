@@ -96,6 +96,8 @@ func (p *Parser) Parse() (*ast.Program, error) {
 
 func (p *Parser) parseStatement() (ast.Statement, error) {
 	switch p.curToken.Type {
+	case token.IMPORT:
+		return p.parseImport()
 	case token.DECLARE:
 		return p.parseDeclaration()
 	case token.LET:
@@ -211,6 +213,93 @@ func (p *Parser) parseLetDeclaration() (ast.Statement, error) {
 		Name:       nameToken.Value,
 		IsConstant: isConstant,
 		Value:      value,
+	}, nil
+}
+
+// parseImport parses import statements with natural English syntax:
+// - Import "file.abc".
+// - Import from "file.abc".
+// - Import func1, func2 and func3 from "file.abc".
+// - Import everything from "file.abc".
+// - Import all from "file.abc".
+// - Import all from "file.abc" safely.
+func (p *Parser) parseImport() (ast.Statement, error) {
+	if err := p.expectToken(token.IMPORT); err != nil {
+		return nil, err
+	}
+	p.nextToken()
+
+	var items []string
+	var importAll bool
+	var isSafe bool
+
+	// Handle optional "the" keyword
+	if p.curToken.Type == token.THE {
+		p.nextToken()
+	}
+
+	// Check for "everything" or "all"
+	if p.curToken.Type == token.EVERYTHING || p.curToken.Type == token.ALL {
+		importAll = true
+		p.nextToken()
+	} else if p.curToken.Type == token.IDENTIFIER {
+		// Parse list of items to import
+		// Support: func1, func2 and func3
+		for {
+			items = append(items, p.curToken.Value)
+			p.nextToken()
+
+			// Check for comma or "and"
+			if p.curToken.Type == token.COMMA {
+				p.nextToken()
+				// Optional "and" after comma
+				if p.curToken.Type == token.AND {
+					p.nextToken()
+				}
+			} else if p.curToken.Type == token.AND {
+				p.nextToken()
+			} else {
+				// No more items
+				break
+			}
+
+			// Expect another identifier
+			if p.curToken.Type != token.IDENTIFIER {
+				break
+			}
+		}
+	}
+
+	// Handle optional "from" keyword
+	if p.curToken.Type == token.FROM {
+		p.nextToken()
+	}
+
+	// Expect a string with the file path
+	if p.curToken.Type != token.STRING {
+		return nil, fmt.Errorf("expected file path (string) after 'Import', got %v at line %d", p.curToken.Type, p.curToken.Line)
+	}
+
+	filePath := p.curToken.Value
+	p.nextToken()
+
+	// Check for "safely" keyword
+	if p.curToken.Type == token.SAFELY {
+		isSafe = true
+		p.nextToken()
+	}
+
+	// Expect period to end the statement
+	if err := p.expectToken(token.PERIOD); err != nil {
+		return nil, err
+	}
+	p.nextToken()
+
+	return &ast.ImportStatement{
+		Path:      filePath,
+		Items:     items,
+		ImportAll: importAll,
+		IsSafe:    isSafe,
 	}, nil
 }
 

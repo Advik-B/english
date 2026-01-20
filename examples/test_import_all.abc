@@ -1,0 +1,15 @@
+# Test import all (synonym for everything)
+
+Print "=== Testing Import All ===".
+
+# Import all from the library
+Import all from "examples/string_utils.abc".
+
+Declare msg to be "".
+Set msg to the result of calling makeGreeting with "World".
+Print the value of msg.
+
+Set msg to the result of calling makeFarewell with "Friend".
+Print the value of msg.
+
+Print "=== Import all works! ===".

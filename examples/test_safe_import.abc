@@ -1,0 +1,18 @@
+# Test safe imports
+
+Print "=== Testing Safe Imports ===".
+
+# Import safely - should NOT print "Initializing library..." or "Library initialized!"
+Import all from "examples/library_with_init.abc" safely.
+
+# But functions and variables should be available
+Declare result to be 0.
+Set result to the result of calling add with 5 and 3.
+Print "add(5, 3) =", the value of result.
+
+Set result to the result of calling multiply with 4 and 6.
+Print "multiply(4, 6) =", the value of result.
+
+Print "version =", the value of version.
+
+Print "=== Safe import works! ===".

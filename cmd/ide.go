@@ -295,6 +295,36 @@ func (m ideModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			cmds = append(cmds, cmd)
 		}
 
+	case fileOpenSuccess:
+		// File opened successfully, update console
+		m.console.SetContent(fmt.Sprintf("Opened: %s\n", msg.path))
+		return m, nil
+
+	case fileOpenError:
+		// Error opening file
+		m.console.SetContent(fmt.Sprintf("Error opening file: %v\n", msg.err))
+		return m, nil
+
+	case fileSaveSuccess:
+		// File saved successfully
+		m.console.SetContent(fmt.Sprintf("Saved: %s\n", msg.path))
+		return m, nil
+
+	case fileSaveError:
+		// Error saving file
+		m.console.SetContent(fmt.Sprintf("Error saving file: %v\n", msg.err))
+		return m, nil
+
+	case fileRunSuccess:
+		// File ran successfully, show output
+		m.console.SetContent(fmt.Sprintf("Program output:\n%s", msg.output))
+		return m, nil
+
+	case fileRunError:
+		// Error running file
+		m.console.SetContent(fmt.Sprintf("Error running file: %v\n", msg.err))
+		return m, nil
+
 	default:
 		// Update all components
 		if m.focusedPane == FileBrowserPane {

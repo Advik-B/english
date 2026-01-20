@@ -9,9 +9,11 @@ A programming language interpreter with natural English syntax, built using Go w
 - **Rich Error Messages**: Helpful error messages with suggestions (e.g., "perhaps you meant...")
 - **Stack Traces**: Full call stack information for debugging runtime errors
 - **Interactive REPL**: Beautiful terminal UI with syntax highlighting powered by Bubble Tea
+- **TUI-based IDE**: Full-featured IDE with vim-like keybindings, file browser, code outline, and LSP integration
 - **Flexible Syntax**: Multiple ways to express the same thing (e.g., `to be always` or `to always be`)
 - **Bytecode Compilation**: Compile source files to binary format for faster loading
 - **Automatic Bytecode Caching**: Imported files are automatically cached in `__engcache__/` for faster loading
+- **Language Server Protocol**: LSP server for IDE integration with autocomplete, diagnostics, and more
 
 ## 🚀 Quick Start
 
@@ -28,6 +30,9 @@ go build -o english .
 # Interactive REPL with beautiful TUI
 ./english
 
+# TUI-based IDE with vim-like keybindings
+./english ide [directory]
+
 # Run a source file
 ./english run program.abc
 # or simply
@@ -39,6 +44,9 @@ go build -o english .
 
 # Run bytecode directly (no parsing needed)
 ./english run program.101
+
+# Start LSP server for IDE integration
+./english lsp
 
 # Show version
 ./english version
@@ -316,6 +324,63 @@ The interactive REPL (Read-Eval-Print Loop) features:
   - `:exit` or `:quit` or `:q` - Exit REPL
   - `Ctrl+C` or `Esc` - Exit REPL
 
+## 💻 TUI IDE Features
+
+The TUI-based IDE provides a complete development environment in your terminal:
+
+### Layout
+
+- **File Browser** (Left Pane): Navigate directories and open files
+- **Editor** (Center Pane): Vim-like text editor with syntax highlighting
+- **Code Outline** (Top Right): Shows functions and variables in the current file
+- **Console** (Bottom Right): Program output and status messages
+
+### Keybindings
+
+#### Global Navigation
+- `Tab` / `Shift+Tab` - Switch between panes
+- `Ctrl+W` - Cycle through panes
+- `?` - Toggle help
+- `Ctrl+C` / `Esc` - Quit IDE
+
+#### File Operations
+- `Ctrl+S` - Save current file
+- `Ctrl+R` - Run current file
+
+#### Editor (Vim Mode)
+- `i` - Insert mode
+- `Esc` - Normal mode
+- `v` - Visual mode
+- `:` - Command mode
+- `h/j/k/l` - Navigation
+- `dd` - Delete line
+- `yy` - Yank (copy) line
+- `p` - Paste
+- `u` - Undo
+- `Ctrl+R` - Redo
+
+### Features
+
+- **Vim-like Editing**: Full modal editing with normal, insert, visual, and command modes
+- **Syntax Highlighting**: Automatic highlighting for English language code
+- **LSP Integration**: Real-time diagnostics and code analysis
+- **Code Outline**: Automatically extracted functions and variables
+- **File Browser**: Easy navigation through project directories
+- **Program Execution**: Run files directly from the IDE and see output in the console pane
+
+### Usage
+
+```bash
+# Start IDE in current directory
+./english ide
+
+# Start IDE in specific directory
+./english ide /path/to/project
+
+# Start IDE in examples directory
+./english ide examples
+```
+
 ## 📁 Project Structure
 
 ```
@@ -323,7 +388,14 @@ The interactive REPL (Read-Eval-Print Loop) features:
 ├── main.go              # Entry point - calls cmd.Execute()
 ├── cmd/
 │   ├── root.go          # Cobra CLI setup with subcommands
-│   └── repl.go          # Bubble Tea REPL implementation
+│   ├── repl.go          # Bubble Tea REPL implementation
+│   ├── ide.go           # TUI-based IDE with vim-like editor
+│   └── lsp.go           # Language Server Protocol server
+├── lsp/
+│   ├── server.go        # LSP server implementation
+│   ├── analyzer.go      # Code analysis and diagnostics
+│   ├── document.go      # Document management
+│   └── protocol.go      # LSP protocol types
 ├── token/
 │   ├── token.go         # Token type definitions
 │   └── token_test.go    # Token tests
@@ -405,6 +477,9 @@ go test ./bytecode/... -v
 - **[Cobra](https://github.com/spf13/cobra)** v1.10.2 - CLI framework
 - **[Bubble Tea](https://github.com/charmbracelet/bubbletea)** v1.3.10 - TUI framework  
 - **[Lipgloss](https://github.com/charmbracelet/lipgloss)** v1.1.0 - Terminal styling
+- **[Bubbles](https://github.com/charmbracelet/bubbles)** v0.21.0 - TUI components (filepicker, list, viewport)
+- **[VimTea](https://github.com/kujtimiihoxha/vimtea)** v0.0.2 - Vim-like text editor component
+- **[Chroma](https://github.com/alecthomas/chroma)** v2.15.0 - Syntax highlighting
 
 Install dependencies:
 ```bash

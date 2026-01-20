@@ -1,0 +1,37 @@
+# Demo file for IDE testing
+# This file demonstrates various language features
+
+# Variables and constants
+Declare x to be 10.
+Declare name to be "English IDE".
+Declare pi to always be 3.14159.
+
+# Function definition
+Declare function greet that takes person and does the following:
+    Print "Hello,", the value of person, "!".
+    Print "Welcome to the", the value of name.
+thats it.
+
+# Function with return value
+Declare function square that takes n and does the following:
+    Return the result of n times n.
+thats it.
+
+# Main program
+Print "=== English IDE Demo ===".
+Print "".
+
+Call greet with "Developer".
+Print "".
+
+Declare result to be the result of calling square with 5.
+Print "Square of 5 is:", the value of result.
+Print "".
+
+# Loop example
+Declare i to be 1.
+Print "Counting to 5:".
+Repeat while i is less than or equal to 5, do the following:
+    Print the value of i.
+    Set i to i plus 1.
+thats it.

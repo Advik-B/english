@@ -23,6 +23,13 @@ var MagicBytes = []byte{0x10, 0x1E, 0x4E, 0x47}
 // Version of the bytecode format
 const FormatVersion uint8 = 1
 
+// Cache configuration
+const (
+	// CacheHashBytes is the number of bytes from SHA-256 hash used for cache filenames.
+	// 16 bytes (128 bits) provides good collision resistance while keeping filenames readable.
+	CacheHashBytes = 16
+)
+
 // Node type identifiers
 const (
 	NodeProgram byte = iota + 1
@@ -917,7 +924,7 @@ const CacheDir = "__engcache__"
 func GetCachePath(sourcePath string) string {
 	// Compute a hash-based filename to handle absolute and relative paths
 	hash := sha256.Sum256([]byte(sourcePath))
-	hashStr := hex.EncodeToString(hash[:16]) // Use first 16 bytes (128 bits) of hash for better collision resistance
+	hashStr := hex.EncodeToString(hash[:CacheHashBytes])
 	
 	// Get the base name for readability
 	baseName := filepath.Base(sourcePath)

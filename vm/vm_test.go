@@ -1047,3 +1047,84 @@ func TestRuntimeErrorFormat(t *testing.T) {
 		t.Error("Error should contain function name")
 	}
 }
+
+func TestEvaluatorImport(t *testing.T) {
+	// Create a temporary file for import testing
+	tempDir := t.TempDir()
+	libFile := tempDir + "/testlib.abc"
+	
+	// Create a library file with functions and variables
+	libContent := `# Test library
+Declare function double that takes x and does the following:
+    Return x * 2.
+thats it.
+
+Declare magicNumber to always be 42.
+`
+	err := os.WriteFile(libFile, []byte(libContent), 0644)
+	if err != nil {
+		t.Fatalf("Failed to create test library file: %v", err)
+	}
+
+	// Test importing the library
+	code := `Import "` + libFile + `".
+Declare result to be 0.
+Set result to the result of calling double with 5.
+Print the value of result.
+Print the value of magicNumber.`
+
+	output := captureOutput(func() {
+		evaluate(code)
+	})
+	
+	expected := "10\n42\n"
+	if output != expected {
+		t.Errorf("Expected %q, got %q", expected, output)
+	}
+}
+
+func TestEvaluatorImportWithFrom(t *testing.T) {
+	// Create a temporary file for import testing
+	tempDir := t.TempDir()
+	libFile := tempDir + "/helpers.abc"
+	
+	// Create a library file
+	libContent := `Declare function square that takes n and does the following:
+    Return n * n.
+thats it.
+`
+	err := os.WriteFile(libFile, []byte(libContent), 0644)
+	if err != nil {
+		t.Fatalf("Failed to create test library file: %v", err)
+	}
+
+	// Test importing with "from" syntax
+	code := `Import from "` + libFile + `".
+Declare result to be 0.
+Set result to the result of calling square with 3.
+Print the value of result.`
+
+	output := captureOutput(func() {
+		evaluate(code)
+	})
+	
+	if output != "9\n" {
+		t.Errorf("Expected '9\\n', got %q", output)
+	}
+}
+
+func TestEvaluatorImportNonexistent(t *testing.T) {
+	code := `Import "nonexistent_file.abc".`
+	
+	_, err := evaluate(code)
+	if err == nil {
+		t.Error("Expected error when importing nonexistent file")
+	}
+	
+	// Check that error message contains helpful information
+	errStr := err.Error()
+	if !strings.Contains(errStr, "nonexistent_file.abc") {
+		t.Error("Error should mention the file that failed to import")
+	}
+}
+

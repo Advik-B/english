@@ -150,6 +150,8 @@ func TestLexerKeywords(t *testing.T) {
 		{"remainder", token.REMAINDER},
 		{"divided", token.DIVIDED},
 		{"by", token.BY},
+		{"import", token.IMPORT},
+		{"from", token.FROM},
 	}
 
 	for _, test := range tests {
@@ -671,6 +673,36 @@ func TestParserCallStatement(t *testing.T) {
 
 	if callStmt.FunctionCall.Name != "myFunction" {
 		t.Errorf("Expected function name 'myFunction', got %q", callStmt.FunctionCall.Name)
+	}
+}
+
+func TestParserImportStatement(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected string
+	}{
+		{`Import "library.abc".`, "library.abc"},
+		{`Import from "utils.abc".`, "utils.abc"},
+		{`Import code from "helpers.abc".`, "helpers.abc"},
+		{`Import the code from "module.abc".`, "module.abc"},
+	}
+
+	for _, test := range tests {
+		program, err := parse(test.input)
+		if err != nil {
+			t.Errorf("Input %q: parse error: %v", test.input, err)
+			continue
+		}
+
+		importStmt, ok := program.Statements[0].(*ast.ImportStatement)
+		if !ok {
+			t.Errorf("Input %q: expected ImportStatement, got %T", test.input, program.Statements[0])
+			continue
+		}
+
+		if importStmt.Path != test.expected {
+			t.Errorf("Input %q: expected path %q, got %q", test.input, test.expected, importStmt.Path)
+		}
 	}
 }
 

@@ -47,6 +47,7 @@ const (
 	NodeToggleStatement
 	NodeBreakStatement
 	NodeLocationExpression
+	NodeImportStatement
 )
 
 // Encoder serializes AST to binary format
@@ -250,6 +251,11 @@ func (e *Encoder) encodeStatement(stmt ast.Statement) error {
 
 	case *ast.BreakStatement:
 		e.buf.WriteByte(NodeBreakStatement)
+		return nil
+
+	case *ast.ImportStatement:
+		e.buf.WriteByte(NodeImportStatement)
+		e.writeString(s.Path)
 		return nil
 
 	default:
@@ -676,6 +682,13 @@ func (d *Decoder) decodeStatement() (ast.Statement, error) {
 
 	case NodeBreakStatement:
 		return &ast.BreakStatement{}, nil
+
+	case NodeImportStatement:
+		path, err := d.readString()
+		if err != nil {
+			return nil, err
+		}
+		return &ast.ImportStatement{Path: path}, nil
 
 	default:
 		return nil, fmt.Errorf("unknown statement node type: %d", nodeType)

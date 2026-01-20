@@ -237,16 +237,13 @@ func (m ideModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.console.Width = rightWidth - 4
 		m.console.Height = consoleHeight - 3
 		
-		// Update editor size
+		// Update editor size if it exists
 		if m.editor != nil {
-			var editorModel tea.Model
-			var cmd tea.Cmd
-			editorModel, cmd = m.editor.SetSize(middleWidth-4, mainHeight-2)
-			m.editor = editorModel.(vimtea.Editor)
-			return m, cmd
+			cmd = m.setEditorSize()
+			cmds = append(cmds, cmd)
 		}
 
-		return m, nil
+		return m, tea.Batch(cmds...)
 
 	case tea.KeyMsg:
 		// Global keybindings
@@ -316,11 +313,7 @@ func (m ideModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		
 		// Set editor size if window size is known
 		if m.ready {
-			middleWidth := m.width / 2
-			mainHeight := m.height - 4
-			var editorModel tea.Model
-			editorModel, cmd = m.editor.SetSize(middleWidth-4, mainHeight-2)
-			m.editor = editorModel.(vimtea.Editor)
+			cmd = m.setEditorSize()
 			cmds = append(cmds, cmd)
 		}
 		
@@ -581,6 +574,22 @@ Editor (Vim mode):
 	return ideHelpStyle.Render(help)
 }
 
+// setEditorSize sets the editor size based on current window dimensions
+func (m *ideModel) setEditorSize() tea.Cmd {
+	if m.editor == nil {
+		return nil
+	}
+	
+	middleWidth := m.width / 2
+	mainHeight := m.height - 4
+	
+	var editorModel tea.Model
+	var cmd tea.Cmd
+	editorModel, cmd = m.editor.SetSize(middleWidth-4, mainHeight-2)
+	m.editor = editorModel.(vimtea.Editor)
+	return cmd
+}
+
 // Commands for file operations
 func (m *ideModel) openFile(path string) tea.Cmd {
 	return func() tea.Msg {
@@ -697,15 +706,25 @@ func runFileWithoutExit(filename string) error {
 }
 
 // Messages
-type fileOpenSuccess struct{ 
+type fileOpenSuccess struct {
 	path    string
 	content string
 }
-type fileOpenError struct{ err error }
-type fileSaveSuccess struct{ path string }
-type fileSaveError struct{ err error }
-type fileRunSuccess struct{ output string }
-type fileRunError struct{ err error }
+type fileOpenError struct {
+	err error
+}
+type fileSaveSuccess struct {
+	path string
+}
+type fileSaveError struct {
+	err error
+}
+type fileRunSuccess struct {
+	output string
+}
+type fileRunError struct {
+	err error
+}
 
 // StartIDE starts the TUI-based IDE
 func StartIDE(dir string) {

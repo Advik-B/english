@@ -414,11 +414,7 @@ The interpreter provides helpful error messages:
 
 ## 📄 License
 
-[Your License Here]
-
-## 🤝 Contributing
-
-[Your Contributing Guidelines Here]
+MIT License
 
 ## 🙏 Acknowledgments
 

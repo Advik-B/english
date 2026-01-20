@@ -133,8 +133,13 @@ func (ev *Evaluator) evalProgram(prog *ast.Program) (Value, error) {
 }
 
 func (ev *Evaluator) evalImport(is *ast.ImportStatement) (Value, error) {
-	// Import evaluates another English file and executes it in the current environment
-	// This allows sharing variables and functions across files
+	// Import evaluates another English file and executes it in the current environment.
+	// This allows sharing variables and functions across files, similar to how Python's
+	// 'exec' works or how C's #include works - everything from the imported file becomes
+	// available in the current scope. This is intentional and provides a simple module system.
+	// 
+	// Note: Imported files are re-parsed on each import statement. For better performance
+	// in production code, consider compiling to bytecode (.101 files) instead.
 	
 	// Read the file content
 	content, err := os.ReadFile(is.Path)
@@ -151,13 +156,14 @@ func (ev *Evaluator) evalImport(is *ast.ImportStatement) (Value, error) {
 		return nil, ev.runtimeError(fmt.Sprintf("failed to parse imported file '%s': %v", is.Path, err))
 	}
 
-	// Execute the imported program in the current environment
-	// This makes all declarations from the imported file available in the current scope
+	// Execute the imported program in the current environment.
+	// All declarations from the imported file become available in the current scope.
 	_, err = ev.evalProgram(program)
 	if err != nil {
 		return nil, err
 	}
 
+	// Import statements don't produce a value, similar to other declaration statements
 	return nil, nil
 }
 

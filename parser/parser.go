@@ -96,6 +96,8 @@ func (p *Parser) Parse() (*ast.Program, error) {
 
 func (p *Parser) parseStatement() (ast.Statement, error) {
 	switch p.curToken.Type {
+	case token.IMPORT:
+		return p.parseImport()
 	case token.DECLARE:
 		return p.parseDeclaration()
 	case token.LET:
@@ -211,6 +213,50 @@ func (p *Parser) parseLetDeclaration() (ast.Statement, error) {
 		Name:       nameToken.Value,
 		IsConstant: isConstant,
 		Value:      value,
+	}, nil
+}
+
+// parseImport parses import statements with natural English syntax:
+// - Import code from "file.abc".
+// - Import "utilities.abc".
+func (p *Parser) parseImport() (ast.Statement, error) {
+	if err := p.expectToken(token.IMPORT); err != nil {
+		return nil, err
+	}
+	p.nextToken()
+
+	// Handle optional "code" or "the" keywords for natural language
+	// "Import code from file.abc" or "Import the code from file.abc"
+	if p.curToken.Type == token.THE {
+		p.nextToken()
+	}
+	
+	// Skip optional "code" keyword
+	if p.curToken.Type == token.IDENTIFIER && strings.ToLower(p.curToken.Value) == "code" {
+		p.nextToken()
+	}
+
+	// Handle optional "from" keyword
+	if p.curToken.Type == token.FROM {
+		p.nextToken()
+	}
+
+	// Expect a string with the file path
+	if p.curToken.Type != token.STRING {
+		return nil, fmt.Errorf("expected file path (string) after 'Import', got %v at line %d", p.curToken.Type, p.curToken.Line)
+	}
+
+	filePath := p.curToken.Value
+	p.nextToken()
+
+	// Expect period to end the statement
+	if err := p.expectToken(token.PERIOD); err != nil {
+		return nil, err
+	}
+	p.nextToken()
+
+	return &ast.ImportStatement{
+		Path: filePath,
 	}, nil
 }
 

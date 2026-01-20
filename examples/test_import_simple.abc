@@ -1,0 +1,17 @@
+# Import with different syntax styles
+
+Print "=== Testing different import syntax ===".
+
+# Import using simple syntax
+Import "examples/string_utils.abc".
+
+# Test imported functions
+Declare greeting to be "".
+Set greeting to the result of calling makeGreeting with "Alice".
+Print the value of greeting.
+
+Declare farewell to be "".
+Set farewell to the result of calling makeFarewell with "Bob".
+Print the value of farewell.
+
+Print "=== Done! ===".

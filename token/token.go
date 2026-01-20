@@ -91,6 +91,7 @@ const (
 	INTEGER
 	DEFAULT
 	BUT
+	IMPORT
 
 	// Operators and Punctuation
 	PERIOD
@@ -286,6 +287,8 @@ func (t Type) String() string {
 		return "DEFAULT"
 	case BUT:
 		return "BUT"
+	case IMPORT:
+		return "IMPORT"
 	case PERIOD:
 		return "PERIOD"
 	case COMMA:

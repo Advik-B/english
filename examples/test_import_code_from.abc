@@ -1,0 +1,13 @@
+# Import with "code from" syntax
+
+Print "=== Testing 'code from' syntax ===".
+
+# Import using "code from" syntax (very natural English)
+Import code from "examples/string_utils.abc".
+
+# Test imported function
+Declare msg to be "".
+Set msg to the result of calling makeGreeting with "Charlie".
+Print the value of msg.
+
+Print "=== Done! ===".

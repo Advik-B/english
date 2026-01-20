@@ -1,0 +1,31 @@
+# Import Example
+# Demonstrates importing code from other files
+
+Print "=== Import Example ===".
+
+# Import math functions from another file
+Import "examples/math_library.abc".
+
+Print "Testing imported functions:".
+
+# Use the imported square function
+Declare result to be 0.
+Set result to the result of calling square with 5.
+Print "Square of 5:", the value of result.
+
+# Use the imported cube function
+Set result to the result of calling cube with 3.
+Print "Cube of 3:", the value of result.
+
+# Use the imported isEven function
+Declare isEvenResult to be false.
+Set isEvenResult to the result of calling isEven with 10.
+Print "Is 10 even?", the value of isEvenResult.
+
+Set isEvenResult to the result of calling isEven with 7.
+Print "Is 7 even?", the value of isEvenResult.
+
+# Use the imported constant
+Print "Value of pi:", the value of pi.
+
+Print "=== Done! ===".

@@ -201,6 +201,7 @@ var keywords = map[string]token.Type{
 	"integer":   token.INTEGER,
 	"default":   token.DEFAULT,
 	"but":       token.BUT,
+	"import":    token.IMPORT,
 }
 
 func (l *Lexer) lookupKeyword(word string) token.Type {

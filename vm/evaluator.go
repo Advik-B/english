@@ -2,7 +2,9 @@ package vm
 
 import (
 	"english/ast"
+	"english/parser"
 	"fmt"
+	"os"
 	"strings"
 )
 
@@ -35,6 +37,8 @@ func (ev *Evaluator) Eval(node interface{}) (Value, error) {
 	switch node := node.(type) {
 	case *ast.Program:
 		return ev.evalProgram(node)
+	case *ast.ImportStatement:
+		return ev.evalImport(node)
 	case *ast.VariableDecl:
 		return ev.evalVariableDecl(node)
 	case *ast.Assignment:
@@ -126,6 +130,35 @@ func (ev *Evaluator) evalProgram(prog *ast.Program) (Value, error) {
 		result = val
 	}
 	return result, nil
+}
+
+func (ev *Evaluator) evalImport(is *ast.ImportStatement) (Value, error) {
+	// Import evaluates another English file and executes it in the current environment
+	// This allows sharing variables and functions across files
+	
+	// Read the file content
+	content, err := os.ReadFile(is.Path)
+	if err != nil {
+		return nil, ev.runtimeError(fmt.Sprintf("failed to import '%s': %v", is.Path, err))
+	}
+
+	// Parse the imported file
+	lexer := parser.NewLexer(string(content))
+	tokens := lexer.TokenizeAll()
+	p := parser.NewParser(tokens)
+	program, err := p.Parse()
+	if err != nil {
+		return nil, ev.runtimeError(fmt.Sprintf("failed to parse imported file '%s': %v", is.Path, err))
+	}
+
+	// Execute the imported program in the current environment
+	// This makes all declarations from the imported file available in the current scope
+	_, err = ev.evalProgram(program)
+	if err != nil {
+		return nil, err
+	}
+
+	return nil, nil
 }
 
 func (ev *Evaluator) evalVariableDecl(vd *ast.VariableDecl) (Value, error) {

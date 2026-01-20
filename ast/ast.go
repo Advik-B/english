@@ -26,6 +26,14 @@ type Program struct {
 
 func (p *Program) node() {}
 
+// ImportStatement represents an import statement
+type ImportStatement struct {
+	Path string // The file path to import
+}
+
+func (is *ImportStatement) node()          {}
+func (is *ImportStatement) statementNode() {}
+
 // VariableDecl represents a variable declaration
 type VariableDecl struct {
 	Name       string

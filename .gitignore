@@ -8,6 +8,9 @@ english
 # Compiled bytecode files
 *.101
 
+# Bytecode cache directory
+__engcache__/
+
 # Test binary
 *.test
 

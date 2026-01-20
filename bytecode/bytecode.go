@@ -6,11 +6,15 @@ package bytecode
 
 import (
 	"bytes"
+	"crypto/sha256"
 	"encoding/binary"
+	"encoding/hex"
 	"english/ast"
 	"fmt"
 	"io"
 	"math"
+	"os"
+	"path/filepath"
 )
 
 // Magic bytes to identify .101 files (binary identifier)
@@ -902,4 +906,103 @@ func (d *Decoder) decodeExpression() (ast.Expression, error) {
 	default:
 		return nil, fmt.Errorf("unknown expression node type: %d", nodeType)
 	}
+}
+
+// Cache management functions for __engcache__ directory
+
+const CacheDir = "__engcache__"
+
+// GetCachePath returns the cache file path for a given source file.
+// For example: "examples/math_library.abc" -> "__engcache__/examples_math_library.abc.101"
+func GetCachePath(sourcePath string) string {
+	// Compute a hash-based filename to handle absolute and relative paths
+	hash := sha256.Sum256([]byte(sourcePath))
+	hashStr := hex.EncodeToString(hash[:8]) // Use first 8 bytes of hash
+	
+	// Get the base name for readability
+	baseName := filepath.Base(sourcePath)
+	
+	// Create cache filename: <hash>_<basename>.101
+	cacheFileName := fmt.Sprintf("%s_%s.101", hashStr, baseName)
+	return filepath.Join(CacheDir, cacheFileName)
+}
+
+// IsCacheValid checks if the cached bytecode is up-to-date by comparing modification times.
+// Returns true if the cache exists and is newer than or equal to the source file.
+func IsCacheValid(sourcePath, cachePath string) bool {
+	sourceInfo, err := os.Stat(sourcePath)
+	if err != nil {
+		return false
+	}
+	
+	cacheInfo, err := os.Stat(cachePath)
+	if err != nil {
+		return false
+	}
+	
+	// Cache is valid if it's newer than or equal to the source
+	return !cacheInfo.ModTime().Before(sourceInfo.ModTime())
+}
+
+// WriteBytecodeCache writes bytecode to the cache directory.
+// Creates the cache directory if it doesn't exist.
+func WriteBytecodeCache(cachePath string, data []byte) error {
+	// Create cache directory if it doesn't exist
+	cacheDir := filepath.Dir(cachePath)
+	if err := os.MkdirAll(cacheDir, 0755); err != nil {
+		return fmt.Errorf("failed to create cache directory: %w", err)
+	}
+	
+	// Write bytecode to cache file
+	if err := os.WriteFile(cachePath, data, 0644); err != nil {
+		return fmt.Errorf("failed to write cache file: %w", err)
+	}
+	
+	return nil
+}
+
+// ReadBytecodeCache reads bytecode from the cache.
+func ReadBytecodeCache(cachePath string) ([]byte, error) {
+	data, err := os.ReadFile(cachePath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read cache file: %w", err)
+	}
+	return data, nil
+}
+
+// LoadCachedOrParse attempts to load bytecode from cache, or parses the source file if cache is invalid.
+// Returns the parsed Program AST and a boolean indicating whether cache was used.
+func LoadCachedOrParse(sourcePath string, parseFunc func(string) (*ast.Program, error)) (*ast.Program, bool, error) {
+	cachePath := GetCachePath(sourcePath)
+	
+	// Check if cache is valid
+	if IsCacheValid(sourcePath, cachePath) {
+		// Try to load from cache
+		data, err := ReadBytecodeCache(cachePath)
+		if err == nil {
+			decoder := NewDecoder(data)
+			program, err := decoder.Decode()
+			if err == nil {
+				// Successfully loaded from cache
+				return program, true, nil
+			}
+			// Cache is corrupted, will re-parse and cache
+		}
+	}
+	
+	// Cache miss or invalid - parse the source file
+	program, err := parseFunc(sourcePath)
+	if err != nil {
+		return nil, false, err
+	}
+	
+	// Encode and cache the bytecode
+	encoder := NewEncoder()
+	data, err := encoder.Encode(program)
+	if err == nil {
+		// Ignore cache write errors - not critical
+		_ = WriteBytecodeCache(cachePath, data)
+	}
+	
+	return program, false, nil
 }

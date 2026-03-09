@@ -18,6 +18,7 @@ func RegisterStdlib(env *Environment) {
 	registerListFunctions(env)
 	registerIOFunctions(env)
 	registerLookupTableFunctions(env)
+	registerNumberFunctions(env)
 	registerMathConstants(env)
 }
 
@@ -72,6 +73,20 @@ func registerStringFunctions(env *Environment) {
 	env.DefineFunction("to_number", &FunctionValue{Name: "to_number", Parameters: []string{"text"}, Body: nil, Closure: env})
 	env.DefineFunction("to_string", &FunctionValue{Name: "to_string", Parameters: []string{"value"}, Body: nil, Closure: env})
 	env.DefineFunction("is_empty", &FunctionValue{Name: "is_empty", Parameters: []string{"value"}, Body: nil, Closure: env})
+	// Python-equivalent string methods
+	env.DefineFunction("title", &FunctionValue{Name: "title", Parameters: []string{"text"}, Body: nil, Closure: env})
+	env.DefineFunction("capitalize", &FunctionValue{Name: "capitalize", Parameters: []string{"text"}, Body: nil, Closure: env})
+	env.DefineFunction("swapcase", &FunctionValue{Name: "swapcase", Parameters: []string{"text"}, Body: nil, Closure: env})
+	env.DefineFunction("trim_left", &FunctionValue{Name: "trim_left", Parameters: []string{"text"}, Body: nil, Closure: env})
+	env.DefineFunction("trim_right", &FunctionValue{Name: "trim_right", Parameters: []string{"text"}, Body: nil, Closure: env})
+	env.DefineFunction("is_digit", &FunctionValue{Name: "is_digit", Parameters: []string{"text"}, Body: nil, Closure: env})
+	env.DefineFunction("is_alpha", &FunctionValue{Name: "is_alpha", Parameters: []string{"text"}, Body: nil, Closure: env})
+	env.DefineFunction("is_alnum", &FunctionValue{Name: "is_alnum", Parameters: []string{"text"}, Body: nil, Closure: env})
+	env.DefineFunction("is_space", &FunctionValue{Name: "is_space", Parameters: []string{"text"}, Body: nil, Closure: env})
+	env.DefineFunction("is_upper", &FunctionValue{Name: "is_upper", Parameters: []string{"text"}, Body: nil, Closure: env})
+	env.DefineFunction("is_lower", &FunctionValue{Name: "is_lower", Parameters: []string{"text"}, Body: nil, Closure: env})
+	env.DefineFunction("center", &FunctionValue{Name: "center", Parameters: []string{"text", "width", "char"}, Body: nil, Closure: env})
+	env.DefineFunction("zfill", &FunctionValue{Name: "zfill", Parameters: []string{"text", "width"}, Body: nil, Closure: env})
 }
 
 // registerListFunctions registers all list functions
@@ -88,6 +103,15 @@ func registerListFunctions(env *Environment) {
 	env.DefineFunction("flatten", &FunctionValue{Name: "flatten", Parameters: []string{"list"}, Body: nil, Closure: env})
 	env.DefineFunction("count", &FunctionValue{Name: "count", Parameters: []string{"list"}, Body: nil, Closure: env})
 	env.DefineFunction("slice", &FunctionValue{Name: "slice", Parameters: []string{"list", "start", "end"}, Body: nil, Closure: env})
+	// Python-equivalent list methods
+	env.DefineFunction("average", &FunctionValue{Name: "average", Parameters: []string{"list"}, Body: nil, Closure: env})
+	env.DefineFunction("min_value", &FunctionValue{Name: "min_value", Parameters: []string{"list"}, Body: nil, Closure: env})
+	env.DefineFunction("max_value", &FunctionValue{Name: "max_value", Parameters: []string{"list"}, Body: nil, Closure: env})
+	env.DefineFunction("any_true", &FunctionValue{Name: "any_true", Parameters: []string{"list"}, Body: nil, Closure: env})
+	env.DefineFunction("all_true", &FunctionValue{Name: "all_true", Parameters: []string{"list"}, Body: nil, Closure: env})
+	env.DefineFunction("product", &FunctionValue{Name: "product", Parameters: []string{"list"}, Body: nil, Closure: env})
+	env.DefineFunction("sorted_desc", &FunctionValue{Name: "sorted_desc", Parameters: []string{"list"}, Body: nil, Closure: env})
+	env.DefineFunction("zip_with", &FunctionValue{Name: "zip_with", Parameters: []string{"list", "other"}, Body: nil, Closure: env})
 }
 
 // registerIOFunctions registers input/output functions
@@ -101,6 +125,58 @@ func registerLookupTableFunctions(env *Environment) {
 	env.DefineFunction("values", &FunctionValue{Name: "values", Parameters: []string{"table"}, Body: nil, Closure: env})
 	env.DefineFunction("table_remove", &FunctionValue{Name: "table_remove", Parameters: []string{"table", "key"}, Body: nil, Closure: env})
 	env.DefineFunction("table_has", &FunctionValue{Name: "table_has", Parameters: []string{"table", "key"}, Body: nil, Closure: env})
+	// Python-equivalent lookup table methods
+	env.DefineFunction("merge", &FunctionValue{Name: "merge", Parameters: []string{"table", "other"}, Body: nil, Closure: env})
+	env.DefineFunction("get_or_default", &FunctionValue{Name: "get_or_default", Parameters: []string{"table", "key", "default"}, Body: nil, Closure: env})
+}
+
+// registerNumberFunctions registers number-specific functions
+func registerNumberFunctions(env *Environment) {
+	env.DefineFunction("is_integer", &FunctionValue{Name: "is_integer", Parameters: []string{"x"}, Body: nil, Closure: env})
+	env.DefineFunction("clamp", &FunctionValue{Name: "clamp", Parameters: []string{"x", "min", "max"}, Body: nil, Closure: env})
+	env.DefineFunction("sign", &FunctionValue{Name: "sign", Parameters: []string{"x"}, Body: nil, Closure: env})
+}
+
+// requireText checks that arg is a string value and returns a descriptive
+// TypeError if it is not.  Used by text-specific stdlib functions so that
+// calling e.g. `42's title` produces a clear error instead of silently
+// converting the number.
+func requireText(fn string, arg Value) (string, error) {
+	s, ok := arg.(string)
+	if !ok {
+		return "", fmt.Errorf("TypeError: %s expects text, got %s", fn, typeKindName(inferTypeKind(arg)))
+	}
+	return s, nil
+}
+
+// requireNumber checks that arg is a numeric value and returns a descriptive
+// TypeError if it is not.
+func requireNumber(fn string, arg Value) (float64, error) {
+	n, err := ToNumber(arg)
+	if err != nil {
+		return 0, fmt.Errorf("TypeError: %s expects number, got %s", fn, typeKindName(inferTypeKind(arg)))
+	}
+	return n, nil
+}
+
+// requireList checks that arg is a list ([]interface{}) and returns a
+// descriptive TypeError if it is not.
+func requireList(fn string, arg Value) ([]interface{}, error) {
+	lst, ok := arg.([]interface{})
+	if !ok {
+		return nil, fmt.Errorf("TypeError: %s expects list, got %s", fn, typeKindName(inferTypeKind(arg)))
+	}
+	return lst, nil
+}
+
+// requireLookupTable checks that arg is a *LookupTableValue and returns a
+// descriptive TypeError if it is not.
+func requireLookupTable(fn string, arg Value) (*LookupTableValue, error) {
+	lt, ok := arg.(*LookupTableValue)
+	if !ok {
+		return nil, fmt.Errorf("TypeError: %s expects lookup table, got %s", fn, typeKindName(inferTypeKind(arg)))
+	}
+	return lt, nil
 }
 
 // evalBuiltinFunction evaluates a built-in stdlib function
@@ -239,15 +315,30 @@ func evalBuiltinFunction(name string, args []Value) (Value, error) {
 
 	// ── String ────────────────────────────────────────────────────────────────
 	case "uppercase":
-		return strings.ToUpper(ToString(args[0])), nil
+		text, err := requireText("uppercase", args[0])
+		if err != nil {
+			return nil, err
+		}
+		return strings.ToUpper(text), nil
 	case "lowercase":
-		return strings.ToLower(ToString(args[0])), nil
+		text, err := requireText("lowercase", args[0])
+		if err != nil {
+			return nil, err
+		}
+		return strings.ToLower(text), nil
 	case "casefold":
 		// casefold converts text to a case-folded (lowercase) form suitable for
 		// case-insensitive comparisons.  Equivalent to Python's str.casefold().
-		return strings.ToLower(ToString(args[0])), nil
+		text, err := requireText("casefold", args[0])
+		if err != nil {
+			return nil, err
+		}
+		return strings.ToLower(text), nil
 	case "split":
-		text := ToString(args[0])
+		text, err := requireText("split", args[0])
+		if err != nil {
+			return nil, err
+		}
 		sep := ToString(args[1])
 		parts := strings.Split(text, sep)
 		result := make([]interface{}, len(parts))
@@ -258,7 +349,7 @@ func evalBuiltinFunction(name string, args []Value) (Value, error) {
 	case "join":
 		list, ok := args[0].([]interface{})
 		if !ok {
-			return nil, NewRuntimeError("join expects a list as first argument")
+			return nil, fmt.Errorf("TypeError: join expects list, got %s", typeKindName(inferTypeKind(args[0])))
 		}
 		sep := ToString(args[1])
 		strs := make([]string, len(list))
@@ -267,31 +358,53 @@ func evalBuiltinFunction(name string, args []Value) (Value, error) {
 		}
 		return strings.Join(strs, sep), nil
 	case "trim":
-		return strings.TrimSpace(ToString(args[0])), nil
+		text, err := requireText("trim", args[0])
+		if err != nil {
+			return nil, err
+		}
+		return strings.TrimSpace(text), nil
 	case "replace":
-		text := ToString(args[0])
+		text, err := requireText("replace", args[0])
+		if err != nil {
+			return nil, err
+		}
 		old := ToString(args[1])
 		newStr := ToString(args[2])
 		return strings.ReplaceAll(text, old, newStr), nil
 	case "contains":
-		text := ToString(args[0])
+		text, err := requireText("contains", args[0])
+		if err != nil {
+			return nil, err
+		}
 		substr := ToString(args[1])
 		return strings.Contains(text, substr), nil
 	case "starts_with":
-		text := ToString(args[0])
+		text, err := requireText("starts_with", args[0])
+		if err != nil {
+			return nil, err
+		}
 		prefix := ToString(args[1])
 		return strings.HasPrefix(text, prefix), nil
 	case "ends_with":
-		text := ToString(args[0])
+		text, err := requireText("ends_with", args[0])
+		if err != nil {
+			return nil, err
+		}
 		suffix := ToString(args[1])
 		return strings.HasSuffix(text, suffix), nil
 	case "index_of":
-		text := ToString(args[0])
+		text, err := requireText("index_of", args[0])
+		if err != nil {
+			return nil, err
+		}
 		search := ToString(args[1])
 		idx := strings.Index(text, search)
 		return float64(idx), nil
 	case "substring":
-		text := ToString(args[0])
+		text, err := requireText("substring", args[0])
+		if err != nil {
+			return nil, err
+		}
 		start, err := ToNumber(args[1])
 		if err != nil {
 			return nil, NewRuntimeError("substring expects a number as second argument")
@@ -311,7 +424,10 @@ func evalBuiltinFunction(name string, args []Value) (Value, error) {
 		}
 		return text[s:end], nil
 	case "str_repeat":
-		text := ToString(args[0])
+		text, err := requireText("str_repeat", args[0])
+		if err != nil {
+			return nil, err
+		}
 		n, err := ToNumber(args[1])
 		if err != nil {
 			return nil, NewRuntimeError("str_repeat expects a number as second argument")
@@ -321,11 +437,17 @@ func evalBuiltinFunction(name string, args []Value) (Value, error) {
 		}
 		return strings.Repeat(text, int(n)), nil
 	case "count_occurrences":
-		text := ToString(args[0])
+		text, err := requireText("count_occurrences", args[0])
+		if err != nil {
+			return nil, err
+		}
 		sub := ToString(args[1])
 		return float64(strings.Count(text, sub)), nil
 	case "pad_left":
-		text := ToString(args[0])
+		text, err := requireText("pad_left", args[0])
+		if err != nil {
+			return nil, err
+		}
 		width, err := ToNumber(args[1])
 		if err != nil {
 			return nil, NewRuntimeError("pad_left expects a number as second argument")
@@ -343,7 +465,10 @@ func evalBuiltinFunction(name string, args []Value) (Value, error) {
 		}
 		return text, nil
 	case "pad_right":
-		text := ToString(args[0])
+		text, err := requireText("pad_right", args[0])
+		if err != nil {
+			return nil, err
+		}
 		width, err := ToNumber(args[1])
 		if err != nil {
 			return nil, NewRuntimeError("pad_right expects a number as second argument")
@@ -361,9 +486,12 @@ func evalBuiltinFunction(name string, args []Value) (Value, error) {
 		}
 		return text, nil
 	case "to_number":
-		text := ToString(args[0])
+		text, err := requireText("to_number", args[0])
+		if err != nil {
+			return nil, err
+		}
 		var f float64
-		_, err := fmt.Sscanf(text, "%g", &f)
+		_, err = fmt.Sscanf(text, "%g", &f)
 		if err != nil {
 			return nil, NewRuntimeError(fmt.Sprintf("cannot convert '%s' to a number", text))
 		}
@@ -381,8 +509,425 @@ func evalBuiltinFunction(name string, args []Value) (Value, error) {
 		default:
 			return false, nil
 		}
+	// ── String (Python-equivalent methods) ────────────────────────────────────
+	case "title":
+		// str.title() — uppercase the first letter of each word.
+		text, err := requireText("title", args[0])
+		if err != nil {
+			return nil, err
+		}
+		return strings.Title(strings.ToLower(text)), nil //nolint:staticcheck
+	case "capitalize":
+		// str.capitalize() — uppercase first character, lowercase rest.
+		text, err := requireText("capitalize", args[0])
+		if err != nil {
+			return nil, err
+		}
+		if text == "" {
+			return text, nil
+		}
+		return strings.ToUpper(text[:1]) + strings.ToLower(text[1:]), nil
+	case "swapcase":
+		// str.swapcase() — swap the case of every character.
+		text, err := requireText("swapcase", args[0])
+		if err != nil {
+			return nil, err
+		}
+		var sb strings.Builder
+		for _, r := range text {
+			if r >= 'A' && r <= 'Z' {
+				sb.WriteRune(r + 32)
+			} else if r >= 'a' && r <= 'z' {
+				sb.WriteRune(r - 32)
+			} else {
+				sb.WriteRune(r)
+			}
+		}
+		return sb.String(), nil
+	case "trim_left":
+		// str.lstrip() — strip leading whitespace.
+		text, err := requireText("trim_left", args[0])
+		if err != nil {
+			return nil, err
+		}
+		return strings.TrimLeftFunc(text, func(r rune) bool { return r == ' ' || r == '\t' || r == '\n' || r == '\r' }), nil
+	case "trim_right":
+		// str.rstrip() — strip trailing whitespace.
+		text, err := requireText("trim_right", args[0])
+		if err != nil {
+			return nil, err
+		}
+		return strings.TrimRightFunc(text, func(r rune) bool { return r == ' ' || r == '\t' || r == '\n' || r == '\r' }), nil
+	case "is_digit":
+		// str.isdigit() — true if all characters are digits and text is non-empty.
+		text, err := requireText("is_digit", args[0])
+		if err != nil {
+			return nil, err
+		}
+		if text == "" {
+			return false, nil
+		}
+		for _, r := range text {
+			if r < '0' || r > '9' {
+				return false, nil
+			}
+		}
+		return true, nil
+	case "is_alpha":
+		// str.isalpha() — true if all characters are letters and text is non-empty.
+		text, err := requireText("is_alpha", args[0])
+		if err != nil {
+			return nil, err
+		}
+		if text == "" {
+			return false, nil
+		}
+		for _, r := range text {
+			if !((r >= 'A' && r <= 'Z') || (r >= 'a' && r <= 'z')) {
+				return false, nil
+			}
+		}
+		return true, nil
+	case "is_alnum":
+		// str.isalnum() — true if all characters are letters or digits and text is non-empty.
+		text, err := requireText("is_alnum", args[0])
+		if err != nil {
+			return nil, err
+		}
+		if text == "" {
+			return false, nil
+		}
+		for _, r := range text {
+			if !((r >= 'A' && r <= 'Z') || (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9')) {
+				return false, nil
+			}
+		}
+		return true, nil
+	case "is_space":
+		// str.isspace() — true if all characters are whitespace and text is non-empty.
+		text, err := requireText("is_space", args[0])
+		if err != nil {
+			return nil, err
+		}
+		if text == "" {
+			return false, nil
+		}
+		return strings.TrimSpace(text) == "", nil
+	case "is_upper":
+		// str.isupper() — true if all cased characters are uppercase.
+		text, err := requireText("is_upper", args[0])
+		if err != nil {
+			return nil, err
+		}
+		if text == "" {
+			return false, nil
+		}
+		hasCased := false
+		for _, r := range text {
+			if r >= 'a' && r <= 'z' {
+				return false, nil
+			}
+			if r >= 'A' && r <= 'Z' {
+				hasCased = true
+			}
+		}
+		return hasCased, nil
+	case "is_lower":
+		// str.islower() — true if all cased characters are lowercase.
+		text, err := requireText("is_lower", args[0])
+		if err != nil {
+			return nil, err
+		}
+		if text == "" {
+			return false, nil
+		}
+		hasCased := false
+		for _, r := range text {
+			if r >= 'A' && r <= 'Z' {
+				return false, nil
+			}
+			if r >= 'a' && r <= 'z' {
+				hasCased = true
+			}
+		}
+		return hasCased, nil
+	case "center":
+		// str.center(width[, fillchar]) — center text within a field of given width.
+		text, err := requireText("center", args[0])
+		if err != nil {
+			return nil, err
+		}
+		width, err := requireNumber("center", args[1])
+		if err != nil {
+			return nil, err
+		}
+		fillChar := " "
+		if len(args) > 2 {
+			fillChar, err = requireText("center", args[2])
+			if err != nil {
+				return nil, err
+			}
+			if len(fillChar) == 0 {
+				fillChar = " "
+			}
+		}
+		w := int(width)
+		pad := w - len(text)
+		if pad <= 0 {
+			return text, nil
+		}
+		left := pad / 2
+		right := pad - left
+		return strings.Repeat(fillChar[:1], left) + text + strings.Repeat(fillChar[:1], right), nil
+	case "zfill":
+		// str.zfill(width) — pad text with leading zeros to reach given width.
+		text, err := requireText("zfill", args[0])
+		if err != nil {
+			return nil, err
+		}
+		width, err := requireNumber("zfill", args[1])
+		if err != nil {
+			return nil, err
+		}
+		w := int(width)
+		if len(text) >= w {
+			return text, nil
+		}
+		prefix := ""
+		body := text
+		if len(body) > 0 && (body[0] == '+' || body[0] == '-') {
+			prefix = string(body[0])
+			body = body[1:]
+		}
+		return prefix + strings.Repeat("0", w-len(prefix)-len(body)) + body, nil
 
-	// ── List ──────────────────────────────────────────────────────────────────
+	// ── Number (Python-equivalent methods) ────────────────────────────────────
+	case "is_integer":
+		// float.is_integer() — true if the number has no fractional part.
+		x, err := requireNumber("is_integer", args[0])
+		if err != nil {
+			return nil, err
+		}
+		return x == math.Trunc(x), nil
+	case "clamp":
+		// clamp(x, min, max) — limit x to the range [min, max].
+		x, err := requireNumber("clamp", args[0])
+		if err != nil {
+			return nil, err
+		}
+		lo, err := requireNumber("clamp", args[1])
+		if err != nil {
+			return nil, err
+		}
+		hi, err := requireNumber("clamp", args[2])
+		if err != nil {
+			return nil, err
+		}
+		if x < lo {
+			return lo, nil
+		}
+		if x > hi {
+			return hi, nil
+		}
+		return x, nil
+	case "sign":
+		// sign(x) — returns -1, 0, or 1 depending on the sign of x.
+		x, err := requireNumber("sign", args[0])
+		if err != nil {
+			return nil, err
+		}
+		if x < 0 {
+			return float64(-1), nil
+		}
+		if x > 0 {
+			return float64(1), nil
+		}
+		return float64(0), nil
+
+	// ── List (Python-equivalent methods) ──────────────────────────────────────
+	case "average":
+		// statistics.mean() / sum(l)/len(l) — average of a numeric list.
+		lst, err := requireList("average", args[0])
+		if err != nil {
+			return nil, err
+		}
+		if len(lst) == 0 {
+			return nil, fmt.Errorf("RuntimeError: average called on empty list")
+		}
+		total := 0.0
+		for _, item := range lst {
+			n, err := ToNumber(item)
+			if err != nil {
+				return nil, fmt.Errorf("TypeError: average requires a list of numbers")
+			}
+			total += n
+		}
+		return total / float64(len(lst)), nil
+	case "min_value":
+		// min(list) — minimum value in a numeric list.
+		lst, err := requireList("min_value", args[0])
+		if err != nil {
+			return nil, err
+		}
+		if len(lst) == 0 {
+			return nil, fmt.Errorf("RuntimeError: min_value called on empty list")
+		}
+		best, err := ToNumber(lst[0])
+		if err != nil {
+			return nil, fmt.Errorf("TypeError: min_value requires a list of numbers")
+		}
+		for _, item := range lst[1:] {
+			n, err := ToNumber(item)
+			if err != nil {
+				return nil, fmt.Errorf("TypeError: min_value requires a list of numbers")
+			}
+			if n < best {
+				best = n
+			}
+		}
+		return best, nil
+	case "max_value":
+		// max(list) — maximum value in a numeric list.
+		lst, err := requireList("max_value", args[0])
+		if err != nil {
+			return nil, err
+		}
+		if len(lst) == 0 {
+			return nil, fmt.Errorf("RuntimeError: max_value called on empty list")
+		}
+		best, err := ToNumber(lst[0])
+		if err != nil {
+			return nil, fmt.Errorf("TypeError: max_value requires a list of numbers")
+		}
+		for _, item := range lst[1:] {
+			n, err := ToNumber(item)
+			if err != nil {
+				return nil, fmt.Errorf("TypeError: max_value requires a list of numbers")
+			}
+			if n > best {
+				best = n
+			}
+		}
+		return best, nil
+	case "any_true":
+		// any() — true if at least one element is truthy.
+		lst, err := requireList("any_true", args[0])
+		if err != nil {
+			return nil, err
+		}
+		for _, item := range lst {
+			b, err := ToBool(item)
+			if err != nil {
+				return nil, fmt.Errorf("TypeError: any_true requires a list of boolean values")
+			}
+			if b {
+				return true, nil
+			}
+		}
+		return false, nil
+	case "all_true":
+		// all() — true if every element is truthy.
+		lst, err := requireList("all_true", args[0])
+		if err != nil {
+			return nil, err
+		}
+		for _, item := range lst {
+			b, err := ToBool(item)
+			if err != nil {
+				return nil, fmt.Errorf("TypeError: all_true requires a list of boolean values")
+			}
+			if !b {
+				return false, nil
+			}
+		}
+		return true, nil
+	case "product":
+		// math.prod() — product of all numbers in a list.
+		lst, err := requireList("product", args[0])
+		if err != nil {
+			return nil, err
+		}
+		result := 1.0
+		for _, item := range lst {
+			n, err := ToNumber(item)
+			if err != nil {
+				return nil, fmt.Errorf("TypeError: product requires a list of numbers")
+			}
+			result *= n
+		}
+		return result, nil
+	case "sorted_desc":
+		// sorted(list, reverse=True) — return a new list sorted in descending order.
+		lst, err := requireList("sorted_desc", args[0])
+		if err != nil {
+			return nil, err
+		}
+		result := make([]interface{}, len(lst))
+		copy(result, lst)
+		sort.Slice(result, func(i, j int) bool {
+			a, errA := ToNumber(result[i])
+			b, errB := ToNumber(result[j])
+			if errA == nil && errB == nil {
+				return a > b
+			}
+			return ToString(result[i]) > ToString(result[j])
+		})
+		return result, nil
+	case "zip_with":
+		// zip(a, b) — pair elements of two lists into a list of two-element lists.
+		lst, err := requireList("zip_with", args[0])
+		if err != nil {
+			return nil, err
+		}
+		other, err := requireList("zip_with", args[1])
+		if err != nil {
+			return nil, err
+		}
+		length := len(lst)
+		if len(other) < length {
+			length = len(other)
+		}
+		result := make([]interface{}, length)
+		for i := 0; i < length; i++ {
+			result[i] = []interface{}{lst[i], other[i]}
+		}
+		return result, nil
+
+	// ── Lookup table (Python-equivalent methods) ───────────────────────────────
+	case "merge":
+		// {**a, **b} — merge two lookup tables; second overwrites first on conflict.
+		lt, err := requireLookupTable("merge", args[0])
+		if err != nil {
+			return nil, err
+		}
+		other, err := requireLookupTable("merge", args[1])
+		if err != nil {
+			return nil, err
+		}
+		newTable := types.NewLookupTable()
+		for _, k := range lt.KeyOrder {
+			newTable.Set(k, lt.Entries[k])
+		}
+		for _, k := range other.KeyOrder {
+			newTable.Set(k, other.Entries[k])
+		}
+		return newTable, nil
+	case "get_or_default":
+		// dict.get(key, default) — return value for key, or default if absent.
+		lt, err := requireLookupTable("get_or_default", args[0])
+		if err != nil {
+			return nil, err
+		}
+		serialKey, err := types.SerializeKey(args[1])
+		if err != nil {
+			return nil, err
+		}
+		if v, ok := lt.Entries[serialKey]; ok {
+			return v, nil
+		}
+		return args[2], nil
+
+
 	case "append":
 		switch col := args[0].(type) {
 		case []interface{}:

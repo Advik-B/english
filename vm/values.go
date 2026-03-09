@@ -24,6 +24,9 @@ type ReturnValue struct {
 // BreakValue is used to implement break statements
 type BreakValue struct{}
 
+// ContinueValue is used to implement continue statements
+type ContinueValue struct{}
+
 // RuntimeError represents an error during execution
 type RuntimeError struct {
 	Message   string

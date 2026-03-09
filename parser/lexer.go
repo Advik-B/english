@@ -205,6 +205,14 @@ var keywords = map[string]token.Type{
 	"everything": token.EVERYTHING,
 	"all":       token.ALL,
 	"safely":    token.SAFELY,
+	"continue":  token.CONTINUE,
+	"skip":      token.SKIP,
+	"nothing":   token.NOTHING,
+	"none":      token.NOTHING,
+	"null":      token.NOTHING,
+	"not":       token.NOT,
+	"or":        token.OR,
+	"ask":       token.ASK,
 }
 
 func (l *Lexer) lookupKeyword(word string) token.Type {

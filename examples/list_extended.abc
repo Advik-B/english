@@ -1,0 +1,66 @@
+# List Functions Example
+# Demonstrates the extended list standard library
+
+Print "=== Extended List Functions ===".
+
+Declare numbers to be [3, 1, 4, 1, 5, 9, 2, 6, 5, 3, 5].
+
+Print "Original list:".
+Print the value of numbers.
+Print "".
+
+# Sum
+Print "Sum of all numbers:".
+Print sum(numbers).
+
+# Count
+Print "Count of elements:".
+Print count(numbers).
+
+# First and Last
+Print "First element:".
+Print first(numbers).
+Print "Last element:".
+Print last(numbers).
+
+# Unique (remove duplicates)
+Print "Unique values:".
+Print unique(numbers).
+
+# Slice
+Print "Slice from index 2 to 6:".
+Print slice(numbers, 2, 6).
+
+# Flatten nested lists
+Print "".
+Print "=== Flatten ===".
+Declare matrix to be [[1, 2, 3], [4, 5, 6], [7, 8, 9]].
+Print "Original nested list:".
+Print the value of matrix.
+Print "Flattened:".
+Print flatten(matrix).
+
+# Sort
+Print "".
+Print "=== Sort and Reverse ===".
+Declare unsorted to be [64, 25, 12, 22, 11].
+Print "Unsorted:".
+Print the value of unsorted.
+Set unsorted to be sort(unsorted).
+Print "Sorted:".
+Print the value of unsorted.
+Set unsorted to be reverse(unsorted).
+Print "Reversed:".
+Print the value of unsorted.
+
+# Computing average using sum and count
+Print "".
+Print "=== Average ===".
+Declare data to be [10, 20, 30, 40, 50].
+Declare total to be sum(data).
+Declare n to be count(data).
+Declare avg to be total / n.
+Print "Average of [10, 20, 30, 40, 50]:".
+Print the value of avg.
+
+Print "=== Done! ===".

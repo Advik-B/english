@@ -1,6 +1,7 @@
 package vm
 
 import (
+	"bufio"
 	"english/ast"
 	"english/bytecode"
 	"english/parser"
@@ -66,6 +67,12 @@ func (ev *Evaluator) Eval(node interface{}) (Value, error) {
 		return ev.evalToggle(node)
 	case *ast.BreakStatement:
 		return &BreakValue{}, nil
+	case *ast.ContinueStatement:
+		return &ContinueValue{}, nil
+	case *ast.NothingLiteral:
+		return nil, nil
+	case *ast.AskExpression:
+		return ev.evalAskExpression(node)
 	case *ast.NumberLiteral:
 		return node.Value, nil
 	case *ast.StringLiteral:
@@ -341,6 +348,30 @@ func (ev *Evaluator) evalLocationExpression(loc *ast.LocationExpression) (Value,
 	return fmt.Sprintf("0x%p:%s", ev.env, loc.Name), nil
 }
 
+func (ev *Evaluator) evalAskExpression(ae *ast.AskExpression) (Value, error) {
+	// Display the prompt if provided
+	if ae.Prompt != nil {
+		prompt, err := ev.Eval(ae.Prompt)
+		if err != nil {
+			return nil, err
+		}
+		fmt.Print(ToString(prompt))
+	}
+
+	// Read a line from stdin
+	reader := bufio.NewReader(os.Stdin)
+	line, err := reader.ReadString('\n')
+	if err != nil {
+		// EOF is acceptable (e.g. input from pipe)
+		if len(line) == 0 {
+			return "", nil
+		}
+	}
+	// Trim trailing newline characters
+	line = strings.TrimRight(line, "\r\n")
+	return line, nil
+}
+
 func (ev *Evaluator) evalToggle(ts *ast.ToggleStatement) (Value, error) {
 	// Get the current value
 	val, ok := ev.env.Get(ts.Name)
@@ -474,6 +505,9 @@ func (ev *Evaluator) evalWhileLoop(wl *ast.WhileLoop) (Value, error) {
 		if _, ok := val.(*BreakValue); ok {
 			break
 		}
+		if _, ok := val.(*ContinueValue); ok {
+			continue
+		}
 		result = val
 	}
 	return result, nil
@@ -508,6 +542,9 @@ func (ev *Evaluator) evalForLoop(fl *ast.ForLoop) (Value, error) {
 		}
 		if _, ok := val.(*BreakValue); ok {
 			break
+		}
+		if _, ok := val.(*ContinueValue); ok {
+			continue
 		}
 		result = val
 	}
@@ -546,6 +583,9 @@ func (ev *Evaluator) evalForEachLoop(fel *ast.ForEachLoop) (Value, error) {
 		if _, ok := val.(*BreakValue); ok {
 			break
 		}
+		if _, ok := val.(*ContinueValue); ok {
+			continue
+		}
 		result = val
 	}
 	return result, nil
@@ -559,6 +599,9 @@ func (ev *Evaluator) evalStatements(stmts []ast.Statement) (Value, error) {
 			return nil, err
 		}
 		if _, ok := val.(*ReturnValue); ok {
+			return val, nil
+		}
+		if _, ok := val.(*ContinueValue); ok {
 			return val, nil
 		}
 		result = val
@@ -606,6 +649,36 @@ func (ev *Evaluator) findSimilarVariable(name string) string {
 }
 
 func (ev *Evaluator) evalBinaryExpression(be *ast.BinaryExpression) (Value, error) {
+	// Short-circuit evaluation for logical operators
+	if be.Operator == "and" {
+		left, err := ev.Eval(be.Left)
+		if err != nil {
+			return nil, err
+		}
+		if !ToBool(left) {
+			return false, nil
+		}
+		right, err := ev.Eval(be.Right)
+		if err != nil {
+			return nil, err
+		}
+		return ToBool(right), nil
+	}
+	if be.Operator == "or" {
+		left, err := ev.Eval(be.Left)
+		if err != nil {
+			return nil, err
+		}
+		if ToBool(left) {
+			return true, nil
+		}
+		right, err := ev.Eval(be.Right)
+		if err != nil {
+			return nil, err
+		}
+		return ToBool(right), nil
+	}
+
 	left, err := ev.Eval(be.Left)
 	if err != nil {
 		return nil, err
@@ -648,6 +721,8 @@ func (ev *Evaluator) evalUnaryExpression(ue *ast.UnaryExpression) (Value, error)
 			return nil, err
 		}
 		return -num, nil
+	case "not":
+		return !ToBool(right), nil
 	default:
 		return nil, fmt.Errorf("unknown unary operator: %s", ue.Operator)
 	}
@@ -676,7 +751,7 @@ func (ev *Evaluator) evalFunctionCall(fc *ast.FunctionCall) (Value, error) {
 	// Check if it's a built-in function (stdlib)
 	if fn.Body == nil {
 		// This is a built-in function, delegate to stdlib
-		return ev.evalBuiltinFunction(fc.Name, args)
+		return evalBuiltinFunction(fc.Name, args)
 	}
 
 	// Check parameter count

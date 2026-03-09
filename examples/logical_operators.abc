@@ -1,0 +1,62 @@
+# Logical Operators Example
+# Demonstrates 'and', 'or', and 'not' operators
+
+Print "=== Logical Operators ===".
+
+Declare age to be 25.
+Declare has_license to be true.
+Declare is_tired to be false.
+
+# AND operator: both conditions must be true
+Print "Testing AND:".
+If age is greater than or equal to 18 and has_license is equal to true, then
+    Print "Can drive: age OK and has license.".
+thats it.
+
+# OR operator: at least one condition must be true
+Print "Testing OR:".
+If age is less than 16 or is_tired is equal to true, then
+    Print "Should not drive.".
+otherwise
+    Print "OK to drive (neither too young nor tired).".
+thats it.
+
+# NOT operator: inverts a boolean
+Print "Testing NOT:".
+If not is_tired, then
+    Print "Driver is not tired - good!".
+thats it.
+
+# Chaining multiple operators
+Print "Testing chained operators:".
+Declare speed to be 60.
+Declare speed_limit to be 70.
+Declare road_wet to be true.
+
+If speed is less than speed_limit and not road_wet, then
+    Print "Driving safely on dry road.".
+otherwise if speed is less than speed_limit and road_wet, then
+    Print "Driving safely but road is wet - be careful!".
+otherwise
+    Print "Speeding! Slow down.".
+thats it.
+
+# Complex logical conditions
+Print "FizzBuzz with logical operators:".
+Declare n to be 1.
+repeat the following while n is less than or equal to 15:
+    Declare by3 to be the remainder of n divided by 3.
+    Declare by5 to be the remainder of n divided by 5.
+    If by3 is equal to 0 and by5 is equal to 0, then
+        Print "FizzBuzz".
+    otherwise if by3 is equal to 0, then
+        Print "Fizz".
+    otherwise if by5 is equal to 0, then
+        Print "Buzz".
+    otherwise
+        Print the value of n.
+    thats it.
+    Set n to be n + 1.
+thats it.
+
+Print "=== Done! ===".

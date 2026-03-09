@@ -363,6 +363,26 @@ type SwapStatement struct {
 func (ss *SwapStatement) node()          {}
 func (ss *SwapStatement) statementNode() {}
 
+// ContinueStatement skips the rest of the current loop iteration
+type ContinueStatement struct{}
+
+func (cs *ContinueStatement) node()          {}
+func (cs *ContinueStatement) statementNode() {}
+
+// NothingLiteral represents a null/nil value (nothing, none, null)
+type NothingLiteral struct{}
+
+func (nl *NothingLiteral) node()           {}
+func (nl *NothingLiteral) expressionNode() {}
+
+// AskExpression reads a line of user input after displaying an optional prompt
+type AskExpression struct {
+	Prompt Expression // optional prompt to display
+}
+
+func (ae *AskExpression) node()           {}
+func (ae *AskExpression) expressionNode() {}
+
 // TypedVariableDecl represents a variable declaration with explicit type
 type TypedVariableDecl struct {
 	Name       string

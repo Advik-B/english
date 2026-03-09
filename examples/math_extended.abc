@@ -1,0 +1,51 @@
+# Math Constants and Functions Example
+# Demonstrates pi, e, infinity, log, exp, random, and more
+
+Print "=== Math Constants ===".
+Print "Pi:".
+Print the value of pi.
+Print "Euler's number (e):".
+Print the value of e.
+Print "Infinity:".
+Print the value of infinity.
+
+Print "".
+Print "=== Math Functions ===".
+
+# Logarithms
+Print "Natural log of 100:".
+Print log(100).
+Print "Log base 10 of 1000:".
+Print log10(1000).
+Print "Log base 2 of 1024:".
+Print log2(1024).
+
+# Exponential
+Print "e to the power of 2 (exp(2)):".
+Print exp(2).
+
+# Verify: exp(1) should equal e
+Declare result to be exp(1).
+Print "exp(1) equals e:".
+Print the value of result.
+
+# Circle area using pi
+Declare radius to be 5.
+Declare area to be pi * radius * radius.
+Print "Area of circle with radius 5:".
+Print the value of area.
+
+# Random numbers
+Print "".
+Print "=== Random Numbers ===".
+Print "Three random numbers between 0 and 1:".
+Print random().
+Print random().
+Print random().
+
+Print "Three random integers between 1 and 100:".
+Print floor(random_between(1, 101)).
+Print floor(random_between(1, 101)).
+Print floor(random_between(1, 101)).
+
+Print "=== Done! ===".

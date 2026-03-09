@@ -1,0 +1,42 @@
+# Nothing (Null) Value Example
+# Demonstrates the 'nothing' literal for representing absent values
+
+Print "=== Nothing (Null) Value ===".
+
+# Declare a variable with no value
+Declare result to be nothing.
+
+If result is equal to nothing, then
+    Print "result has no value (is nothing)".
+otherwise
+    Print "result has a value".
+thats it.
+
+# Assigning a real value
+Set result to be 42.
+
+If result is equal to nothing, then
+    Print "result is still nothing".
+otherwise
+    Print "result now has a value: ".
+    Print the value of result.
+thats it.
+
+# Using nothing as a default/sentinel value
+Declare found to be nothing.
+Declare haystack to be [10, 20, 30, 40, 50].
+
+For each item in haystack, do the following:
+    If item is equal to 30, then
+        Set found to be item.
+    thats it.
+thats it.
+
+If found is not equal to nothing, then
+    Print "Found the value:".
+    Print the value of found.
+otherwise
+    Print "Value not found.".
+thats it.
+
+Print "=== Done! ===".

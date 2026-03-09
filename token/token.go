@@ -96,6 +96,14 @@ const (
 	ALL
 	SAFELY
 
+	// New keywords
+	CONTINUE
+	SKIP
+	NOTHING
+	NOT
+	OR
+	ASK
+
 	// Operators and Punctuation
 	PERIOD
 	COMMA
@@ -298,6 +306,18 @@ func (t Type) String() string {
 		return "ALL"
 	case SAFELY:
 		return "SAFELY"
+	case CONTINUE:
+		return "CONTINUE"
+	case SKIP:
+		return "SKIP"
+	case NOTHING:
+		return "NOTHING"
+	case NOT:
+		return "NOT"
+	case OR:
+		return "OR"
+	case ASK:
+		return "ASK"
 	case PERIOD:
 		return "PERIOD"
 	case COMMA:

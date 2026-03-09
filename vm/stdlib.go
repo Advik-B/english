@@ -1,7 +1,11 @@
 package vm
 
 import (
+	"bufio"
+	"fmt"
 	"math"
+	"math/rand"
+	"os"
 	"sort"
 	"strings"
 )
@@ -11,6 +15,15 @@ func RegisterStdlib(env *Environment) {
 	registerMathFunctions(env)
 	registerStringFunctions(env)
 	registerListFunctions(env)
+	registerIOFunctions(env)
+	registerMathConstants(env)
+}
+
+// registerMathConstants registers mathematical constants as read-only variables
+func registerMathConstants(env *Environment) {
+	env.Define("pi", math.Pi, true)
+	env.Define("e", math.E, true)
+	env.Define("infinity", math.Inf(1), true)
 }
 
 // registerMathFunctions registers all math functions
@@ -26,6 +39,14 @@ func registerMathFunctions(env *Environment) {
 	env.DefineFunction("sin", &FunctionValue{Name: "sin", Parameters: []string{"x"}, Body: nil, Closure: env})
 	env.DefineFunction("cos", &FunctionValue{Name: "cos", Parameters: []string{"x"}, Body: nil, Closure: env})
 	env.DefineFunction("tan", &FunctionValue{Name: "tan", Parameters: []string{"x"}, Body: nil, Closure: env})
+	env.DefineFunction("log", &FunctionValue{Name: "log", Parameters: []string{"x"}, Body: nil, Closure: env})
+	env.DefineFunction("log10", &FunctionValue{Name: "log10", Parameters: []string{"x"}, Body: nil, Closure: env})
+	env.DefineFunction("log2", &FunctionValue{Name: "log2", Parameters: []string{"x"}, Body: nil, Closure: env})
+	env.DefineFunction("exp", &FunctionValue{Name: "exp", Parameters: []string{"x"}, Body: nil, Closure: env})
+	env.DefineFunction("random", &FunctionValue{Name: "random", Parameters: []string{}, Body: nil, Closure: env})
+	env.DefineFunction("random_between", &FunctionValue{Name: "random_between", Parameters: []string{"min", "max"}, Body: nil, Closure: env})
+	env.DefineFunction("is_nan", &FunctionValue{Name: "is_nan", Parameters: []string{"x"}, Body: nil, Closure: env})
+	env.DefineFunction("is_infinite", &FunctionValue{Name: "is_infinite", Parameters: []string{"x"}, Body: nil, Closure: env})
 }
 
 // registerStringFunctions registers all string functions
@@ -37,6 +58,17 @@ func registerStringFunctions(env *Environment) {
 	env.DefineFunction("trim", &FunctionValue{Name: "trim", Parameters: []string{"text"}, Body: nil, Closure: env})
 	env.DefineFunction("replace", &FunctionValue{Name: "replace", Parameters: []string{"text", "old", "new"}, Body: nil, Closure: env})
 	env.DefineFunction("contains", &FunctionValue{Name: "contains", Parameters: []string{"text", "substring"}, Body: nil, Closure: env})
+	env.DefineFunction("starts_with", &FunctionValue{Name: "starts_with", Parameters: []string{"text", "prefix"}, Body: nil, Closure: env})
+	env.DefineFunction("ends_with", &FunctionValue{Name: "ends_with", Parameters: []string{"text", "suffix"}, Body: nil, Closure: env})
+	env.DefineFunction("index_of", &FunctionValue{Name: "index_of", Parameters: []string{"text", "search"}, Body: nil, Closure: env})
+	env.DefineFunction("substring", &FunctionValue{Name: "substring", Parameters: []string{"text", "start", "length"}, Body: nil, Closure: env})
+	env.DefineFunction("str_repeat", &FunctionValue{Name: "str_repeat", Parameters: []string{"text", "n"}, Body: nil, Closure: env})
+	env.DefineFunction("count_occurrences", &FunctionValue{Name: "count_occurrences", Parameters: []string{"text", "substring"}, Body: nil, Closure: env})
+	env.DefineFunction("pad_left", &FunctionValue{Name: "pad_left", Parameters: []string{"text", "width", "char"}, Body: nil, Closure: env})
+	env.DefineFunction("pad_right", &FunctionValue{Name: "pad_right", Parameters: []string{"text", "width", "char"}, Body: nil, Closure: env})
+	env.DefineFunction("to_number", &FunctionValue{Name: "to_number", Parameters: []string{"text"}, Body: nil, Closure: env})
+	env.DefineFunction("to_string", &FunctionValue{Name: "to_string", Parameters: []string{"value"}, Body: nil, Closure: env})
+	env.DefineFunction("is_empty", &FunctionValue{Name: "is_empty", Parameters: []string{"value"}, Body: nil, Closure: env})
 }
 
 // registerListFunctions registers all list functions
@@ -46,12 +78,24 @@ func registerListFunctions(env *Environment) {
 	env.DefineFunction("insert", &FunctionValue{Name: "insert", Parameters: []string{"list", "index", "item"}, Body: nil, Closure: env})
 	env.DefineFunction("sort", &FunctionValue{Name: "sort", Parameters: []string{"list"}, Body: nil, Closure: env})
 	env.DefineFunction("reverse", &FunctionValue{Name: "reverse", Parameters: []string{"list"}, Body: nil, Closure: env})
+	env.DefineFunction("sum", &FunctionValue{Name: "sum", Parameters: []string{"list"}, Body: nil, Closure: env})
+	env.DefineFunction("unique", &FunctionValue{Name: "unique", Parameters: []string{"list"}, Body: nil, Closure: env})
+	env.DefineFunction("first", &FunctionValue{Name: "first", Parameters: []string{"list"}, Body: nil, Closure: env})
+	env.DefineFunction("last", &FunctionValue{Name: "last", Parameters: []string{"list"}, Body: nil, Closure: env})
+	env.DefineFunction("flatten", &FunctionValue{Name: "flatten", Parameters: []string{"list"}, Body: nil, Closure: env})
+	env.DefineFunction("count", &FunctionValue{Name: "count", Parameters: []string{"list"}, Body: nil, Closure: env})
+	env.DefineFunction("slice", &FunctionValue{Name: "slice", Parameters: []string{"list", "start", "end"}, Body: nil, Closure: env})
+}
+
+// registerIOFunctions registers input/output functions
+func registerIOFunctions(env *Environment) {
+	env.DefineFunction("ask", &FunctionValue{Name: "ask", Parameters: []string{"prompt"}, Body: nil, Closure: env})
 }
 
 // evalBuiltinFunction evaluates a built-in stdlib function
 func evalBuiltinFunction(name string, args []Value) (Value, error) {
-	// Math functions
 	switch name {
+	// ── Math ──────────────────────────────────────────────────────────────────
 	case "sqrt":
 		x, err := ToNumber(args[0])
 		if err != nil {
@@ -130,8 +174,59 @@ func evalBuiltinFunction(name string, args []Value) (Value, error) {
 			return nil, err
 		}
 		return math.Tan(x), nil
+	case "log":
+		x, err := ToNumber(args[0])
+		if err != nil {
+			return nil, err
+		}
+		return math.Log(x), nil
+	case "log10":
+		x, err := ToNumber(args[0])
+		if err != nil {
+			return nil, err
+		}
+		return math.Log10(x), nil
+	case "log2":
+		x, err := ToNumber(args[0])
+		if err != nil {
+			return nil, err
+		}
+		return math.Log2(x), nil
+	case "exp":
+		x, err := ToNumber(args[0])
+		if err != nil {
+			return nil, err
+		}
+		return math.Exp(x), nil
+	case "random":
+		return rand.Float64(), nil
+	case "random_between":
+		a, err := ToNumber(args[0])
+		if err != nil {
+			return nil, NewRuntimeError("random_between expects a number as first argument")
+		}
+		b, err := ToNumber(args[1])
+		if err != nil {
+			return nil, NewRuntimeError("random_between expects a number as second argument")
+		}
+		if a > b {
+			return nil, NewRuntimeError("random_between: min must be less than or equal to max")
+		}
+		return a + rand.Float64()*(b-a), nil
+	case "is_nan":
+		x, err := ToNumber(args[0])
+		if err != nil {
+			return true, nil // non-numeric is NaN-like
+		}
+		return math.IsNaN(x), nil
+	case "is_infinite":
+		x, err := ToNumber(args[0])
+		if err != nil {
+			return false, nil
+		}
+		return math.IsInf(x, 0), nil
 
-	// String functions
+	// ── String ────────────────────────────────────────────────────────────────
 	case "uppercase":
 		return strings.ToUpper(ToString(args[0])), nil
 	case "lowercase":
@@ -161,14 +256,118 @@ func evalBuiltinFunction(name string, args []Value) (Value, error) {
 	case "replace":
 		text := ToString(args[0])
 		old := ToString(args[1])
-		new := ToString(args[2])
-		return strings.ReplaceAll(text, old, new), nil
+		newStr := ToString(args[2])
+		return strings.ReplaceAll(text, old, newStr), nil
 	case "contains":
 		text := ToString(args[0])
 		substr := ToString(args[1])
 		return strings.Contains(text, substr), nil
+	case "starts_with":
+		text := ToString(args[0])
+		prefix := ToString(args[1])
+		return strings.HasPrefix(text, prefix), nil
+	case "ends_with":
+		text := ToString(args[0])
+		suffix := ToString(args[1])
+		return strings.HasSuffix(text, suffix), nil
+	case "index_of":
+		text := ToString(args[0])
+		search := ToString(args[1])
+		idx := strings.Index(text, search)
+		return float64(idx), nil
+	case "substring":
+		text := ToString(args[0])
+		start, err := ToNumber(args[1])
+		if err != nil {
+			return nil, NewRuntimeError("substring expects a number as second argument")
+		}
+		length, err := ToNumber(args[2])
+		if err != nil {
+			return nil, NewRuntimeError("substring expects a number as third argument")
+		}
+		s := int(start)
+		l := int(length)
+		if s < 0 || s > len(text) {
+			return nil, NewRuntimeError(fmt.Sprintf("substring start index %d out of range", s))
+		}
+		end := s + l
+		if end > len(text) {
+			end = len(text)
+		}
+		return text[s:end], nil
+	case "str_repeat":
+		text := ToString(args[0])
+		n, err := ToNumber(args[1])
+		if err != nil {
+			return nil, NewRuntimeError("str_repeat expects a number as second argument")
+		}
+		if int(n) < 0 {
+			return nil, NewRuntimeError("str_repeat count must be non-negative")
+		}
+		return strings.Repeat(text, int(n)), nil
+	case "count_occurrences":
+		text := ToString(args[0])
+		sub := ToString(args[1])
+		return float64(strings.Count(text, sub)), nil
+	case "pad_left":
+		text := ToString(args[0])
+		width, err := ToNumber(args[1])
+		if err != nil {
+			return nil, NewRuntimeError("pad_left expects a number as second argument")
+		}
+		padChar := " "
+		if len(args) > 2 {
+			padChar = ToString(args[2])
+			if len(padChar) == 0 {
+				padChar = " "
+			}
+		}
+		w := int(width)
+		for len(text) < w {
+			text = padChar[:1] + text
+		}
+		return text, nil
+	case "pad_right":
+		text := ToString(args[0])
+		width, err := ToNumber(args[1])
+		if err != nil {
+			return nil, NewRuntimeError("pad_right expects a number as second argument")
+		}
+		padChar := " "
+		if len(args) > 2 {
+			padChar = ToString(args[2])
+			if len(padChar) == 0 {
+				padChar = " "
+			}
+		}
+		w := int(width)
+		for len(text) < w {
+			text = text + padChar[:1]
+		}
+		return text, nil
+	case "to_number":
+		text := ToString(args[0])
+		var f float64
+		_, err := fmt.Sscanf(text, "%g", &f)
+		if err != nil {
+			return nil, NewRuntimeError(fmt.Sprintf("cannot convert '%s' to a number", text))
+		}
+		return f, nil
+	case "to_string":
+		return ToString(args[0]), nil
+	case "is_empty":
+		switch v := args[0].(type) {
+		case string:
+			return len(v) == 0, nil
+		case []interface{}:
+			return len(v) == 0, nil
+		case nil:
+			return true, nil
+		default:
+			return false, nil
+		}
 
-	// List functions
+	// ── List ──────────────────────────────────────────────────────────────────
 	case "append":
 		list, ok := args[0].([]interface{})
 		if !ok {
@@ -239,6 +438,122 @@ func evalBuiltinFunction(name string, args []Value) (Value, error) {
 			result[len(list)-1-i] = item
 		}
 		return result, nil
+	case "sum":
+		list, ok := args[0].([]interface{})
+		if !ok {
+			return nil, NewRuntimeError("sum expects a list")
+		}
+		total := 0.0
+		for _, item := range list {
+			n, err := ToNumber(item)
+			if err != nil {
+				return nil, NewRuntimeError(fmt.Sprintf("sum: cannot add non-number value '%v'", item))
+			}
+			total += n
+		}
+		return total, nil
+	case "unique":
+		list, ok := args[0].([]interface{})
+		if !ok {
+			return nil, NewRuntimeError("unique expects a list")
+		}
+		seen := make(map[string]bool)
+		var result []interface{}
+		for _, item := range list {
+			key := fmt.Sprintf("%v", item)
+			if !seen[key] {
+				seen[key] = true
+				result = append(result, item)
+			}
+		}
+		if result == nil {
+			result = []interface{}{}
+		}
+		return result, nil
+	case "first":
+		list, ok := args[0].([]interface{})
+		if !ok {
+			return nil, NewRuntimeError("first expects a list")
+		}
+		if len(list) == 0 {
+			return nil, NewRuntimeError("first: list is empty")
+		}
+		return list[0], nil
+	case "last":
+		list, ok := args[0].([]interface{})
+		if !ok {
+			return nil, NewRuntimeError("last expects a list")
+		}
+		if len(list) == 0 {
+			return nil, NewRuntimeError("last: list is empty")
+		}
+		return list[len(list)-1], nil
+	case "flatten":
+		list, ok := args[0].([]interface{})
+		if !ok {
+			return nil, NewRuntimeError("flatten expects a list")
+		}
+		var result []interface{}
+		for _, item := range list {
+			if sublist, ok := item.([]interface{}); ok {
+				result = append(result, sublist...)
+			} else {
+				result = append(result, item)
+			}
+		}
+		if result == nil {
+			result = []interface{}{}
+		}
+		return result, nil
+	case "count":
+		list, ok := args[0].([]interface{})
+		if !ok {
+			// For strings, return character count
+			if s, ok := args[0].(string); ok {
+				return float64(len(s)), nil
+			}
+			return nil, NewRuntimeError("count expects a list or string")
+		}
+		return float64(len(list)), nil
+	case "slice":
+		list, ok := args[0].([]interface{})
+		if !ok {
+			return nil, NewRuntimeError("slice expects a list as first argument")
+		}
+		start, err := ToNumber(args[1])
+		if err != nil {
+			return nil, NewRuntimeError("slice expects a number as second argument")
+		}
+		end, err := ToNumber(args[2])
+		if err != nil {
+			return nil, NewRuntimeError("slice expects a number as third argument")
+		}
+		s := int(start)
+		e := int(end)
+		if s < 0 {
+			s = 0
+		}
+		if e > len(list) {
+			e = len(list)
+		}
+		if s >= e {
+			return []interface{}{}, nil
+		}
+		result := make([]interface{}, e-s)
+		copy(result, list[s:e])
+		return result, nil
+
+	// ── I/O ───────────────────────────────────────────────────────────────────
+	case "ask":
+		if len(args) > 0 {
+			fmt.Print(ToString(args[0]))
+		}
+		reader := bufio.NewReader(os.Stdin)
+		line, err := reader.ReadString('\n')
+		if err != nil && len(line) == 0 {
+			return "", nil
+		}
+		return strings.TrimRight(line, "\r\n"), nil
 	}
 
 	return nil, NewRuntimeError("unknown built-in function: " + name)

@@ -104,6 +104,10 @@ func (p *Parser) parseStatement() (ast.Statement, error) {
 		return p.parseLetDeclaration()
 	case token.BREAK:
 		return p.parseBreak()
+	case token.CONTINUE, token.SKIP:
+		return p.parseContinue()
+	case token.ASK:
+		return p.parseAskStatement()
 	case token.SET:
 		return p.parseAssignment()
 	case token.CALL:
@@ -1111,6 +1115,91 @@ func (p *Parser) parseBreak() (ast.Statement, error) {
 	return &ast.BreakStatement{}, nil
 }
 
+// parseContinue parses a continue statement:
+//   - "Continue." or "Skip."
+//   - "Continue the loop." or "Skip the loop."
+func (p *Parser) parseContinue() (ast.Statement, error) {
+	p.nextToken() // consume CONTINUE or SKIP
+
+	// Optional "the loop"
+	if p.curToken.Type == token.THE {
+		p.nextToken() // consume THE
+		if p.curToken.Type == token.LOOP {
+			p.nextToken() // consume LOOP
+		}
+	}
+
+	if err := p.expectToken(token.PERIOD); err != nil {
+		return nil, err
+	}
+	p.nextToken()
+
+	return &ast.ContinueStatement{}, nil
+}
+
+// parseAskStatement parses an ask statement for user input:
+//   - "Ask "prompt" as varname."   (create or set variable)
+//   - "Ask "prompt" and store it in varname."
+func (p *Parser) parseAskStatement() (ast.Statement, error) {
+	p.nextToken() // consume ASK
+
+	// Parse the prompt expression
+	prompt, err := p.parseExpression()
+	if err != nil {
+		return nil, err
+	}
+
+	// Determine target variable name
+	var varName string
+
+	if p.curToken.Type == token.AS {
+		// "Ask "prompt" as varname."
+		p.nextToken() // consume AS
+		if p.curToken.Type != token.IDENTIFIER {
+			return nil, fmt.Errorf("expected variable name after 'as', got %v at line %d", p.curToken.Type, p.curToken.Line)
+		}
+		varName = p.curToken.Value
+		p.nextToken()
+	} else if p.curToken.Type == token.AND {
+		// "Ask "prompt" and store it in varname." or "Ask "prompt" and save it in varname."
+		p.nextToken() // consume AND
+		// Skip "store"/"save"/"put" identifier if present
+		if p.curToken.Type == token.IDENTIFIER {
+			p.nextToken()
+		}
+		// Skip "it", "the", "answer", "result", "response" identifiers/tokens
+		for p.curToken.Type == token.IDENTIFIER || p.curToken.Type == token.THE {
+			if p.curToken.Type == token.IN {
+				break
+			}
+			p.nextToken()
+		}
+		// Expect "in"
+		if p.curToken.Type == token.IN {
+			p.nextToken() // consume IN
+		}
+		if p.curToken.Type != token.IDENTIFIER {
+			return nil, fmt.Errorf("expected variable name, got %v at line %d", p.curToken.Type, p.curToken.Line)
+		}
+		varName = p.curToken.Value
+		p.nextToken()
+	} else {
+		return nil, fmt.Errorf("expected 'as' or 'and' after ask prompt, got %v at line %d", p.curToken.Type, p.curToken.Line)
+	}
+
+	if err := p.expectToken(token.PERIOD); err != nil {
+		return nil, err
+	}
+	p.nextToken()
+
+	// Use Assignment so it works whether the variable already exists or not.
+	// The Assignment evaluator calls Set(), which creates the variable if it doesn't exist.
+	return &ast.Assignment{
+		Name:  varName,
+		Value: &ast.AskExpression{Prompt: prompt},
+	}, nil
+}
+
 func (p *Parser) parseBlock() ([]ast.Statement, error) {
 	var statements []ast.Statement
 
@@ -1132,7 +1221,39 @@ func (p *Parser) parseBlock() ([]ast.Statement, error) {
 }
 
 func (p *Parser) parseComparison() (ast.Expression, error) {
-	left, err := p.parseExpression()
+	return p.parseLogical()
+}
+
+// parseLogical handles logical "and" / "or" operators (lowest precedence above comparison)
+func (p *Parser) parseLogical() (ast.Expression, error) {
+	left, err := p.parseRelational()
+	if err != nil {
+		return nil, err
+	}
+
+	for p.curToken.Type == token.AND || p.curToken.Type == token.OR {
+		op := "and"
+		if p.curToken.Type == token.OR {
+			op = "or"
+		}
+		p.nextToken()
+		right, err := p.parseRelational()
+		if err != nil {
+			return nil, err
+		}
+		left = &ast.BinaryExpression{
+			Left:     left,
+			Operator: op,
+			Right:    right,
+		}
+	}
+
+	return left, nil
+}
+
+// parseRelational handles comparison operators like "is equal to", "is less than", etc.
+func (p *Parser) parseRelational() (ast.Expression, error) {
+	left, err := p.parseAdditive()
 	if err != nil {
 		return nil, err
 	}
@@ -1142,7 +1263,7 @@ func (p *Parser) parseComparison() (ast.Expression, error) {
 		token.IS_LESS_EQUAL, token.IS_GREATER_EQUAL, token.IS_NOT_EQUAL:
 		op := p.curToken.Value
 		p.nextToken()
-		right, err := p.parseExpression()
+		right, err := p.parseAdditive()
 		if err != nil {
 			return nil, err
 		}
@@ -1157,7 +1278,7 @@ func (p *Parser) parseComparison() (ast.Expression, error) {
 }
 
 func (p *Parser) parseExpression() (ast.Expression, error) {
-	return p.parseAdditive()
+	return p.parseLogical()
 }
 
 func (p *Parser) parseAdditive() (ast.Expression, error) {
@@ -1231,6 +1352,48 @@ func (p *Parser) parsePrimary() (ast.Expression, error) {
 	case token.FALSE:
 		p.nextToken()
 		return &ast.BooleanLiteral{Value: false}, nil
+
+	case token.NOTHING:
+		p.nextToken()
+		return &ast.NothingLiteral{}, nil
+
+	case token.NOT:
+		// Logical NOT unary operator: "not <expression>"
+		p.nextToken()
+		expr, err := p.parsePrimary()
+		if err != nil {
+			return nil, err
+		}
+		return &ast.UnaryExpression{
+			Operator: "not",
+			Right:    expr,
+		}, nil
+
+	case token.ASK:
+		// "ask(<prompt>)" or "ask" used as expression
+		p.nextToken() // consume ASK
+		if p.curToken.Type == token.LPAREN {
+			p.nextToken() // consume (
+			var prompt ast.Expression
+			if p.curToken.Type != token.RPAREN {
+				var err error
+				prompt, err = p.parseExpression()
+				if err != nil {
+					return nil, err
+				}
+			}
+			if err := p.expectToken(token.RPAREN); err != nil {
+				return nil, err
+			}
+			p.nextToken()
+			return &ast.AskExpression{Prompt: prompt}, nil
+		}
+		// "ask" with a string directly (no parentheses)
+		prompt, err := p.parseExpression()
+		if err != nil {
+			return nil, err
+		}
+		return &ast.AskExpression{Prompt: prompt}, nil
 
 	case token.LBRACKET:
 		return p.parseList()

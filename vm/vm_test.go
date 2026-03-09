@@ -1262,3 +1262,446 @@ Print the value of safeVar.`
 }
 
 
+
+// ============================================
+// CONTINUE STATEMENT TESTS
+// ============================================
+
+func TestContinueInWhileLoop(t *testing.T) {
+code := `Declare i to be 1.
+Declare result to be [].
+repeat the following while i is less than or equal to 6:
+    Declare mod to be the remainder of i divided by 2.
+    Set i to be i + 1.
+    If mod is equal to 0, then
+        Continue.
+    thats it.
+    Set result to be append(result, i - 1).
+thats it.
+Print the value of result.`
+
+output := captureOutput(func() {
+evaluate(code)
+})
+
+if !strings.Contains(output, "1") || !strings.Contains(output, "3") || !strings.Contains(output, "5") {
+t.Errorf("Expected odd numbers in output, got: %q", output)
+}
+}
+
+func TestContinueInForLoop(t *testing.T) {
+code := `Declare count to be 0.
+repeat 10 times, do the following:
+    If count is less than 5, then
+        Set count to be count + 1.
+        Continue.
+    thats it.
+    Set count to be count + 2.
+thats it.
+Print the value of count.`
+
+output := captureOutput(func() {
+evaluate(code)
+})
+
+if !strings.Contains(output, "15") {
+t.Errorf("Expected '15', got: %q", output)
+}
+}
+
+func TestContinueInForEachLoop(t *testing.T) {
+code := `Declare nums to be [1, 2, 3, 4, 5, 6].
+Declare evens to be [].
+For each n in nums, do the following:
+    Declare mod to be the remainder of n divided by 2.
+    If mod is not equal to 0, then
+        Continue.
+    thats it.
+    Set evens to be append(evens, n).
+thats it.
+Print the value of evens.`
+
+output := captureOutput(func() {
+evaluate(code)
+})
+
+if !strings.Contains(output, "2") || !strings.Contains(output, "4") || !strings.Contains(output, "6") {
+t.Errorf("Expected [2 4 6] in output, got: %q", output)
+}
+}
+
+// ============================================
+// NOTHING LITERAL TESTS
+// ============================================
+
+func TestNothingLiteral(t *testing.T) {
+code := `Declare x to be nothing.
+Print the value of x.`
+
+output := captureOutput(func() {
+evaluate(code)
+})
+
+if !strings.Contains(output, "") {
+// 'nothing' prints as empty string
+}
+}
+
+func TestNothingEquality(t *testing.T) {
+code := `Declare x to be nothing.
+If x is equal to nothing, then
+    Print "is nothing".
+thats it.`
+
+output := captureOutput(func() {
+evaluate(code)
+})
+
+if !strings.Contains(output, "is nothing") {
+t.Errorf("Expected 'is nothing', got: %q", output)
+}
+}
+
+func TestNothingNotEqual(t *testing.T) {
+code := `Declare x to be 5.
+If x is not equal to nothing, then
+    Print "not nothing".
+thats it.`
+
+output := captureOutput(func() {
+evaluate(code)
+})
+
+if !strings.Contains(output, "not nothing") {
+t.Errorf("Expected 'not nothing', got: %q", output)
+}
+}
+
+// ============================================
+// LOGICAL OPERATOR TESTS
+// ============================================
+
+func TestLogicalAnd(t *testing.T) {
+tests := []struct {
+code     string
+expected string
+}{
+{`Declare x to be 5.
+Declare y to be 10.
+If x is greater than 3 and y is less than 20, then
+    Print "yes".
+thats it.`, "yes"},
+{`Declare x to be 5.
+Declare y to be 10.
+If x is greater than 10 and y is less than 20, then
+    Print "yes".
+otherwise
+    Print "no".
+thats it.`, "no"},
+}
+
+for _, tt := range tests {
+output := captureOutput(func() {
+evaluate(tt.code)
+})
+if !strings.Contains(output, tt.expected) {
+t.Errorf("Expected %q in output, got: %q", tt.expected, output)
+}
+}
+}
+
+func TestLogicalOr(t *testing.T) {
+tests := []struct {
+code     string
+expected string
+}{
+{`Declare x to be 5.
+If x is greater than 10 or x is less than 10, then
+    Print "yes".
+thats it.`, "yes"},
+{`Declare x to be 5.
+If x is greater than 10 or x is greater than 100, then
+    Print "yes".
+otherwise
+    Print "no".
+thats it.`, "no"},
+}
+
+for _, tt := range tests {
+output := captureOutput(func() {
+evaluate(tt.code)
+})
+if !strings.Contains(output, tt.expected) {
+t.Errorf("Expected %q in output, got: %q", tt.expected, output)
+}
+}
+}
+
+func TestLogicalNot(t *testing.T) {
+code := `Declare flag to be false.
+If not flag, then
+    Print "not false is true".
+thats it.`
+
+output := captureOutput(func() {
+evaluate(code)
+})
+
+if !strings.Contains(output, "not false is true") {
+t.Errorf("Expected 'not false is true', got: %q", output)
+}
+}
+
+func TestLogicalShortCircuit(t *testing.T) {
+// AND short-circuit: right side should not be evaluated if left is false
+code := `Declare x to be false.
+Declare result to be x and true.
+If result is equal to false, then
+    Print "short-circuit works".
+thats it.`
+
+output := captureOutput(func() {
+evaluate(code)
+})
+
+if !strings.Contains(output, "short-circuit works") {
+t.Errorf("Expected short-circuit behavior, got: %q", output)
+}
+}
+
+// ============================================
+// STDLIB - NEW MATH FUNCTIONS TESTS
+// ============================================
+
+func TestStdlibLog(t *testing.T) {
+code := `Print log(1).`
+output := captureOutput(func() {
+evaluate(code)
+})
+if !strings.Contains(output, "0") {
+t.Errorf("log(1) should be 0, got: %q", output)
+}
+}
+
+func TestStdlibExp(t *testing.T) {
+code := `Print exp(0).`
+output := captureOutput(func() {
+evaluate(code)
+})
+if !strings.Contains(output, "1") {
+t.Errorf("exp(0) should be 1, got: %q", output)
+}
+}
+
+func TestStdlibRandom(t *testing.T) {
+code := `Declare r to be random().
+If r is greater than or equal to 0, then
+    If r is less than 1, then
+        Print "valid".
+    thats it.
+thats it.`
+output := captureOutput(func() {
+evaluate(code)
+})
+if !strings.Contains(output, "valid") {
+t.Errorf("random() should return value in [0, 1), got: %q", output)
+}
+}
+
+func TestStdlibRandomBetween(t *testing.T) {
+code := `Declare r to be random_between(5, 10).
+If r is greater than or equal to 5, then
+    If r is less than or equal to 10, then
+        Print "valid".
+    thats it.
+thats it.`
+output := captureOutput(func() {
+evaluate(code)
+})
+if !strings.Contains(output, "valid") {
+t.Errorf("random_between(5, 10) should return value in [5, 10], got: %q", output)
+}
+}
+
+func TestMathConstants(t *testing.T) {
+code := `If pi is greater than 3, then
+    Print "pi ok".
+thats it.
+If e is greater than 2, then
+    Print "e ok".
+thats it.`
+output := captureOutput(func() {
+evaluate(code)
+})
+if !strings.Contains(output, "pi ok") {
+t.Errorf("pi should be > 3, got: %q", output)
+}
+if !strings.Contains(output, "e ok") {
+t.Errorf("e should be > 2, got: %q", output)
+}
+}
+
+// ============================================
+// STDLIB - NEW STRING FUNCTIONS TESTS
+// ============================================
+
+func TestStdlibStartsWith(t *testing.T) {
+code := `Print starts_with("hello world", "hello").`
+output := captureOutput(func() {
+evaluate(code)
+})
+if !strings.Contains(output, "true") {
+t.Errorf("starts_with should return true, got: %q", output)
+}
+}
+
+func TestStdlibEndsWith(t *testing.T) {
+code := `Print ends_with("hello world", "world").`
+output := captureOutput(func() {
+evaluate(code)
+})
+if !strings.Contains(output, "true") {
+t.Errorf("ends_with should return true, got: %q", output)
+}
+}
+
+func TestStdlibIndexOf(t *testing.T) {
+code := `Print index_of("hello world", "world").`
+output := captureOutput(func() {
+evaluate(code)
+})
+if !strings.Contains(output, "6") {
+t.Errorf("index_of should return 6, got: %q", output)
+}
+}
+
+func TestStdlibSubstring(t *testing.T) {
+code := `Print substring("hello world", 6, 5).`
+output := captureOutput(func() {
+evaluate(code)
+})
+if !strings.Contains(output, "world") {
+t.Errorf("substring should return 'world', got: %q", output)
+}
+}
+
+func TestStdlibStrRepeat(t *testing.T) {
+code := `Print str_repeat("ab", 3).`
+output := captureOutput(func() {
+evaluate(code)
+})
+if !strings.Contains(output, "ababab") {
+t.Errorf("str_repeat should return 'ababab', got: %q", output)
+}
+}
+
+func TestStdlibCountOccurrences(t *testing.T) {
+code := `Print count_occurrences("abcabc", "abc").`
+output := captureOutput(func() {
+evaluate(code)
+})
+if !strings.Contains(output, "2") {
+t.Errorf("count_occurrences should return 2, got: %q", output)
+}
+}
+
+func TestStdlibToNumber(t *testing.T) {
+code := `Declare n to be to_number("42.5").
+If n is greater than 42, then
+    Print "ok".
+thats it.`
+output := captureOutput(func() {
+evaluate(code)
+})
+if !strings.Contains(output, "ok") {
+t.Errorf("to_number should parse '42.5' > 42, got: %q", output)
+}
+}
+
+func TestStdlibIsEmpty(t *testing.T) {
+code := `Print is_empty("").
+Print is_empty("hi").
+Print is_empty([]).`
+output := captureOutput(func() {
+evaluate(code)
+})
+lines := strings.Split(strings.TrimSpace(output), "\n")
+if len(lines) < 3 || lines[0] != "true" || lines[1] != "false" || lines[2] != "true" {
+t.Errorf("is_empty results wrong, got: %q", output)
+}
+}
+
+// ============================================
+// STDLIB - NEW LIST FUNCTIONS TESTS
+// ============================================
+
+func TestStdlibSum(t *testing.T) {
+code := `Print sum([1, 2, 3, 4, 5]).`
+output := captureOutput(func() {
+evaluate(code)
+})
+if !strings.Contains(output, "15") {
+t.Errorf("sum([1,2,3,4,5]) should be 15, got: %q", output)
+}
+}
+
+func TestStdlibUnique(t *testing.T) {
+code := `Declare u to be unique([1, 2, 2, 3, 3, 3]).
+Print count(u).`
+output := captureOutput(func() {
+evaluate(code)
+})
+if !strings.Contains(output, "3") {
+t.Errorf("unique([1,2,2,3,3,3]) should have 3 elements, got: %q", output)
+}
+}
+
+func TestStdlibFirst(t *testing.T) {
+code := `Print first([10, 20, 30]).`
+output := captureOutput(func() {
+evaluate(code)
+})
+if !strings.Contains(output, "10") {
+t.Errorf("first([10,20,30]) should be 10, got: %q", output)
+}
+}
+
+func TestStdlibLast(t *testing.T) {
+code := `Print last([10, 20, 30]).`
+output := captureOutput(func() {
+evaluate(code)
+})
+if !strings.Contains(output, "30") {
+t.Errorf("last([10,20,30]) should be 30, got: %q", output)
+}
+}
+
+func TestStdlibFlatten(t *testing.T) {
+code := `Print flatten([[1, 2], [3, 4], [5]]).`
+output := captureOutput(func() {
+evaluate(code)
+})
+if !strings.Contains(output, "1") || !strings.Contains(output, "5") {
+t.Errorf("flatten should produce flat list, got: %q", output)
+}
+}
+
+func TestStdlibCount(t *testing.T) {
+code := `Print count([1, 2, 3, 4, 5]).`
+output := captureOutput(func() {
+evaluate(code)
+})
+if !strings.Contains(output, "5") {
+t.Errorf("count([1,2,3,4,5]) should be 5, got: %q", output)
+}
+}
+
+func TestStdlibSlice(t *testing.T) {
+code := `Print slice([10, 20, 30, 40, 50], 1, 4).`
+output := captureOutput(func() {
+evaluate(code)
+})
+if !strings.Contains(output, "20") || !strings.Contains(output, "40") {
+t.Errorf("slice should return [20 30 40], got: %q", output)
+}
+}

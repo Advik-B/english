@@ -15,16 +15,15 @@ import (
 type Evaluator struct {
 	env       *Environment
 	callStack []string
+	builtinFn BuiltinFunc // injected stdlib evaluator
 }
 
-// NewEvaluator creates a new evaluator with the given environment
-func NewEvaluator(env *Environment) *Evaluator {
-	// Register standard library functions
-	RegisterStdlib(env)
-	
+// NewEvaluator creates a new evaluator with the given environment and optional builtin function.
+func NewEvaluator(env *Environment, builtinFn BuiltinFunc) *Evaluator {
 	return &Evaluator{
 		env:       env,
 		callStack: []string{"<main>"},
+		builtinFn: builtinFn,
 	}
 }
 
@@ -227,7 +226,7 @@ func (ev *Evaluator) evalSafeImport(program *ast.Program, is *ast.ImportStatemen
 func (ev *Evaluator) evalSelectiveImport(program *ast.Program, is *ast.ImportStatement) (Value, error) {
 	// Create a temporary environment for the imported file
 	tempEnv := NewEnvironment()
-	tempEval := NewEvaluator(tempEnv)
+	tempEval := NewEvaluator(tempEnv, ev.builtinFn)
 	
 	// Execute in temporary environment
 	_, err := tempEval.evalProgram(program)
@@ -866,7 +865,7 @@ func (ev *Evaluator) evalFunctionCall(fc *ast.FunctionCall) (Value, error) {
 	// Check if it's a built-in function (stdlib)
 	if fn.Body == nil {
 		// This is a built-in function, delegate to stdlib
-		return evalBuiltinFunction(fc.Name, args)
+		return ev.evalBuiltinFunction(fc.Name, args)
 	}
 
 	// Check parameter count
@@ -940,7 +939,7 @@ func (ev *Evaluator) callFunction(name string, args []Value) (Value, error) {
 
 	// Built-in (stdlib) path
 	if fn.Body == nil {
-		return evalBuiltinFunction(name, args)
+		return ev.evalBuiltinFunction(name, args)
 	}
 
 	// User-defined function path

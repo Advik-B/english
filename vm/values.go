@@ -10,6 +10,10 @@ import (
 // Every evaluated expression produces a Value.
 type Value = interface{}
 
+// BuiltinFunc is the signature for the injected standard-library evaluator.
+// It is called whenever a built-in function (Body == nil) is invoked.
+type BuiltinFunc func(name string, args []Value) (Value, error)
+
 // FunctionValue represents a user-defined function.
 // It lives in vm/ (not vm/types/) because it holds a *Environment closure.
 type FunctionValue struct {

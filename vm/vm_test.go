@@ -1,9 +1,11 @@
-package vm
+package vm_test
 
 import (
 	"bytes"
 	"english/ast"
 	"english/parser"
+	"english/vm"
+	"english/vm/stdlib"
 	"io"
 	"os"
 	"strings"
@@ -11,7 +13,7 @@ import (
 )
 
 // Helper function to evaluate code
-func evaluate(input string) (Value, error) {
+func evaluate(input string) (vm.Value, error) {
 	lexer := parser.NewLexer(input)
 	tokens := lexer.TokenizeAll()
 	p := parser.NewParser(tokens)
@@ -19,8 +21,9 @@ func evaluate(input string) (Value, error) {
 	if err != nil {
 		return nil, err
 	}
-	env := NewEnvironment()
-	evaluator := NewEvaluator(env)
+	env := vm.NewEnvironment()
+	stdlib.Register(env)
+	evaluator := vm.NewEvaluator(env, stdlib.Eval)
 	return evaluator.Eval(program)
 }
 
@@ -45,7 +48,7 @@ func captureOutput(f func()) string {
 // ============================================
 
 func TestEnvironmentDefine(t *testing.T) {
-	env := NewEnvironment()
+	env := vm.NewEnvironment()
 	err := env.Define("x", float64(5), false)
 	if err != nil {
 		t.Fatalf("Define error: %v", err)
@@ -61,7 +64,7 @@ func TestEnvironmentDefine(t *testing.T) {
 }
 
 func TestEnvironmentDefineConstant(t *testing.T) {
-	env := NewEnvironment()
+	env := vm.NewEnvironment()
 	err := env.Define("PI", float64(3.14159), true)
 	if err != nil {
 		t.Fatalf("Define error: %v", err)
@@ -73,7 +76,7 @@ func TestEnvironmentDefineConstant(t *testing.T) {
 }
 
 func TestEnvironmentSet(t *testing.T) {
-	env := NewEnvironment()
+	env := vm.NewEnvironment()
 	env.Define("x", float64(5), false)
 	env.Set("x", float64(10))
 
@@ -84,7 +87,7 @@ func TestEnvironmentSet(t *testing.T) {
 }
 
 func TestEnvironmentSetConstantError(t *testing.T) {
-	env := NewEnvironment()
+	env := vm.NewEnvironment()
 	env.Define("PI", float64(3.14159), true)
 	err := env.Set("PI", float64(3.14))
 
@@ -94,7 +97,7 @@ func TestEnvironmentSetConstantError(t *testing.T) {
 }
 
 func TestEnvironmentChildScope(t *testing.T) {
-	parent := NewEnvironment()
+	parent := vm.NewEnvironment()
 	parent.Define("x", float64(5), false)
 
 	child := parent.NewChild()
@@ -117,8 +120,8 @@ func TestEnvironmentChildScope(t *testing.T) {
 }
 
 func TestEnvironmentGetFunction(t *testing.T) {
-	env := NewEnvironment()
-	fn := &FunctionValue{Name: "test", Parameters: []string{}, Body: []ast.Statement{}}
+	env := vm.NewEnvironment()
+	fn := &vm.FunctionValue{Name: "test", Parameters: []string{}, Body: []ast.Statement{}}
 	env.DefineFunction("test", fn)
 
 	found, ok := env.GetFunction("test")
@@ -131,7 +134,7 @@ func TestEnvironmentGetFunction(t *testing.T) {
 }
 
 func TestEnvironmentGetAllVariables(t *testing.T) {
-	env := NewEnvironment()
+	env := vm.NewEnvironment()
 	env.Define("x", float64(5), false)
 	env.Define("y", float64(10), false)
 
@@ -142,9 +145,9 @@ func TestEnvironmentGetAllVariables(t *testing.T) {
 }
 
 func TestEnvironmentGetAllFunctions(t *testing.T) {
-	env := NewEnvironment()
-	fn1 := &FunctionValue{Name: "fn1", Parameters: []string{}, Body: []ast.Statement{}}
-	fn2 := &FunctionValue{Name: "fn2", Parameters: []string{}, Body: []ast.Statement{}}
+	env := vm.NewEnvironment()
+	fn1 := &vm.FunctionValue{Name: "fn1", Parameters: []string{}, Body: []ast.Statement{}}
+	fn2 := &vm.FunctionValue{Name: "fn2", Parameters: []string{}, Body: []ast.Statement{}}
 	env.DefineFunction("fn1", fn1)
 	env.DefineFunction("fn2", fn2)
 
@@ -162,7 +165,7 @@ func TestToNumber(t *testing.T) {
 	// Strict type system: ToNumber only accepts actual numeric values.
 	// Text-to-number coercion requires explicit "cast to number".
 	tests := []struct {
-		input    Value
+		input    vm.Value
 		expected float64
 		hasError bool
 	}{
@@ -175,7 +178,7 @@ func TestToNumber(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		result, err := ToNumber(test.input)
+		result, err := vm.ToNumber(test.input)
 		if test.hasError {
 			if err == nil {
 				t.Errorf("Expected error for %v, got nil", test.input)
@@ -185,7 +188,7 @@ func TestToNumber(t *testing.T) {
 				t.Errorf("Unexpected error for %v: %v", test.input, err)
 			}
 			if result != test.expected {
-				t.Errorf("ToNumber(%v) = %v, want %v", test.input, result, test.expected)
+				t.Errorf("vm.ToNumber(%v) = %v, want %v", test.input, result, test.expected)
 			}
 		}
 	}
@@ -193,7 +196,7 @@ func TestToNumber(t *testing.T) {
 
 func TestToString(t *testing.T) {
 	tests := []struct {
-		input    Value
+		input    vm.Value
 		expected string
 	}{
 		{float64(5), "5"},
@@ -206,9 +209,9 @@ func TestToString(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		result := ToString(test.input)
+		result := vm.ToString(test.input)
 		if result != test.expected {
-			t.Errorf("ToString(%v) = %q, want %q", test.input, result, test.expected)
+			t.Errorf("vm.ToString(%v) = %q, want %q", test.input, result, test.expected)
 		}
 	}
 }
@@ -217,7 +220,7 @@ func TestToBool(t *testing.T) {
 	// With strict typing, ToBool only accepts boolean values (and nil for nothing).
 	// Truthy/falsy coercion of numbers, strings, and lists is intentionally removed.
 	tests := []struct {
-		input     Value
+		input     vm.Value
 		expected  bool
 		expectErr bool
 	}{
@@ -230,17 +233,17 @@ func TestToBool(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		result, err := ToBool(test.input)
+		result, err := vm.ToBool(test.input)
 		if test.expectErr {
 			if err == nil {
-				t.Errorf("ToBool(%v): expected TypeError, got nil error", test.input)
+				t.Errorf("vm.ToBool(%v): expected TypeError, got nil error", test.input)
 			}
 		} else {
 			if err != nil {
-				t.Errorf("ToBool(%v): unexpected error: %v", test.input, err)
+				t.Errorf("vm.ToBool(%v): unexpected error: %v", test.input, err)
 			}
 			if result != test.expected {
-				t.Errorf("ToBool(%v) = %v, want %v", test.input, result, test.expected)
+				t.Errorf("vm.ToBool(%v) = %v, want %v", test.input, result, test.expected)
 			}
 		}
 	}
@@ -252,31 +255,31 @@ func TestToBool(t *testing.T) {
 
 func TestAdd(t *testing.T) {
 // Strict typing: only same-type addition. list+list via '+' is removed; use append().
-if _, err := Add(float64(5), float64(3)); err != nil {
-t.Errorf("Add(5, 3): unexpected error: %v", err)
+if _, err := vm.Add(float64(5), float64(3)); err != nil {
+t.Errorf("vm.Add(5, 3): unexpected error: %v", err)
 }
-r, err := Add("Hello", " World")
+r, err := vm.Add("Hello", " World")
 if err != nil || r != "Hello World" {
-t.Errorf("Add(text,text): got %v, %v", r, err)
+t.Errorf("vm.Add(text,text): got %v, %v", r, err)
 }
 // list+list is now a TypeError
-if _, err := Add([]interface{}{1}, []interface{}{2}); err == nil {
-t.Error("Add(list, list): expected TypeError, got nil")
+if _, err := vm.Add([]interface{}{1}, []interface{}{2}); err == nil {
+t.Error("vm.Add(list, list): expected TypeError, got nil")
 }
 }
 
 
 func TestSubtract(t *testing.T) {
-	result, err := Subtract(float64(10), float64(3))
+	result, err := vm.Subtract(float64(10), float64(3))
 	if err != nil {
 		t.Fatalf("Subtract error: %v", err)
 	}
 	if result != float64(7) {
-		t.Errorf("Subtract(10, 3) = %v, want 7", result)
+		t.Errorf("vm.Subtract(10, 3) = %v, want 7", result)
 	}
 
 	// Test error case
-	_, err = Subtract("hello", float64(3))
+	_, err = vm.Subtract("hello", float64(3))
 	if err == nil {
 		t.Error("Expected error for non-numeric subtraction")
 	}
@@ -284,49 +287,49 @@ func TestSubtract(t *testing.T) {
 
 func TestMultiply(t *testing.T) {
 // Strict typing: only number*number. String repetition removed; use str_repeat().
-r, err := Multiply(float64(5), float64(3))
+r, err := vm.Multiply(float64(5), float64(3))
 if err != nil || r != float64(15) {
-t.Errorf("Multiply(5,3): got %v, %v", r, err)
+t.Errorf("vm.Multiply(5,3): got %v, %v", r, err)
 }
-if _, err := Multiply("ab", float64(3)); err == nil {
-t.Error("Multiply(text,number): expected TypeError, got nil")
+if _, err := vm.Multiply("ab", float64(3)); err == nil {
+t.Error("vm.Multiply(text,number): expected TypeError, got nil")
 }
 }
 
 
 func TestDivide(t *testing.T) {
-	result, err := Divide(float64(10), float64(2))
+	result, err := vm.Divide(float64(10), float64(2))
 	if err != nil {
 		t.Fatalf("Divide error: %v", err)
 	}
 	if result != float64(5) {
-		t.Errorf("Divide(10, 2) = %v, want 5", result)
+		t.Errorf("vm.Divide(10, 2) = %v, want 5", result)
 	}
 
 	// Test division by zero
-	_, err = Divide(float64(10), float64(0))
+	_, err = vm.Divide(float64(10), float64(0))
 	if err == nil {
 		t.Error("Expected error for division by zero")
 	}
 
 	// Test non-numeric division
-	_, err = Divide("hello", float64(2))
+	_, err = vm.Divide("hello", float64(2))
 	if err == nil {
 		t.Error("Expected error for non-numeric division")
 	}
 }
 
 func TestModulo(t *testing.T) {
-	result, err := Modulo(float64(17), float64(5))
+	result, err := vm.Modulo(float64(17), float64(5))
 	if err != nil {
 		t.Fatalf("Modulo error: %v", err)
 	}
 	if result != float64(2) {
-		t.Errorf("Modulo(17, 5) = %v, want 2", result)
+		t.Errorf("vm.Modulo(17, 5) = %v, want 2", result)
 	}
 
 	// Test modulo by zero
-	_, err = Modulo(float64(10), float64(0))
+	_, err = vm.Modulo(float64(10), float64(0))
 	if err == nil {
 		t.Error("Expected error for modulo by zero")
 	}
@@ -339,8 +342,8 @@ func TestModulo(t *testing.T) {
 func TestCompare(t *testing.T) {
 	tests := []struct {
 		op       string
-		left     Value
-		right    Value
+		left     vm.Value
+		right    vm.Value
 		expected bool
 	}{
 		{"is equal to", float64(5), float64(5), true},
@@ -360,21 +363,21 @@ func TestCompare(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		result, err := Compare(test.op, test.left, test.right)
+		result, err := vm.Compare(test.op, test.left, test.right)
 		if err != nil {
-			t.Errorf("Compare(%q, %v, %v) error: %v", test.op, test.left, test.right, err)
+			t.Errorf("vm.Compare(%q, %v, %v) error: %v", test.op, test.left, test.right, err)
 			continue
 		}
 		if result != test.expected {
-			t.Errorf("Compare(%q, %v, %v) = %v, want %v", test.op, test.left, test.right, result, test.expected)
+			t.Errorf("vm.Compare(%q, %v, %v) = %v, want %v", test.op, test.left, test.right, result, test.expected)
 		}
 	}
 }
 
 func TestEquals(t *testing.T) {
 	tests := []struct {
-		left     Value
-		right    Value
+		left     vm.Value
+		right    vm.Value
 		expected bool
 	}{
 		{float64(5), float64(5), true},
@@ -388,9 +391,9 @@ func TestEquals(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		result := Equals(test.left, test.right)
+		result := vm.Equals(test.left, test.right)
 		if result != test.expected {
-			t.Errorf("Equals(%v, %v) = %v, want %v", test.left, test.right, result, test.expected)
+			t.Errorf("vm.Equals(%v, %v) = %v, want %v", test.left, test.right, result, test.expected)
 		}
 	}
 }
@@ -1008,21 +1011,21 @@ Print the value of result.`
 }
 
 func TestFunctionValueString(t *testing.T) {
-	fn := &FunctionValue{
+	fn := &vm.FunctionValue{
 		Name:       "test",
 		Parameters: []string{"a", "b"},
 		Body:       []ast.Statement{},
-		Closure:    NewEnvironment(),
+		Closure:    vm.NewEnvironment(),
 	}
 
-	result := ToString(fn)
+	result := vm.ToString(fn)
 	if result != "<function test>" {
-		t.Errorf("ToString(function) = %q, want '<function test>'", result)
+		t.Errorf("vm.ToString(function) = %q, want '<function test>'", result)
 	}
 }
 
 func TestRuntimeErrorFormat(t *testing.T) {
-	err := &RuntimeError{
+	err := &vm.RuntimeError{
 		Message:   "test error",
 		CallStack: []string{"<main>", "myFunc(a, b)"},
 	}

@@ -1253,7 +1253,7 @@ func (p *Parser) parseLogical() (ast.Expression, error) {
 
 // parseRelational handles comparison operators like "is equal to", "is less than", etc.
 func (p *Parser) parseRelational() (ast.Expression, error) {
-	left, err := p.parseAdditive()
+	left, err := p.parseCast()
 	if err != nil {
 		return nil, err
 	}
@@ -1263,7 +1263,7 @@ func (p *Parser) parseRelational() (ast.Expression, error) {
 		token.IS_LESS_EQUAL, token.IS_GREATER_EQUAL, token.IS_NOT_EQUAL:
 		op := p.curToken.Value
 		p.nextToken()
-		right, err := p.parseAdditive()
+		right, err := p.parseCast()
 		if err != nil {
 			return nil, err
 		}
@@ -1278,7 +1278,61 @@ func (p *Parser) parseRelational() (ast.Expression, error) {
 }
 
 func (p *Parser) parseExpression() (ast.Expression, error) {
-	return p.parseLogical()
+	return p.parseCast()
+}
+
+// parseCast handles postfix "cast to <type>" on any expression
+func (p *Parser) parseCast() (ast.Expression, error) {
+	expr, err := p.parseAdditive()
+	if err != nil {
+		return nil, err
+	}
+
+	// Check for postfix "cast to <type>" or "casted to <type>"
+	if p.curToken.Type == token.CASTED {
+		p.nextToken() // consume "cast"/"casted"
+		// Consume optional "to"
+		if p.curToken.Type == token.TO {
+			p.nextToken()
+		}
+		typeName := p.parseTypeName()
+		if typeName == "" {
+			return nil, fmt.Errorf("expected type name after 'cast to' at line %d", p.curToken.Line)
+		}
+		return &ast.CastExpression{Value: expr, TypeName: typeName}, nil
+	}
+
+	return expr, nil
+}
+
+// parseTypeName parses a type name (single word or "unsigned integer")
+func (p *Parser) parseTypeName() string {
+	// Handle "unsigned integer"
+	if p.curToken.Type == token.UNSIGNED {
+		p.nextToken()
+		if p.curToken.Type == token.INTEGER {
+			p.nextToken()
+			return "unsigned integer"
+		}
+		return "unsigned"
+	}
+
+	name := ""
+	switch p.curToken.Type {
+	case token.IDENTIFIER:
+		name = strings.ToLower(p.curToken.Value)
+	case token.INTEGER:
+		name = "integer"
+	case token.TYPE:
+		name = strings.ToLower(p.curToken.Value)
+	default:
+		// Try interpreting keyword token values as type names
+		name = strings.ToLower(p.curToken.Value)
+	}
+	if name != "" {
+		p.nextToken()
+	}
+	return name
 }
 
 func (p *Parser) parseAdditive() (ast.Expression, error) {
@@ -1513,7 +1567,8 @@ func (p *Parser) parsePrimary() (ast.Expression, error) {
 
 	case token.LPAREN:
 		p.nextToken()
-		expr, err := p.parseExpression()
+		// Allow logical operators (and/or) inside parentheses
+		expr, err := p.parseComparison()
 		if err != nil {
 			return nil, err
 		}

@@ -598,7 +598,12 @@ func (ev *Evaluator) evalStatements(stmts []ast.Statement) (Value, error) {
 		if err != nil {
 			return nil, err
 		}
+		// Propagate control-flow signals so they escape nested blocks (e.g. break/continue
+		// inside an if-block inside a loop). The enclosing loop evaluator consumes them.
 		if _, ok := val.(*ReturnValue); ok {
+			return val, nil
+		}
+		if _, ok := val.(*BreakValue); ok {
 			return val, nil
 		}
 		if _, ok := val.(*ContinueValue); ok {

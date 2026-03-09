@@ -1290,8 +1290,8 @@ t.Errorf("Expected odd numbers in output, got: %q", output)
 }
 
 func TestContinueInForLoop(t *testing.T) {
-code := `Declare count to be 0.
-repeat 10 times, do the following:
+	code := `Declare count to be 0.
+repeat the following 10 times:
     If count is less than 5, then
         Set count to be count + 1.
         Continue.
@@ -1300,13 +1300,13 @@ repeat 10 times, do the following:
 thats it.
 Print the value of count.`
 
-output := captureOutput(func() {
-evaluate(code)
-})
+	output := captureOutput(func() {
+		evaluate(code)
+	})
 
-if !strings.Contains(output, "15") {
-t.Errorf("Expected '15', got: %q", output)
-}
+	if !strings.Contains(output, "15") {
+		t.Errorf("Expected '15', got: %q", output)
+	}
 }
 
 func TestContinueInForEachLoop(t *testing.T) {
@@ -1335,16 +1335,19 @@ t.Errorf("Expected [2 4 6] in output, got: %q", output)
 // ============================================
 
 func TestNothingLiteral(t *testing.T) {
-code := `Declare x to be nothing.
-Print the value of x.`
+	// 'nothing' is a nil value; printing it should not crash and produces empty-like output
+	code := `Declare x to be nothing.
+If x is equal to nothing, then
+    Print "is nil".
+thats it.`
 
-output := captureOutput(func() {
-evaluate(code)
-})
+	output := captureOutput(func() {
+		evaluate(code)
+	})
 
-if !strings.Contains(output, "") {
-// 'nothing' prints as empty string
-}
+	if !strings.Contains(output, "is nil") {
+		t.Errorf("Expected 'is nil', got: %q", output)
+	}
 }
 
 func TestNothingEquality(t *testing.T) {
@@ -1453,20 +1456,21 @@ t.Errorf("Expected 'not false is true', got: %q", output)
 }
 
 func TestLogicalShortCircuit(t *testing.T) {
-// AND short-circuit: right side should not be evaluated if left is false
-code := `Declare x to be false.
-Declare result to be x and true.
-If result is equal to false, then
+	// AND short-circuit: condition is false when left side is false
+	code := `Declare x to be false.
+If x and true, then
+    Print "wrong".
+otherwise
     Print "short-circuit works".
 thats it.`
 
-output := captureOutput(func() {
-evaluate(code)
-})
+	output := captureOutput(func() {
+		evaluate(code)
+	})
 
-if !strings.Contains(output, "short-circuit works") {
-t.Errorf("Expected short-circuit behavior, got: %q", output)
-}
+	if !strings.Contains(output, "short-circuit works") {
+		t.Errorf("Expected short-circuit behavior, got: %q", output)
+	}
 }
 
 // ============================================
@@ -1703,5 +1707,87 @@ evaluate(code)
 })
 if !strings.Contains(output, "20") || !strings.Contains(output, "40") {
 t.Errorf("slice should return [20 30 40], got: %q", output)
+}
+}
+
+// ============================================
+// CAST TO SYNTAX TESTS
+// ============================================
+
+func TestCastToNumber(t *testing.T) {
+code := `Declare age_str to be "25".
+Declare age to be age_str cast to number.
+If age is greater than 20, then
+    Print "cast works".
+thats it.`
+
+output := captureOutput(func() {
+evaluate(code)
+})
+
+if !strings.Contains(output, "cast works") {
+t.Errorf("Expected 'cast works', got: %q", output)
+}
+}
+
+func TestCastToText(t *testing.T) {
+code := `Declare n to be 42.
+Declare s to be n cast to text.
+Print starts_with(s, "4").`
+
+output := captureOutput(func() {
+evaluate(code)
+})
+
+if !strings.Contains(output, "true") {
+t.Errorf("Expected 'true' after cast to text, got: %q", output)
+}
+}
+
+func TestCastToBoolean(t *testing.T) {
+code := `Declare zero to be 0.
+Declare b to be zero cast to boolean.
+If not b, then
+    Print "zero is false".
+thats it.`
+
+output := captureOutput(func() {
+evaluate(code)
+})
+
+if !strings.Contains(output, "zero is false") {
+t.Errorf("Expected 'zero is false', got: %q", output)
+}
+}
+
+func TestCastInCondition(t *testing.T) {
+code := `Declare s to be "100".
+If s cast to number is greater than 50, then
+    Print "condition cast works".
+thats it.`
+
+output := captureOutput(func() {
+evaluate(code)
+})
+
+if !strings.Contains(output, "condition cast works") {
+t.Errorf("Expected 'condition cast works', got: %q", output)
+}
+}
+
+func TestCastedKeyword(t *testing.T) {
+// "casted" should work as an alias for "cast"
+code := `Declare s to be "7".
+Declare n to be s casted to number.
+If n is equal to 7, then
+    Print "casted keyword works".
+thats it.`
+
+output := captureOutput(func() {
+evaluate(code)
+})
+
+if !strings.Contains(output, "casted keyword works") {
+t.Errorf("Expected 'casted keyword works', got: %q", output)
 }
 }

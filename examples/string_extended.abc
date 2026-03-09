@@ -41,15 +41,15 @@ Print pad_left("42", 8, "0").
 Print "Pad 'hi' to width 10 with '.' on right:".
 Print pad_right("hi", 10, ".").
 
-# Type conversions
+# Type Conversions
 Print "".
 Print "=== Type Conversions ===".
 Declare num_str to be "3.14159".
-Declare as_num to be to_number(num_str).
-Print "String '3.14159' as number:".
+Declare as_num to be num_str cast to number.
+Print "String '3.14159' cast to number:".
 Print the value of as_num.
-Print "Number 42 as string:".
-Print to_string(42).
+Print "Number 42 cast to text:".
+Print 42 cast to text.
 
 # Checking empty
 Print "".

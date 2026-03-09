@@ -9,7 +9,7 @@ Print "".
 Ask "What is your name? " as name.
 
 Ask "How old are you? " as age_str.
-Declare age to be to_number(age_str).
+Declare age to be age_str cast to number.
 
 Print "".
 Print "Hello, ".

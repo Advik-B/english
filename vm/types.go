@@ -2,6 +2,7 @@ package vm
 
 import (
 	"fmt"
+	"strings"
 )
 
 // TypeKind represents the kind of type
@@ -175,9 +176,9 @@ func ParseTypeString(typeStr string) TypeKind {
 		return TypeU64
 	case "f32", "float":
 		return TypeF32
-	case "f64", "double":
+	case "f64", "double", "number", "num":
 		return TypeF64
-	case "string":
+	case "string", "text", "str":
 		return TypeString
 	case "bool", "boolean":
 		return TypeBool
@@ -265,6 +266,8 @@ func CastValue(v Value, targetType TypeKind) (Value, error) {
 		}
 	case TypeF64:
 		switch val := v.(type) {
+		case float64:
+			return val, nil
 		case int32:
 			return float64(val), nil
 		case int64:
@@ -275,18 +278,47 @@ func CastValue(v Value, targetType TypeKind) (Value, error) {
 			return float64(val), nil
 		case float32:
 			return float64(val), nil
+		case bool:
+			if val {
+				return float64(1), nil
+			}
+			return float64(0), nil
 		case string:
 			var f float64
 			_, err := fmt.Sscanf(val, "%f", &f)
 			if err != nil {
-				return nil, fmt.Errorf("cannot cast string '%s' to f64", val)
+				return nil, fmt.Errorf("cannot cast string '%s' to number", val)
 			}
 			return f, nil
 		default:
-			return nil, fmt.Errorf("cannot cast %T to f64", v)
+			return nil, fmt.Errorf("cannot cast %T to number", v)
 		}
 	case TypeString:
 		return ToString(v), nil
+	case TypeBool:
+		switch val := v.(type) {
+		case bool:
+			return val, nil
+		case float64:
+			return val != 0, nil
+		case int32:
+			return val != 0, nil
+		case int64:
+			return val != 0, nil
+		case string:
+			normalized := strings.ToLower(val)
+			if normalized == "true" || normalized == "1" || normalized == "yes" {
+				return true, nil
+			}
+			if normalized == "false" || normalized == "0" || normalized == "no" {
+				return false, nil
+			}
+			return nil, fmt.Errorf("cannot cast string '%s' to boolean", val)
+		case nil:
+			return false, nil
+		default:
+			return nil, fmt.Errorf("cannot cast %T to boolean", v)
+		}
 	default:
 		return nil, fmt.Errorf("unsupported cast to type %v", targetType)
 	}

@@ -1,0 +1,65 @@
+# Cast To Example
+# Demonstrates the natural English "cast to" type conversion syntax
+
+Print "=== Cast To Syntax ===".
+
+# String to number
+Declare age_str to be "25".
+Declare age to be age_str cast to number.
+Print "String '25' cast to number:".
+Print the value of age.
+Print "Age plus 5:".
+Print age + 5.
+
+Print "".
+
+# Number to text
+Declare score to be 98.
+Declare score_text to be score cast to text.
+Print "Score as text:".
+Print the value of score_text.
+Print "Score starts with '9':".
+Print starts_with(score_text, "9").
+
+Print "".
+
+# Float string to number
+Declare pi_str to be "3.14159".
+Declare pi_approx to be pi_str cast to number.
+Print "Pi approximation:".
+Print the value of pi_approx.
+
+Print "".
+
+# Using "casted" (alternative keyword)
+Declare temp_str to be "98.6".
+Declare temp to be temp_str casted to number.
+Print "Temperature:".
+Print the value of temp.
+
+Print "".
+
+# Cast in conditions
+Print "=== Cast in Conditions ===".
+Declare threshold_str to be "50".
+Declare score2 to be 75.
+
+If score2 is greater than threshold_str cast to number, then
+    Print "Value exceeds threshold.".
+thats it.
+
+# Boolean cast
+Print "".
+Print "=== Boolean Cast ===".
+Declare zero to be 0.
+Declare one to be 1.
+
+If not (zero cast to boolean), then
+    Print "0 cast to boolean is false.".
+thats it.
+
+If one cast to boolean, then
+    Print "1 cast to boolean is true.".
+thats it.
+
+Print "=== Done! ===".

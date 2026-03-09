@@ -193,6 +193,7 @@ var keywords = map[string]token.Type{
 	"copy":      token.COPY,
 	"swap":      token.SWAP,
 	"casted":    token.CASTED,
+	"cast":      token.CASTED,
 	"type":      token.TYPE,
 	"which":     token.WHICH,
 	"is":        token.IS,

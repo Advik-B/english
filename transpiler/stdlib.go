@@ -25,6 +25,13 @@ func (t *Transpiler) transpileFuncCallExpr(e *ast.FunctionCall) string {
 		return "None"
 	}
 
+	// User-defined functions take priority over any stdlib mapping with the
+	// same name (e.g. a user can define their own "average" that takes numbers
+	// rather than a list).
+	if t.userFunctions[e.Name] {
+		return fmt.Sprintf("%s(%s)", sanitizeIdent(e.Name), strings.Join(args, ", "))
+	}
+
 	switch e.Name {
 	// ── Math ──────────────────────────────────────────────────────────────────
 	case "sqrt":
@@ -107,7 +114,7 @@ func (t *Transpiler) transpileFuncCallExpr(e *ast.FunctionCall) string {
 	case "ends_with":
 		return fmt.Sprintf("%s.endswith(%s)", a(0), a(1))
 	case "index_of":
-		return fmt.Sprintf("%s.index(%s)", a(0), a(1))
+		return fmt.Sprintf("%s.find(%s)", a(0), a(1))
 	case "substring":
 		// substring(s, start, length) → s[start : start+length]
 		start := a(1)
@@ -226,5 +233,5 @@ func (t *Transpiler) transpileFuncCallExpr(e *ast.FunctionCall) string {
 	}
 
 	// Unknown / user-defined function — emit a direct call.
-	return fmt.Sprintf("%s(%s)", e.Name, strings.Join(args, ", "))
+	return fmt.Sprintf("%s(%s)", sanitizeIdent(e.Name), strings.Join(args, ", "))
 }

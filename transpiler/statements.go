@@ -43,7 +43,8 @@ func (t *Transpiler) transpileStatement(stmt ast.Statement) {
 	case *ast.ForEachLoop:
 		t.transpileForEach(s)
 	case *ast.ToggleStatement:
-		t.writeLine(fmt.Sprintf("%s = not %s", s.Name, s.Name))
+		n := sanitizeIdent(s.Name)
+		t.writeLine(fmt.Sprintf("%s = not %s", n, n))
 	case *ast.BreakStatement:
 		t.writeLine("break")
 	case *ast.ContinueStatement:
@@ -55,7 +56,8 @@ func (t *Transpiler) transpileStatement(stmt ast.Statement) {
 	case *ast.ErrorTypeDecl:
 		t.transpileErrorTypeDecl(s)
 	case *ast.SwapStatement:
-		t.writeLine(fmt.Sprintf("%s, %s = %s, %s", s.Name1, s.Name2, s.Name2, s.Name1))
+		n1, n2 := sanitizeIdent(s.Name1), sanitizeIdent(s.Name2)
+		t.writeLine(fmt.Sprintf("%s, %s = %s, %s", n1, n2, n2, n1))
 	case *ast.StructDecl:
 		t.transpileStructDecl(s)
 	case *ast.CommentStatement:
@@ -96,37 +98,39 @@ func (t *Transpiler) transpileComment(s *ast.CommentStatement) {
 }
 
 func (t *Transpiler) transpileVariableDecl(s *ast.VariableDecl) {
+	name := sanitizeIdent(s.Name)
 	val := t.transpileExpr(s.Value)
 	if s.IsConstant {
 		// Emit a typing.Final annotation so type-checkers treat this as constant.
-		t.writeLine(fmt.Sprintf("%s: Final = %s", s.Name, val))
+		t.writeLine(fmt.Sprintf("%s: Final = %s", name, val))
 	} else {
-		t.writeLine(fmt.Sprintf("%s = %s", s.Name, val))
+		t.writeLine(fmt.Sprintf("%s = %s", name, val))
 	}
 }
 
 func (t *Transpiler) transpileTypedVariableDecl(s *ast.TypedVariableDecl) {
+	name := sanitizeIdent(s.Name)
 	val := t.transpileExpr(s.Value)
 	typeName := mapTypeName(s.TypeName)
 	if s.IsConstant {
-		t.writeLine(fmt.Sprintf("%s: Final[%s] = %s", s.Name, typeName, val))
+		t.writeLine(fmt.Sprintf("%s: Final[%s] = %s", name, typeName, val))
 	} else {
-		t.writeLine(fmt.Sprintf("%s: %s = %s", s.Name, typeName, val))
+		t.writeLine(fmt.Sprintf("%s: %s = %s", name, typeName, val))
 	}
 }
 
 func (t *Transpiler) transpileAssignment(s *ast.Assignment) {
-	target := s.Name
-	if t.methodFields[target] {
-		target = "self." + target
+	target := sanitizeIdent(s.Name)
+	if t.methodFields[s.Name] {
+		target = "self." + sanitizeIdent(s.Name)
 	}
 	t.writeLine(fmt.Sprintf("%s = %s", target, t.transpileExpr(s.Value)))
 }
 
 func (t *Transpiler) transpileIndexAssignment(s *ast.IndexAssignment) {
-	target := s.ListName
-	if t.methodFields[target] {
-		target = "self." + target
+	target := sanitizeIdent(s.ListName)
+	if t.methodFields[s.ListName] {
+		target = "self." + sanitizeIdent(s.ListName)
 	}
 	idx := t.transpileExpr(s.Index)
 	val := t.transpileExpr(s.Value)
@@ -134,18 +138,21 @@ func (t *Transpiler) transpileIndexAssignment(s *ast.IndexAssignment) {
 }
 
 func (t *Transpiler) transpileFieldAssignment(s *ast.FieldAssignment) {
-	t.writeLine(fmt.Sprintf("%s.%s = %s", s.ObjectName, s.Field, t.transpileExpr(s.Value)))
+	t.writeLine(fmt.Sprintf("%s.%s = %s", sanitizeIdent(s.ObjectName), s.Field, t.transpileExpr(s.Value)))
 }
 
 func (t *Transpiler) transpileLookupKeyAssignment(s *ast.LookupKeyAssignment) {
 	key := t.transpileExpr(s.Key)
 	val := t.transpileExpr(s.Value)
-	t.writeLine(fmt.Sprintf("%s[%s] = %s", s.TableName, key, val))
+	t.writeLine(fmt.Sprintf("%s[%s] = %s", sanitizeIdent(s.TableName), key, val))
 }
 
 func (t *Transpiler) transpileFunctionDecl(s *ast.FunctionDecl) {
-	params := strings.Join(s.Parameters, ", ")
-	t.writeLine(fmt.Sprintf("def %s(%s):", s.Name, params))
+	params := make([]string, len(s.Parameters))
+	for i, p := range s.Parameters {
+		params[i] = sanitizeIdent(p)
+	}
+	t.writeLine(fmt.Sprintf("def %s(%s):", sanitizeIdent(s.Name), strings.Join(params, ", ")))
 	t.indent++
 	t.transpileBody(s.Body)
 	t.indent--
@@ -218,7 +225,7 @@ func (t *Transpiler) transpileForLoop(s *ast.ForLoop) {
 }
 
 func (t *Transpiler) transpileForEach(s *ast.ForEachLoop) {
-	t.writeLine(fmt.Sprintf("for %s in %s:", s.Item, t.transpileExpr(s.List)))
+	t.writeLine(fmt.Sprintf("for %s in %s:", sanitizeIdent(s.Item), t.transpileExpr(s.List)))
 	t.indent++
 	t.transpileBody(s.Body)
 	t.indent--
@@ -282,21 +289,26 @@ func (t *Transpiler) transpileStructDecl(s *ast.StructDecl) {
 	t.indent++
 
 	if len(s.Fields) > 0 {
-		// Build __init__ with all fields as parameters (with defaults if present).
+		// Build __init__ with all fields as parameters.
+		// Fields with an explicit default use that value; fields without a default
+		// fall back to the Python zero value for their declared type so that
+		// instances can be created with no arguments (e.g. "a new instance of T").
 		params := make([]string, 0, len(s.Fields)+1)
 		params = append(params, "self")
 		for _, field := range s.Fields {
+			fname := sanitizeIdent(field.Name)
 			if field.DefaultValue != nil {
 				defVal := t.transpileExpr(field.DefaultValue)
-				params = append(params, fmt.Sprintf("%s=%s", field.Name, defVal))
+				params = append(params, fmt.Sprintf("%s=%s", fname, defVal))
 			} else {
-				params = append(params, field.Name)
+				params = append(params, fmt.Sprintf("%s=%s", fname, typeZeroValue(field.TypeName)))
 			}
 		}
 		t.writeLine(fmt.Sprintf("def __init__(%s):", strings.Join(params, ", ")))
 		t.indent++
 		for _, field := range s.Fields {
-			t.writeLine(fmt.Sprintf("self.%s = %s", field.Name, field.Name))
+			fname := sanitizeIdent(field.Name)
+			t.writeLine(fmt.Sprintf("self.%s = %s", fname, fname))
 		}
 		t.indent--
 	} else {
@@ -314,10 +326,12 @@ func (t *Transpiler) transpileStructDecl(s *ast.StructDecl) {
 
 	for _, method := range s.Methods {
 		t.write("\n")
-		params := make([]string, 0, len(method.Parameters)+1)
-		params = append(params, "self")
-		params = append(params, method.Parameters...)
-		t.writeLine(fmt.Sprintf("def %s(%s):", method.Name, strings.Join(params, ", ")))
+		mparams := make([]string, 0, len(method.Parameters)+1)
+		mparams = append(mparams, "self")
+		for _, p := range method.Parameters {
+			mparams = append(mparams, sanitizeIdent(p))
+		}
+		t.writeLine(fmt.Sprintf("def %s(%s):", sanitizeIdent(method.Name), strings.Join(mparams, ", ")))
 		t.indent++
 		t.transpileBody(method.Body)
 		t.indent--

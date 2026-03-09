@@ -28,6 +28,12 @@ type Transpiler struct {
 	//       the generated Python contains no comment lines at all.
 	keepComments bool
 
+	// userFunctions is the set of user-defined function names collected during
+	// the scan pass. Functions in this set take priority over any stdlib mapping
+	// with the same name, so "Declare function average ..." is emitted as a plain
+	// call rather than being mis-translated to the stdlib average expression.
+	userFunctions map[string]bool
+
 	// Python module imports required by the generated code.
 	needsMath   bool
 	needsCopy   bool
@@ -47,8 +53,9 @@ type Transpiler struct {
 // generated Python output. Use this when transpiling .abc source files.
 func NewTranspiler() *Transpiler {
 	return &Transpiler{
-		helpers:      make(map[string]bool),
-		keepComments: true,
+		helpers:       make(map[string]bool),
+		userFunctions: make(map[string]bool),
+		keepComments:  true,
 	}
 }
 
@@ -57,8 +64,9 @@ func NewTranspiler() *Transpiler {
 // which contain no source comments.
 func NewTranspilerStripped() *Transpiler {
 	return &Transpiler{
-		helpers:      make(map[string]bool),
-		keepComments: false,
+		helpers:       make(map[string]bool),
+		userFunctions: make(map[string]bool),
+		keepComments:  false,
 	}
 }
 
@@ -73,6 +81,11 @@ func NewTranspilerStripped() *Transpiler {
 //
 // banner + imports + helpers + body
 func (t *Transpiler) Transpile(program *ast.Program) string {
+	// Pass 0 – resolve imports by inlining the referenced files so that the
+	// generated Python is self-contained.  The 'seen' map prevents duplicate
+	// definitions when the same file is imported more than once.
+	program = inlineImports(program, make(map[string]bool))
+
 	// Pass 1 – collect import and helper requirements.
 	t.scanProgram(program)
 
@@ -140,6 +153,9 @@ func (t *Transpiler) scanProgram(program *ast.Program) {
 func (t *Transpiler) scanStmt(stmt ast.Statement) {
 	switch s := stmt.(type) {
 	case *ast.FunctionDecl:
+		// Register this as a user-defined function so that transpileFuncCallExpr
+		// prefers it over any stdlib mapping with the same name.
+		t.userFunctions[s.Name] = true
 		for _, c := range s.Body {
 			t.scanStmt(c)
 		}

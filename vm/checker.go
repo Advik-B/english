@@ -84,13 +84,24 @@ func (te *TypeError) Error() string {
 
 // TypeChecker performs static type analysis on an AST before execution.
 type TypeChecker struct {
-	varTypes map[string]types.TypeKind
-	errors   []*TypeError
+	varTypes      map[string]types.TypeKind
+	userFunctions map[string]bool // names of user-defined functions (skip stdlib type check)
+	errors        []*TypeError
 }
 
 // Check runs the type checker on a program and returns all type errors found.
 func Check(program *ast.Program) []*TypeError {
-	tc := &TypeChecker{varTypes: make(map[string]types.TypeKind)}
+	tc := &TypeChecker{
+		varTypes:      make(map[string]types.TypeKind),
+		userFunctions: make(map[string]bool),
+	}
+	// Pre-scan top-level function declarations so that user-defined functions
+	// sharing a name with a stdlib function are not falsely type-checked.
+	for _, stmt := range program.Statements {
+		if fn, ok := stmt.(*ast.FunctionDecl); ok {
+			tc.userFunctions[fn.Name] = true
+		}
+	}
 	tc.checkStatements(program.Statements)
 	return tc.errors
 }
@@ -227,6 +238,10 @@ func (tc *TypeChecker) checkExpression(expr ast.Expression) {
 }
 
 func (tc *TypeChecker) checkFunctionCallArgs(name string, args []ast.Expression) {
+	// User-defined functions shadow stdlib functions; skip the stdlib type check.
+	if tc.userFunctions[name] {
+		return
+	}
 	expected, ok := builtinArgTypes[name]
 	if !ok {
 		return

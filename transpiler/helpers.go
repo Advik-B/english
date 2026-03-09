@@ -15,6 +15,29 @@ var mathConstantMap = map[string]string{
 	"infinity": "math.inf",
 }
 
+// pythonKeywords is the set of Python reserved words that cannot be used as
+// bare identifiers. Any English identifier that matches a keyword is suffixed
+// with an underscore (PEP 8 convention, e.g. "class" → "class_").
+var pythonKeywords = map[string]bool{
+	"False": true, "None": true, "True": true,
+	"and": true, "as": true, "assert": true, "async": true, "await": true,
+	"break": true, "class": true, "continue": true, "def": true, "del": true,
+	"elif": true, "else": true, "except": true, "finally": true, "for": true,
+	"from": true, "global": true, "if": true, "import": true, "in": true,
+	"is": true, "lambda": true, "nonlocal": true, "not": true, "or": true,
+	"pass": true, "raise": true, "return": true, "try": true, "type": true,
+	"while": true, "with": true, "yield": true,
+}
+
+// sanitizeIdent escapes a Python reserved word used as a user-defined identifier
+// by appending a trailing underscore, following PEP 8 conventions.
+func sanitizeIdent(name string) string {
+	if pythonKeywords[name] {
+		return name + "_"
+	}
+	return name
+}
+
 // ─── Python helper function definitions ──────────────────────────────────────
 //
 // These small Python functions are injected at the top of the generated file
@@ -186,5 +209,21 @@ func mapTypeName(name string) string {
 		return "list"
 	default:
 		return name
+	}
+}
+
+// typeZeroValue returns the Python zero/default value literal for a given
+// English type name. Used when a struct field has no explicit default so that
+// struct instances can be created with no arguments.
+func typeZeroValue(typeName string) string {
+	switch strings.ToLower(typeName) {
+	case "number", "float", "integer", "int", "unsigned integer":
+		return "0"
+	case "text", "string":
+		return `""`
+	case "boolean", "bool":
+		return "False"
+	default:
+		return "None"
 	}
 }

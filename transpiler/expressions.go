@@ -36,7 +36,7 @@ func (t *Transpiler) transpileExpr(expr ast.Expression) string {
 			t.needsMath = true
 			return pyConst
 		}
-		return e.Name
+		return sanitizeIdent(e.Name)
 	case *ast.ListLiteral:
 		return t.transpileListLit(e.Elements)
 	case *ast.ArrayLiteral:
@@ -67,11 +67,11 @@ func (t *Transpiler) transpileExpr(expr ast.Expression) string {
 		return t.transpileCast(e)
 	case *ast.ReferenceExpression:
 		// References are plain variable accesses in Python.
-		return e.Name
+		return sanitizeIdent(e.Name)
 	case *ast.CopyExpression:
 		return fmt.Sprintf("copy.copy(%s)", t.transpileExpr(e.Value))
 	case *ast.LocationExpression:
-		return fmt.Sprintf("hex(id(%s))", e.Name)
+		return fmt.Sprintf("hex(id(%s))", sanitizeIdent(e.Name))
 	case *ast.AskExpression:
 		if e.Prompt == nil {
 			return "input()"

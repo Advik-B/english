@@ -3,6 +3,7 @@ package transpiler_test
 import (
 	"english/parser"
 	"english/transpiler"
+	"os"
 	"strings"
 	"testing"
 )
@@ -845,5 +846,101 @@ out := transpileStripped(t, `Declare PI to always be 3.14.`)
 assertContains(t, out, "PI: Final = 3.14")
 if strings.Contains(out, "#") {
 t.Errorf("stripped mode should produce no '#' lines, got:\n%s", out)
+}
+}
+
+// ─── Import inlining ──────────────────────────────────────────────────────────
+
+func TestImportInlining(t *testing.T) {
+// Write a small library file to a temp dir.
+dir := t.TempDir()
+libPath := dir + "/mylib.abc"
+libSrc := `Declare function double that takes n and does the following:
+    Return n * 2.
+thats it.
+`
+if err := os.WriteFile(libPath, []byte(libSrc), 0644); err != nil {
+t.Fatalf("write lib: %v", err)
+}
+
+// Main file imports the library and calls the function.
+mainSrc := `Import "` + libPath + `".
+Declare result to be 0.
+Set result to the result of calling double with 5.
+Print the value of result.`
+
+out := transpile(t, mainSrc)
+assertContains(t, out, "def double(n)")
+assertContains(t, out, "result = double(5)")
+assertContains(t, out, "print(result)")
+}
+
+func TestSelectiveImportInlining(t *testing.T) {
+dir := t.TempDir()
+libPath := dir + "/mathlib.abc"
+libSrc := `Declare function square that takes x and does the following:
+    Return x * x.
+thats it.
+
+Declare function cube that takes x and does the following:
+    Return x * x * x.
+thats it.
+`
+if err := os.WriteFile(libPath, []byte(libSrc), 0644); err != nil {
+t.Fatalf("write lib: %v", err)
+}
+
+mainSrc := `Import square from "` + libPath + `".
+Print square(3).`
+
+out := transpile(t, mainSrc)
+assertContains(t, out, "def square(x)")
+// cube should NOT be included since we only imported square.
+if strings.Contains(out, "def cube(") {
+t.Errorf("cube should not be inlined when only square is imported")
+}
+}
+
+func TestUserDefinedFunctionOverridesStdlib(t *testing.T) {
+// A user-defined function named "average" taking numbers should not be
+// mis-translated to the stdlib average(list) expression.
+out := transpile(t, `Declare function average that takes x and y and z and does the following:
+    Return (x + y + z) / 3.
+thats it.
+
+Declare result to be 0.
+Set result to the result of calling average with 10 and 20 and 30.
+Print the value of result.`)
+assertContains(t, out, "def average(x, y, z)")
+assertContains(t, out, "result = average(10, 20, 30)")
+}
+
+func TestPythonKeywordEscaping(t *testing.T) {
+out := transpile(t, `Declare class to be "A".
+Print the value of class.`)
+assertContains(t, out, `class_ = "A"`)
+assertContains(t, out, "print(class_)")
+}
+
+func TestStructZeroValueDefaults(t *testing.T) {
+out := transpile(t, `declare Person as a structure with the following fields:
+    name is a string.
+    age is an integer.
+thats it.
+
+let p be a new instance of Person.
+Print the name of p.`)
+// Both fields should have zero-value defaults so Person() works.
+assertContains(t, out, `name=""`)
+assertContains(t, out, "age=0")
+}
+
+func TestIndexOfReturnsNegOne(t *testing.T) {
+out := transpile(t, `Declare s to be "hello".
+Print index_of(s, "xyz").`)
+// Should use .find() which returns -1, not .index() which raises ValueError.
+assertContains(t, out, ".find(")
+if strings.Contains(out, ".index(") {
+t.Errorf("index_of should emit .find(), not .index()")
 }
 }

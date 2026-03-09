@@ -1,9 +1,11 @@
-package vm
+package vm_test
 
 import (
 	"bytes"
 	"english/ast"
 	"english/parser"
+	"english/vm"
+	"english/vm/stdlib"
 	"io"
 	"os"
 	"strings"
@@ -11,7 +13,7 @@ import (
 )
 
 // Helper function to evaluate code
-func evaluate(input string) (Value, error) {
+func evaluate(input string) (vm.Value, error) {
 	lexer := parser.NewLexer(input)
 	tokens := lexer.TokenizeAll()
 	p := parser.NewParser(tokens)
@@ -19,8 +21,9 @@ func evaluate(input string) (Value, error) {
 	if err != nil {
 		return nil, err
 	}
-	env := NewEnvironment()
-	evaluator := NewEvaluator(env)
+	env := vm.NewEnvironment()
+	stdlib.Register(env)
+	evaluator := vm.NewEvaluator(env, stdlib.Eval)
 	return evaluator.Eval(program)
 }
 
@@ -45,7 +48,7 @@ func captureOutput(f func()) string {
 // ============================================
 
 func TestEnvironmentDefine(t *testing.T) {
-	env := NewEnvironment()
+	env := vm.NewEnvironment()
 	err := env.Define("x", float64(5), false)
 	if err != nil {
 		t.Fatalf("Define error: %v", err)
@@ -61,7 +64,7 @@ func TestEnvironmentDefine(t *testing.T) {
 }
 
 func TestEnvironmentDefineConstant(t *testing.T) {
-	env := NewEnvironment()
+	env := vm.NewEnvironment()
 	err := env.Define("PI", float64(3.14159), true)
 	if err != nil {
 		t.Fatalf("Define error: %v", err)
@@ -73,7 +76,7 @@ func TestEnvironmentDefineConstant(t *testing.T) {
 }
 
 func TestEnvironmentSet(t *testing.T) {
-	env := NewEnvironment()
+	env := vm.NewEnvironment()
 	env.Define("x", float64(5), false)
 	env.Set("x", float64(10))
 
@@ -84,7 +87,7 @@ func TestEnvironmentSet(t *testing.T) {
 }
 
 func TestEnvironmentSetConstantError(t *testing.T) {
-	env := NewEnvironment()
+	env := vm.NewEnvironment()
 	env.Define("PI", float64(3.14159), true)
 	err := env.Set("PI", float64(3.14))
 
@@ -94,7 +97,7 @@ func TestEnvironmentSetConstantError(t *testing.T) {
 }
 
 func TestEnvironmentChildScope(t *testing.T) {
-	parent := NewEnvironment()
+	parent := vm.NewEnvironment()
 	parent.Define("x", float64(5), false)
 
 	child := parent.NewChild()
@@ -117,8 +120,8 @@ func TestEnvironmentChildScope(t *testing.T) {
 }
 
 func TestEnvironmentGetFunction(t *testing.T) {
-	env := NewEnvironment()
-	fn := &FunctionValue{Name: "test", Parameters: []string{}, Body: []ast.Statement{}}
+	env := vm.NewEnvironment()
+	fn := &vm.FunctionValue{Name: "test", Parameters: []string{}, Body: []ast.Statement{}}
 	env.DefineFunction("test", fn)
 
 	found, ok := env.GetFunction("test")
@@ -131,7 +134,7 @@ func TestEnvironmentGetFunction(t *testing.T) {
 }
 
 func TestEnvironmentGetAllVariables(t *testing.T) {
-	env := NewEnvironment()
+	env := vm.NewEnvironment()
 	env.Define("x", float64(5), false)
 	env.Define("y", float64(10), false)
 
@@ -142,9 +145,9 @@ func TestEnvironmentGetAllVariables(t *testing.T) {
 }
 
 func TestEnvironmentGetAllFunctions(t *testing.T) {
-	env := NewEnvironment()
-	fn1 := &FunctionValue{Name: "fn1", Parameters: []string{}, Body: []ast.Statement{}}
-	fn2 := &FunctionValue{Name: "fn2", Parameters: []string{}, Body: []ast.Statement{}}
+	env := vm.NewEnvironment()
+	fn1 := &vm.FunctionValue{Name: "fn1", Parameters: []string{}, Body: []ast.Statement{}}
+	fn2 := &vm.FunctionValue{Name: "fn2", Parameters: []string{}, Body: []ast.Statement{}}
 	env.DefineFunction("fn1", fn1)
 	env.DefineFunction("fn2", fn2)
 
@@ -162,7 +165,7 @@ func TestToNumber(t *testing.T) {
 	// Strict type system: ToNumber only accepts actual numeric values.
 	// Text-to-number coercion requires explicit "cast to number".
 	tests := []struct {
-		input    Value
+		input    vm.Value
 		expected float64
 		hasError bool
 	}{
@@ -175,7 +178,7 @@ func TestToNumber(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		result, err := ToNumber(test.input)
+		result, err := vm.ToNumber(test.input)
 		if test.hasError {
 			if err == nil {
 				t.Errorf("Expected error for %v, got nil", test.input)
@@ -185,7 +188,7 @@ func TestToNumber(t *testing.T) {
 				t.Errorf("Unexpected error for %v: %v", test.input, err)
 			}
 			if result != test.expected {
-				t.Errorf("ToNumber(%v) = %v, want %v", test.input, result, test.expected)
+				t.Errorf("vm.ToNumber(%v) = %v, want %v", test.input, result, test.expected)
 			}
 		}
 	}
@@ -193,7 +196,7 @@ func TestToNumber(t *testing.T) {
 
 func TestToString(t *testing.T) {
 	tests := []struct {
-		input    Value
+		input    vm.Value
 		expected string
 	}{
 		{float64(5), "5"},
@@ -206,9 +209,9 @@ func TestToString(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		result := ToString(test.input)
+		result := vm.ToString(test.input)
 		if result != test.expected {
-			t.Errorf("ToString(%v) = %q, want %q", test.input, result, test.expected)
+			t.Errorf("vm.ToString(%v) = %q, want %q", test.input, result, test.expected)
 		}
 	}
 }
@@ -217,7 +220,7 @@ func TestToBool(t *testing.T) {
 	// With strict typing, ToBool only accepts boolean values (and nil for nothing).
 	// Truthy/falsy coercion of numbers, strings, and lists is intentionally removed.
 	tests := []struct {
-		input     Value
+		input     vm.Value
 		expected  bool
 		expectErr bool
 	}{
@@ -230,17 +233,17 @@ func TestToBool(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		result, err := ToBool(test.input)
+		result, err := vm.ToBool(test.input)
 		if test.expectErr {
 			if err == nil {
-				t.Errorf("ToBool(%v): expected TypeError, got nil error", test.input)
+				t.Errorf("vm.ToBool(%v): expected TypeError, got nil error", test.input)
 			}
 		} else {
 			if err != nil {
-				t.Errorf("ToBool(%v): unexpected error: %v", test.input, err)
+				t.Errorf("vm.ToBool(%v): unexpected error: %v", test.input, err)
 			}
 			if result != test.expected {
-				t.Errorf("ToBool(%v) = %v, want %v", test.input, result, test.expected)
+				t.Errorf("vm.ToBool(%v) = %v, want %v", test.input, result, test.expected)
 			}
 		}
 	}
@@ -252,31 +255,31 @@ func TestToBool(t *testing.T) {
 
 func TestAdd(t *testing.T) {
 // Strict typing: only same-type addition. list+list via '+' is removed; use append().
-if _, err := Add(float64(5), float64(3)); err != nil {
-t.Errorf("Add(5, 3): unexpected error: %v", err)
+if _, err := vm.Add(float64(5), float64(3)); err != nil {
+t.Errorf("vm.Add(5, 3): unexpected error: %v", err)
 }
-r, err := Add("Hello", " World")
+r, err := vm.Add("Hello", " World")
 if err != nil || r != "Hello World" {
-t.Errorf("Add(text,text): got %v, %v", r, err)
+t.Errorf("vm.Add(text,text): got %v, %v", r, err)
 }
 // list+list is now a TypeError
-if _, err := Add([]interface{}{1}, []interface{}{2}); err == nil {
-t.Error("Add(list, list): expected TypeError, got nil")
+if _, err := vm.Add([]interface{}{1}, []interface{}{2}); err == nil {
+t.Error("vm.Add(list, list): expected TypeError, got nil")
 }
 }
 
 
 func TestSubtract(t *testing.T) {
-	result, err := Subtract(float64(10), float64(3))
+	result, err := vm.Subtract(float64(10), float64(3))
 	if err != nil {
 		t.Fatalf("Subtract error: %v", err)
 	}
 	if result != float64(7) {
-		t.Errorf("Subtract(10, 3) = %v, want 7", result)
+		t.Errorf("vm.Subtract(10, 3) = %v, want 7", result)
 	}
 
 	// Test error case
-	_, err = Subtract("hello", float64(3))
+	_, err = vm.Subtract("hello", float64(3))
 	if err == nil {
 		t.Error("Expected error for non-numeric subtraction")
 	}
@@ -284,49 +287,49 @@ func TestSubtract(t *testing.T) {
 
 func TestMultiply(t *testing.T) {
 // Strict typing: only number*number. String repetition removed; use str_repeat().
-r, err := Multiply(float64(5), float64(3))
+r, err := vm.Multiply(float64(5), float64(3))
 if err != nil || r != float64(15) {
-t.Errorf("Multiply(5,3): got %v, %v", r, err)
+t.Errorf("vm.Multiply(5,3): got %v, %v", r, err)
 }
-if _, err := Multiply("ab", float64(3)); err == nil {
-t.Error("Multiply(text,number): expected TypeError, got nil")
+if _, err := vm.Multiply("ab", float64(3)); err == nil {
+t.Error("vm.Multiply(text,number): expected TypeError, got nil")
 }
 }
 
 
 func TestDivide(t *testing.T) {
-	result, err := Divide(float64(10), float64(2))
+	result, err := vm.Divide(float64(10), float64(2))
 	if err != nil {
 		t.Fatalf("Divide error: %v", err)
 	}
 	if result != float64(5) {
-		t.Errorf("Divide(10, 2) = %v, want 5", result)
+		t.Errorf("vm.Divide(10, 2) = %v, want 5", result)
 	}
 
 	// Test division by zero
-	_, err = Divide(float64(10), float64(0))
+	_, err = vm.Divide(float64(10), float64(0))
 	if err == nil {
 		t.Error("Expected error for division by zero")
 	}
 
 	// Test non-numeric division
-	_, err = Divide("hello", float64(2))
+	_, err = vm.Divide("hello", float64(2))
 	if err == nil {
 		t.Error("Expected error for non-numeric division")
 	}
 }
 
 func TestModulo(t *testing.T) {
-	result, err := Modulo(float64(17), float64(5))
+	result, err := vm.Modulo(float64(17), float64(5))
 	if err != nil {
 		t.Fatalf("Modulo error: %v", err)
 	}
 	if result != float64(2) {
-		t.Errorf("Modulo(17, 5) = %v, want 2", result)
+		t.Errorf("vm.Modulo(17, 5) = %v, want 2", result)
 	}
 
 	// Test modulo by zero
-	_, err = Modulo(float64(10), float64(0))
+	_, err = vm.Modulo(float64(10), float64(0))
 	if err == nil {
 		t.Error("Expected error for modulo by zero")
 	}
@@ -339,8 +342,8 @@ func TestModulo(t *testing.T) {
 func TestCompare(t *testing.T) {
 	tests := []struct {
 		op       string
-		left     Value
-		right    Value
+		left     vm.Value
+		right    vm.Value
 		expected bool
 	}{
 		{"is equal to", float64(5), float64(5), true},
@@ -360,21 +363,21 @@ func TestCompare(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		result, err := Compare(test.op, test.left, test.right)
+		result, err := vm.Compare(test.op, test.left, test.right)
 		if err != nil {
-			t.Errorf("Compare(%q, %v, %v) error: %v", test.op, test.left, test.right, err)
+			t.Errorf("vm.Compare(%q, %v, %v) error: %v", test.op, test.left, test.right, err)
 			continue
 		}
 		if result != test.expected {
-			t.Errorf("Compare(%q, %v, %v) = %v, want %v", test.op, test.left, test.right, result, test.expected)
+			t.Errorf("vm.Compare(%q, %v, %v) = %v, want %v", test.op, test.left, test.right, result, test.expected)
 		}
 	}
 }
 
 func TestEquals(t *testing.T) {
 	tests := []struct {
-		left     Value
-		right    Value
+		left     vm.Value
+		right    vm.Value
 		expected bool
 	}{
 		{float64(5), float64(5), true},
@@ -388,9 +391,9 @@ func TestEquals(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		result := Equals(test.left, test.right)
+		result := vm.Equals(test.left, test.right)
 		if result != test.expected {
-			t.Errorf("Equals(%v, %v) = %v, want %v", test.left, test.right, result, test.expected)
+			t.Errorf("vm.Equals(%v, %v) = %v, want %v", test.left, test.right, result, test.expected)
 		}
 	}
 }
@@ -1008,21 +1011,21 @@ Print the value of result.`
 }
 
 func TestFunctionValueString(t *testing.T) {
-	fn := &FunctionValue{
+	fn := &vm.FunctionValue{
 		Name:       "test",
 		Parameters: []string{"a", "b"},
 		Body:       []ast.Statement{},
-		Closure:    NewEnvironment(),
+		Closure:    vm.NewEnvironment(),
 	}
 
-	result := ToString(fn)
+	result := vm.ToString(fn)
 	if result != "<function test>" {
-		t.Errorf("ToString(function) = %q, want '<function test>'", result)
+		t.Errorf("vm.ToString(function) = %q, want '<function test>'", result)
 	}
 }
 
 func TestRuntimeErrorFormat(t *testing.T) {
-	err := &RuntimeError{
+	err := &vm.RuntimeError{
 		Message:   "test error",
 		CallStack: []string{"<main>", "myFunc(a, b)"},
 	}
@@ -2107,5 +2110,405 @@ Print total.`
 output := captureOutput(func() { evaluate(code) })
 if output != "60\n" {
 t.Errorf("expected '60', got %q", output)
+}
+}
+
+// ─── Static type annotation tests ────────────────────────────────────────────
+
+func TestTypedDecl_BasicNumber(t *testing.T) {
+code := `Declare x as number to be 5.
+Print x.`
+output := captureOutput(func() { evaluate(code) })
+if output != "5\n" {
+t.Errorf("expected '5', got %q", output)
+}
+}
+
+func TestTypedDecl_BasicText(t *testing.T) {
+code := `Declare name as text to be "Alice".
+Print name.`
+output := captureOutput(func() { evaluate(code) })
+if output != "Alice\n" {
+t.Errorf("expected 'Alice', got %q", output)
+}
+}
+
+func TestTypedDecl_BasicBoolean(t *testing.T) {
+code := `Declare flag as boolean to be true.
+Print flag.`
+output := captureOutput(func() { evaluate(code) })
+if output != "true\n" {
+t.Errorf("expected 'true', got %q", output)
+}
+}
+
+func TestTypedDecl_NoInitialValue(t *testing.T) {
+// Variable declared with type but no initial value should default to nothing.
+code := `Declare score as number.
+Set score to be 42.
+Print score.`
+output := captureOutput(func() { evaluate(code) })
+if output != "42\n" {
+t.Errorf("expected '42', got %q", output)
+}
+}
+
+func TestTypedDecl_TypeEnforced(t *testing.T) {
+// Assigning a text value to a number variable must fail.
+code := `Declare x as number to be 5.
+Set x to be "hello".`
+output := captureOutput(func() { evaluate(code) })
+if output != "" {
+t.Errorf("expected no output (TypeError on reassignment), got %q", output)
+}
+}
+
+func TestTypedDecl_WrongInitType(t *testing.T) {
+// Initialising a number variable with text must fail.
+code := `Declare x as number to be "hello".`
+output := captureOutput(func() { evaluate(code) })
+if output != "" {
+t.Errorf("expected no output (TypeError on init), got %q", output)
+}
+}
+
+func TestTypedDecl_Constant(t *testing.T) {
+code := `Declare PI as number to always be 3.14.
+Print PI.`
+output := captureOutput(func() { evaluate(code) })
+if output != "3.14\n" {
+t.Errorf("expected '3.14', got %q", output)
+}
+}
+
+func TestTypedDecl_UnknownType(t *testing.T) {
+// Unknown type annotation must produce a RuntimeError.
+code := `Declare x as blurgh to be 5.`
+_, err := evaluate(code)
+if err == nil {
+t.Fatal("expected error for unknown type annotation, got nil")
+}
+}
+
+// ─── Custom error type tests ──────────────────────────────────────────────────
+
+func TestCustomError_DeclareAndRaise(t *testing.T) {
+code := `Declare NetworkError as an error type.
+Try doing the following:
+    Raise "Host unreachable" as NetworkError.
+on NetworkError:
+    Print "caught".
+thats it.`
+output := captureOutput(func() { evaluate(code) })
+if output != "caught\n" {
+t.Errorf("expected 'caught', got %q", output)
+}
+}
+
+func TestCustomError_CatchAllStillWorks(t *testing.T) {
+code := `Declare ValidationError as an error type.
+Try doing the following:
+    Raise "bad input" as ValidationError.
+on error:
+    Print "caught".
+thats it.`
+output := captureOutput(func() { evaluate(code) })
+if output != "caught\n" {
+t.Errorf("expected 'caught', got %q", output)
+}
+}
+
+func TestCustomError_TypedCatchDoesNotCatchOtherType(t *testing.T) {
+// A typed catch handler must not intercept errors of a different type.
+code := `Declare NetworkError as an error type.
+Declare DatabaseError as an error type.
+Try doing the following:
+    Try doing the following:
+        Raise "row missing" as DatabaseError.
+    on NetworkError:
+        Print "wrong handler".
+    thats it.
+on DatabaseError:
+    Print "right handler".
+thats it.`
+output := captureOutput(func() { evaluate(code) })
+if output != "right handler\n" {
+t.Errorf("expected 'right handler', got %q", output)
+}
+}
+
+func TestCustomError_FinallyRunsOnTypedMismatch(t *testing.T) {
+// Finally must run even when the typed handler does not match.
+code := `Declare NetworkError as an error type.
+Try doing the following:
+    Try doing the following:
+        Raise "oops" as NetworkError.
+    on NetworkError:
+        Print "inner caught".
+    but finally:
+        Print "inner finally".
+    thats it.
+thats it.`
+output := captureOutput(func() { evaluate(code) })
+if output != "inner caught\ninner finally\n" {
+t.Errorf("expected 'inner caught\\ninner finally\\n', got %q", output)
+}
+}
+
+func TestCustomError_ErrorTypeAccessible(t *testing.T) {
+// The error variable in the catch block should be accessible.
+code := `Declare AppError as an error type.
+Try doing the following:
+    Raise "something broke" as AppError.
+on AppError:
+    Print "ok".
+thats it.`
+output := captureOutput(func() { evaluate(code) })
+if output != "ok\n" {
+t.Errorf("expected 'ok', got %q", output)
+}
+}
+
+// ─── casefold tests ───────────────────────────────────────────────────────────
+
+func TestCasefold_Function(t *testing.T) {
+code := `Print casefold("HELLO").`
+output := captureOutput(func() { evaluate(code) })
+if output != "hello\n" {
+t.Errorf("casefold('HELLO') expected 'hello', got %q", output)
+}
+}
+
+func TestCasefold_OfSyntax(t *testing.T) {
+code := `Declare s to be "WORLD".
+Print casefold of s.`
+output := captureOutput(func() { evaluate(code) })
+if output != "world\n" {
+t.Errorf("casefold of s expected 'world', got %q", output)
+}
+}
+
+func TestCasefold_PossessiveSyntax(t *testing.T) {
+code := `Declare s to be "WORLD".
+Print s's casefold.`
+output := captureOutput(func() { evaluate(code) })
+if output != "world\n" {
+t.Errorf("s's casefold expected 'world', got %q", output)
+}
+}
+
+func TestCasefold_PossessiveInCondition(t *testing.T) {
+code := `Declare answer to be "Y".
+If answer's casefold is equal to "y", then
+    Print "yes".
+otherwise
+    Print "no".
+thats it.`
+output := captureOutput(func() { evaluate(code) })
+if output != "yes\n" {
+t.Errorf("expected 'yes', got %q", output)
+}
+}
+
+func TestCasefold_OfInCondition(t *testing.T) {
+code := `Declare answer to be "Y".
+If casefold of answer is equal to "y", then
+    Print "yes".
+otherwise
+    Print "no".
+thats it.`
+output := captureOutput(func() { evaluate(code) })
+if output != "yes\n" {
+t.Errorf("expected 'yes', got %q", output)
+}
+}
+
+// ─── error hierarchy tests ────────────────────────────────────────────────────
+
+func TestErrorHierarchy_ExactMatch(t *testing.T) {
+code := `Declare LibError as an error type.
+Declare SubError as a type of LibError.
+Try doing the following:
+    Raise "oops" as SubError.
+on SubError:
+    Print "exact".
+thats it.`
+output := captureOutput(func() { evaluate(code) })
+if output != "exact\n" {
+t.Errorf("expected 'exact', got %q", output)
+}
+}
+
+func TestErrorHierarchy_ParentCatchesChild(t *testing.T) {
+code := `Declare LibError as an error type.
+Declare SubError as a type of LibError.
+Try doing the following:
+    Raise "oops" as SubError.
+on LibError:
+    Print "parent".
+thats it.`
+output := captureOutput(func() { evaluate(code) })
+if output != "parent\n" {
+t.Errorf("expected 'parent', got %q", output)
+}
+}
+
+func TestErrorHierarchy_NonMatchingDoesNotCatch(t *testing.T) {
+code := `Declare LibError as an error type.
+Declare SubError1 as a type of LibError.
+Declare SubError2 as a type of LibError.
+Try doing the following:
+    Try doing the following:
+        Raise "oops" as SubError1.
+    on SubError2:
+        Print "wrong".
+    thats it.
+on SubError1:
+    Print "correct".
+thats it.`
+output := captureOutput(func() { evaluate(code) })
+if output != "correct\n" {
+t.Errorf("expected 'correct', got %q", output)
+}
+}
+
+func TestErrorHierarchy_CatchAllCatchesChild(t *testing.T) {
+code := `Declare LibError as an error type.
+Declare SubError as a type of LibError.
+Try doing the following:
+    Raise "oops" as SubError.
+on error:
+    Print "catchall".
+thats it.`
+output := captureOutput(func() { evaluate(code) })
+if output != "catchall\n" {
+t.Errorf("expected 'catchall', got %q", output)
+}
+}
+
+func TestErrorHierarchy_ErrorIsExpression(t *testing.T) {
+code := `Declare LibError as an error type.
+Declare SubError1 as a type of LibError.
+Declare SubError2 as a type of LibError.
+Try doing the following:
+    Raise "oops" as SubError1.
+on LibError:
+    If error is SubError1, then
+        Print "matched SubError1".
+    otherwise
+        Print "no match".
+    thats it.
+thats it.`
+output := captureOutput(func() { evaluate(code) })
+if output != "matched SubError1\n" {
+t.Errorf("expected 'matched SubError1', got %q", output)
+}
+}
+
+func TestErrorHierarchy_ErrorIsExpression_SubtypeCheck(t *testing.T) {
+code := `Declare LibError as an error type.
+Declare SubError as a type of LibError.
+Try doing the following:
+    Raise "oops" as SubError.
+on error:
+    If error is LibError, then
+        Print "is LibError".
+    otherwise
+        Print "not LibError".
+    thats it.
+thats it.`
+output := captureOutput(func() { evaluate(code) })
+if output != "is LibError\n" {
+t.Errorf("expected 'is LibError', got %q", output)
+}
+}
+
+// ─── new stdlib method tests ──────────────────────────────────────────────────
+
+func TestTextMethods(t *testing.T) {
+tests := []struct{ code, want string }{
+{`Print title of "hello world".`, "Hello World\n"},
+{`Print "hello world"'s title.`, "Hello World\n"},
+{`Print capitalize of "hello world".`, "Hello world\n"},
+{`Print "hello world"'s capitalize.`, "Hello world\n"},
+{`Print swapcase of "Hello World".`, "hELLO wORLD\n"},
+{`Print trim_left of "  hi".`, "hi\n"},
+{`Print trim_right of "hi  ".`, "hi\n"},
+{`Print is_digit of "123".`, "true\n"},
+{`Print is_digit of "12a".`, "false\n"},
+{`Print is_alpha of "abc".`, "true\n"},
+{`Print is_alnum of "abc123".`, "true\n"},
+{`Print is_space of "   ".`, "true\n"},
+{`Print is_upper of "HELLO".`, "true\n"},
+{`Print is_lower of "hello".`, "true\n"},
+{`Print is_integer of 5.0.`, "true\n"},
+{`Print is_integer of 5.5.`, "false\n"},
+{`Print sign of -3.`, "-1\n"},
+{`Print sign of 0.`, "0\n"},
+{`Print sign of 7.`, "1\n"},
+}
+for _, tt := range tests {
+got := captureOutput(func() { evaluate(tt.code) })
+if got != tt.want {
+t.Errorf("code=%q: expected %q, got %q", tt.code, tt.want, got)
+}
+}
+}
+
+func TestListMethods(t *testing.T) {
+tests := []struct{ code, want string }{
+{`Print average of [2, 4, 6].`, "4\n"},
+{`Print min_value of [3, 1, 4].`, "1\n"},
+{`Print max_value of [3, 1, 4].`, "4\n"},
+{`Print product of [1, 2, 3, 4].`, "24\n"},
+{`Print any_true of [false, false, true].`, "true\n"},
+{`Print all_true of [true, true, false].`, "false\n"},
+{`Print sorted_desc of [1, 3, 2].`, "[3 2 1]\n"},
+}
+for _, tt := range tests {
+got := captureOutput(func() { evaluate(tt.code) })
+if got != tt.want {
+t.Errorf("code=%q: expected %q, got %q", tt.code, tt.want, got)
+}
+}
+}
+
+func TestCompileTimeTypeError_TextOnNumber(t *testing.T) {
+_, err := evaluate(`Print title of 42.`)
+if err == nil {
+t.Fatal("expected type error, got nil")
+}
+if !strings.Contains(err.Error(), "TypeError") {
+t.Errorf("expected TypeError, got: %v", err)
+}
+}
+
+func TestCompileTimeTypeError_NumberOnText(t *testing.T) {
+_, err := evaluate(`Print is_integer of "hello".`)
+if err == nil {
+t.Fatal("expected type error, got nil")
+}
+if !strings.Contains(err.Error(), "TypeError") {
+t.Errorf("expected TypeError, got: %v", err)
+}
+}
+
+func TestCompileTimeTypeError_ListOnText(t *testing.T) {
+_, err := evaluate(`Print average of "hello".`)
+if err == nil {
+t.Fatal("expected type error, got nil")
+}
+if !strings.Contains(err.Error(), "TypeError") {
+t.Errorf("expected TypeError, got: %v", err)
+}
+}
+
+func TestCompileTimeTypeError_PossessiveSyntax(t *testing.T) {
+_, err := evaluate(`Declare n as number to be 5. Print n's title.`)
+if err == nil {
+t.Fatal("expected type error, got nil")
+}
+if !strings.Contains(err.Error(), "TypeError") {
+t.Errorf("expected TypeError, got: %v", err)
 }
 }

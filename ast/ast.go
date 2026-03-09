@@ -305,6 +305,7 @@ func (fa *FieldAssignment) statementNode() {}
 type TryStatement struct {
 	TryBody     []Statement
 	ErrorVar    string // Variable name to bind the error to
+	ErrorType   string // If non-empty, only catch errors of this type
 	ErrorBody   []Statement
 	FinallyBody []Statement
 }
@@ -320,6 +321,19 @@ type RaiseStatement struct {
 
 func (rs *RaiseStatement) node()          {}
 func (rs *RaiseStatement) statementNode() {}
+
+// ErrorTypeDecl declares a custom error type.
+// Syntax:
+//
+//	Declare NetworkError as an error type.
+//	Declare CustomErr1 as a type of NetworkError.
+type ErrorTypeDecl struct {
+	Name       string
+	ParentType string // empty for root error types; parent name for subtypes
+}
+
+func (etd *ErrorTypeDecl) node()          {}
+func (etd *ErrorTypeDecl) statementNode() {}
 
 // TypeExpression gets the type of a value
 type TypeExpression struct {
@@ -457,3 +471,14 @@ type MethodCall struct {
 
 func (mc *MethodCall) node()           {}
 func (mc *MethodCall) expressionNode() {}
+
+// ErrorTypeCheckExpression checks whether an error value's type matches a named
+// error type (including inherited types).
+// Syntax: error is NetworkError
+type ErrorTypeCheckExpression struct {
+	Value    Expression
+	TypeName string
+}
+
+func (etc *ErrorTypeCheckExpression) node()           {}
+func (etc *ErrorTypeCheckExpression) expressionNode() {}

@@ -188,7 +188,18 @@ func (ev *Evaluator) evalMethodCall(node *ast.MethodCall) (Value, error) {
 	// Check if it's a struct instance
 	structInst, ok := obj.(*StructInstance)
 	if !ok {
-		return nil, ev.runtimeError(fmt.Sprintf("cannot call method on non-struct value"))
+		// Fall back: treat "x's method" as "method(x, ...args)" — allows possessive
+		// syntax to call stdlib or user-defined functions on non-struct values
+		// (e.g. text's casefold → casefold(text)).
+		extraArgs := make([]Value, len(node.Arguments))
+		for i, arg := range node.Arguments {
+			v, err := ev.Eval(arg)
+			if err != nil {
+				return nil, err
+			}
+			extraArgs[i] = v
+		}
+		return ev.callFunction(node.MethodName, append([]Value{obj}, extraArgs...))
 	}
 
 	// Get method from struct definition

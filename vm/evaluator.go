@@ -15,16 +15,15 @@ import (
 type Evaluator struct {
 	env       *Environment
 	callStack []string
+	builtinFn BuiltinFunc // injected stdlib evaluator
 }
 
-// NewEvaluator creates a new evaluator with the given environment
-func NewEvaluator(env *Environment) *Evaluator {
-	// Register standard library functions
-	RegisterStdlib(env)
-	
+// NewEvaluator creates a new evaluator with the given environment and optional builtin function.
+func NewEvaluator(env *Environment, builtinFn BuiltinFunc) *Evaluator {
 	return &Evaluator{
 		env:       env,
 		callStack: []string{"<main>"},
+		builtinFn: builtinFn,
 	}
 }
 
@@ -44,6 +43,10 @@ func (ev *Evaluator) Eval(node interface{}) (Value, error) {
 		return ev.evalImport(node)
 	case *ast.VariableDecl:
 		return ev.evalVariableDecl(node)
+	case *ast.TypedVariableDecl:
+		return ev.evalTypedVariableDecl(node)
+	case *ast.ErrorTypeDecl:
+		return ev.evalErrorTypeDecl(node)
 	case *ast.Assignment:
 		return ev.evalAssignment(node)
 	case *ast.IndexAssignment:
@@ -111,6 +114,8 @@ func (ev *Evaluator) Eval(node interface{}) (Value, error) {
 		return ev.evalHasExpression(node)
 	case *ast.NilCheckExpression:
 		return ev.evalNilCheckExpression(node)
+	case *ast.ErrorTypeCheckExpression:
+		return ev.evalErrorTypeCheckExpression(node)
 	// Struct / type / cast nodes
 	case *ast.StructDecl:
 		return ev.evalStructDecl(node)
@@ -221,7 +226,7 @@ func (ev *Evaluator) evalSafeImport(program *ast.Program, is *ast.ImportStatemen
 func (ev *Evaluator) evalSelectiveImport(program *ast.Program, is *ast.ImportStatement) (Value, error) {
 	// Create a temporary environment for the imported file
 	tempEnv := NewEnvironment()
-	tempEval := NewEvaluator(tempEnv)
+	tempEval := NewEvaluator(tempEnv, ev.builtinFn)
 	
 	// Execute in temporary environment
 	_, err := tempEval.evalProgram(program)
@@ -860,7 +865,7 @@ func (ev *Evaluator) evalFunctionCall(fc *ast.FunctionCall) (Value, error) {
 	// Check if it's a built-in function (stdlib)
 	if fn.Body == nil {
 		// This is a built-in function, delegate to stdlib
-		return evalBuiltinFunction(fc.Name, args)
+		return ev.evalBuiltinFunction(fc.Name, args)
 	}
 
 	// Check parameter count
@@ -917,6 +922,53 @@ func (ev *Evaluator) evalFunctionCall(fc *ast.FunctionCall) (Value, error) {
 		}
 	}
 
+	return nil, nil
+}
+
+// callFunction invokes a named function with pre-evaluated argument values.
+// This is used by evalMethodCall for the stdlib-fallback path.
+func (ev *Evaluator) callFunction(name string, args []Value) (Value, error) {
+	fn, ok := ev.env.GetFunction(name)
+	if !ok {
+		suggestion := ev.findSimilarFunction(name)
+		if suggestion != "" {
+			return nil, ev.runtimeError(fmt.Sprintf("undefined function '%s'\n  Perhaps you meant: '%s'", name, suggestion))
+		}
+		return nil, ev.runtimeError(fmt.Sprintf("undefined function '%s'", name))
+	}
+
+	// Built-in (stdlib) path
+	if fn.Body == nil {
+		return ev.evalBuiltinFunction(name, args)
+	}
+
+	// User-defined function path
+	if len(args) != len(fn.Parameters) {
+		return nil, ev.runtimeError(fmt.Sprintf("function '%s' expects %d argument(s), got %d", name, len(fn.Parameters), len(args)))
+	}
+
+	funcEnv := fn.Closure.NewChild()
+	for i, param := range fn.Parameters {
+		funcEnv.Define(param, args[i], false)
+	}
+
+	oldEnv := ev.env
+	ev.env = funcEnv
+	ev.callStack = append(ev.callStack, fmt.Sprintf("%s(...)", name))
+	defer func() {
+		ev.env = oldEnv
+		ev.callStack = ev.callStack[:len(ev.callStack)-1]
+	}()
+
+	for _, stmt := range fn.Body {
+		val, err := ev.Eval(stmt)
+		if err != nil {
+			return nil, err
+		}
+		if retVal, ok := val.(*ReturnValue); ok {
+			return retVal.Value, nil
+		}
+	}
 	return nil, nil
 }
 

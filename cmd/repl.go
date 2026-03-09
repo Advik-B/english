@@ -3,6 +3,7 @@ package cmd
 import (
 	"english/parser"
 	"english/vm"
+	"english/vm/stdlib"
 	"fmt"
 	"io"
 	"os"
@@ -91,11 +92,12 @@ type model struct {
 // initialModel creates the initial TUI model
 func initialModel() model {
 	env := vm.NewEnvironment()
+	stdlib.Register(env)
 	return model{
 		input:     "",
 		cursorPos: 0,
 		env:       env,
-		evaluator: vm.NewEvaluator(env),
+		evaluator: vm.NewEvaluator(env, stdlib.Eval),
 		history:   []string{},
 		output:    []string{},
 		multiline: false,
@@ -259,7 +261,8 @@ func (m *model) handleCommand(cmd string) string {
 
 	case ":reset":
 		m.env = vm.NewEnvironment()
-		m.evaluator = vm.NewEvaluator(m.env)
+		stdlib.Register(m.env)
+		m.evaluator = vm.NewEvaluator(m.env, stdlib.Eval)
 		return successStyle.Render("✓ Session reset")
 
 	case ":exit", ":quit", ":q":

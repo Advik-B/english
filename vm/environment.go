@@ -1,40 +1,44 @@
 package vm
 
 import (
-"english/vm/types"
-"fmt"
+	"english/vm/types"
+	"fmt"
+	"strings"
 )
 
 // Environment represents a lexical scope: variables, constants, functions, and structs.
 type Environment struct {
-variables     map[string]Value
-variableTypes map[string]types.TypeKind // declared type; fixed at first Define
-constants     map[string]bool
-functions     map[string]*FunctionValue
-structs       map[string]*StructDefinition
-parent        *Environment
+variables        map[string]Value
+variableTypes    map[string]types.TypeKind // declared type; fixed at first Define
+constants        map[string]bool
+functions        map[string]*FunctionValue
+structs          map[string]*StructDefinition
+customErrorTypes map[string]string // error type name → parent type name ("" for root types)
+parent           *Environment
 }
 
 // NewEnvironment creates a new root environment.
 func NewEnvironment() *Environment {
 return &Environment{
-variables:     make(map[string]Value),
-variableTypes: make(map[string]types.TypeKind),
-constants:     make(map[string]bool),
-functions:     make(map[string]*FunctionValue),
-structs:       make(map[string]*StructDefinition),
+variables:        make(map[string]Value),
+variableTypes:    make(map[string]types.TypeKind),
+constants:        make(map[string]bool),
+functions:        make(map[string]*FunctionValue),
+structs:          make(map[string]*StructDefinition),
+customErrorTypes: make(map[string]string),
 }
 }
 
 // NewChild creates a child scope that inherits from this environment.
 func (e *Environment) NewChild() *Environment {
 return &Environment{
-variables:     make(map[string]Value),
-variableTypes: make(map[string]types.TypeKind),
-constants:     make(map[string]bool),
-functions:     make(map[string]*FunctionValue),
-structs:       make(map[string]*StructDefinition),
-parent:        e,
+variables:        make(map[string]Value),
+variableTypes:    make(map[string]types.TypeKind),
+constants:        make(map[string]bool),
+functions:        make(map[string]*FunctionValue),
+structs:          make(map[string]*StructDefinition),
+customErrorTypes: make(map[string]string),
+parent:           e,
 }
 }
 
@@ -102,6 +106,76 @@ e.variables[name] = value
 e.constants[name] = isConstant
 e.variableTypes[name] = inferTypeKind(value)
 return nil
+}
+
+// DefineTyped declares a new variable with an explicit type annotation.
+// The type annotation is enforced: the initial value (if any) must match the declared type,
+// and all subsequent assignments must also match.
+func (e *Environment) DefineTyped(name string, typeName string, value Value, isConstant bool) error {
+if _, exists := e.variables[name]; exists {
+return fmt.Errorf("variable '%s' is already defined in this scope", name)
+}
+targetType := types.Parse(typeName)
+if targetType == types.TypeUnknown {
+return fmt.Errorf("TypeError: unknown type '%s'\n  Hint: valid types are %s",
+typeName, strings.Join(types.UserTypeNames(), ", "))
+}
+// Type-check the initial value if provided
+if value != nil {
+actual := inferTypeKind(value)
+if types.Canonical(actual) != types.Canonical(targetType) {
+return fmt.Errorf(
+"TypeError: cannot initialize %s variable '%s' with %s value\n  Hint: use 'cast to' for explicit conversion",
+types.Name(targetType), name, types.Name(actual),
+)
+}
+}
+e.variables[name] = value
+e.constants[name] = isConstant
+e.variableTypes[name] = targetType
+return nil
+}
+
+// DefineErrorType registers a custom error type in the root environment.
+// parent is the parent type name; pass "" for a root error type.
+func (e *Environment) DefineErrorType(name, parent string) {
+root := e
+for root.parent != nil {
+root = root.parent
+}
+root.customErrorTypes[name] = parent
+}
+
+// IsKnownErrorType reports whether name is a registered custom error type.
+func (e *Environment) IsKnownErrorType(name string) bool {
+root := e
+for root.parent != nil {
+root = root.parent
+}
+_, ok := root.customErrorTypes[name]
+return ok
+}
+
+// IsSubtypeOf reports whether childType is the same as parentType or inherits from it.
+// It walks the parent chain of childType until it either finds parentType or exhausts
+// all ancestors.
+func (e *Environment) IsSubtypeOf(childType, parentType string) bool {
+root := e
+for root.parent != nil {
+root = root.parent
+}
+current := childType
+for current != "" {
+if current == parentType {
+return true
+}
+parent, ok := root.customErrorTypes[current]
+if !ok {
+break
+}
+current = parent
+}
+return false
 }
 
 // GetFunction retrieves a function searching up the scope chain.

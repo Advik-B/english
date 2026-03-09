@@ -1,0 +1,64 @@
+# error_types.abc — demonstrates custom error types and static type annotations.
+
+Print "=== Custom Error Types ===".
+Print "".
+
+# Declare custom error types
+Declare NetworkError as an error type.
+Declare ValidationError as an error type.
+Declare DatabaseError as an error type.
+
+# Raise and catch by type
+Try doing the following:
+    Raise "Host unreachable" as NetworkError.
+on NetworkError:
+    Print "Handled network error:", error.
+but finally:
+    Print "Network cleanup done.".
+thats it.
+
+# Catch-all still works for any error
+Try doing the following:
+    Raise "Age must be positive" as ValidationError.
+on error:
+    Print "Caught any error:", error.
+thats it.
+
+# Type-specific catch: wrong type propagates to outer handler
+Try doing the following:
+    Try doing the following:
+        Raise "Row not found" as DatabaseError.
+    on NetworkError:
+        Print "This should NOT print.".
+    thats it.
+on DatabaseError:
+    Print "Outer caught database error:", error.
+thats it.
+
+Print "".
+Print "=== Static Type Annotations ===".
+Print "".
+
+# Declare variables with explicit types
+Declare count as number to be 0.
+Declare greeting as text to be "Hello".
+Declare active as boolean to be true.
+
+Print "count:", count.
+Print "greeting:", greeting.
+Print "active:", active.
+
+# Typed variable with no initial value
+Declare score as number.
+Set score to be 95.
+Print "score:", score.
+
+# Type enforcement: assigning wrong type is a TypeError
+Try doing the following:
+    Set count to be "not a number".
+on error:
+    Print "Caught type error:", error.
+thats it.
+
+Print "".
+Print "All tests passed!".

@@ -318,11 +318,10 @@ func (p *Parser) parseDeclaration() (ast.Statement, error) {
 		return p.parseFunctionDeclaration()
 	}
 
-	// Check if it's a struct declaration: "Declare Person as a structure..."
-	// We need to peek ahead to see if we have "as" followed by "structure"/"struct"
+	// Check if it's a declaration with "as": "Declare X as ..."
+	// This covers structs, typed variables, and custom error types.
 	if p.curToken.Type == token.IDENTIFIER && p.peekToken.Type == token.AS {
-		// Save position and try struct parsing
-		return p.parseStructDeclaration()
+		return p.parseDeclareAs()
 	}
 
 	// Variable or constant declaration
@@ -370,6 +369,53 @@ func (p *Parser) parseDeclaration() (ast.Statement, error) {
 		IsConstant: isConstant,
 		Value:      value,
 	}, nil
+}
+
+// parseDeclareAs dispatches "Declare X as ..." to the correct parser:
+//   - "Declare X as a structure ..."       → struct declaration
+//   - "Declare X as an error type."        → custom error type declaration
+//   - "Declare X as a type of Y."          → error subtype declaration
+//   - "Declare X as <typename> to be ..."  → typed variable declaration
+func (p *Parser) parseDeclareAs() (ast.Statement, error) {
+	// curToken is IDENTIFIER (name), peekToken is AS.
+	// Look at the token two positions ahead (after AS) to decide.
+	// p.position currently points to the token after peekToken (i.e., after AS).
+	tokAfterAs := p.tokenAt(p.position)
+	tok2AfterAs := p.tokenAt(p.position + 1)
+
+	isArticle := tokAfterAs.Type == token.IDENTIFIER &&
+		(strings.ToLower(tokAfterAs.Value) == "a" || strings.ToLower(tokAfterAs.Value) == "an")
+
+	if isArticle {
+		// "Declare X as a/an ..."
+		switch {
+		case tok2AfterAs.Type == token.STRUCTURE || tok2AfterAs.Type == token.STRUCT:
+			return p.parseStructDeclaration()
+		case strings.ToLower(tok2AfterAs.Value) == "error":
+			// Might be "Declare X as an error type."
+			tok3AfterAs := p.tokenAt(p.position + 2)
+			if tok3AfterAs.Type == token.TYPE {
+				return p.parseErrorTypeDecl()
+			}
+		case tok2AfterAs.Type == token.TYPE:
+			// Might be "Declare X as a type of Y." — error subtype declaration
+			tok3AfterAs := p.tokenAt(p.position + 2)
+			if tok3AfterAs.Type == token.OF {
+				return p.parseErrorSubtypeDecl()
+			}
+		}
+	}
+
+	// Fall through: typed variable declaration "Declare X as typename to be value."
+	return p.parseTypedVariableDecl()
+}
+
+// tokenAt safely returns the token at the given absolute position in p.tokens.
+func (p *Parser) tokenAt(pos int) token.Token {
+	if pos >= 0 && pos < len(p.tokens) {
+		return p.tokens[pos]
+	}
+	return token.Token{Type: token.EOF}
 }
 
 func (p *Parser) parseFunctionDeclaration() (ast.Statement, error) {
@@ -1311,6 +1357,16 @@ func (p *Parser) parseRelational() (ast.Expression, error) {
 		// "x is nothing" / "x has no value" — postfix nil check (is nil)
 		p.nextToken()
 		return &ast.NilCheckExpression{Value: left, IsSomethingCheck: false}, nil
+
+	case token.IS:
+		// "error is TypeName" — error type check (exact or inherited match)
+		p.nextToken()
+		if p.curToken.Type != token.IDENTIFIER {
+			return nil, fmt.Errorf("expected error type name after 'is', got %v at line %d", p.curToken.Type, p.curToken.Line)
+		}
+		typeName := p.curToken.Value
+		p.nextToken()
+		return &ast.ErrorTypeCheckExpression{Value: left, TypeName: typeName}, nil
 	}
 
 	return left, nil
@@ -1363,6 +1419,24 @@ func (p *Parser) parseCast() (ast.Expression, error) {
 			return nil, err
 		}
 		return &ast.LookupKeyAccess{Table: expr, Key: key}, nil
+	}
+
+	// Postfix possessive: expr's method
+	// Handles string literals and other non-identifier expressions:
+	//   "hello"'s title   →   MethodCall{Object: "hello", MethodName: "title"}
+	if p.curToken.Type == token.POSSESSIVE {
+		p.nextToken() // consume 's
+		if p.curToken.Type != token.IDENTIFIER {
+			return nil, fmt.Errorf("expected method name after 's, got %v at line %d", p.curToken.Type, p.curToken.Line)
+		}
+		methodName := p.curToken.Value
+		p.nextToken()
+		var args []ast.Expression
+		if p.curToken.Type == token.WITH {
+			p.nextToken()
+			args = p.parseCallArguments()
+		}
+		return &ast.MethodCall{Object: expr, MethodName: methodName, Arguments: args}, nil
 	}
 
 	return expr, nil
@@ -1614,6 +1688,28 @@ func (p *Parser) parsePrimary() (ast.Expression, error) {
 		}
 		
 		p.nextToken()
+
+		// Possessive expression: "x's method" → MethodCall{Object: x, MethodName: method}
+		// e.g. "her_love_txt's casefold" → casefold applied to her_love_txt
+		if len(name) > 2 && name[len(name)-2:] == "'s" {
+			objectName := name[:len(name)-2]
+			if p.curToken.Type == token.IDENTIFIER {
+				methodName := p.curToken.Value
+				p.nextToken()
+				var args []ast.Expression
+				if p.curToken.Type == token.WITH {
+					p.nextToken()
+					args = p.parseCallArguments()
+				}
+				return &ast.MethodCall{
+					Object:     &ast.Identifier{Name: objectName},
+					MethodName: methodName,
+					Arguments:  args,
+				}, nil
+			}
+			// No method name after possessive — treat as plain identifier
+			name = objectName
+		}
 
 		// Check if it's a function call
 		if p.curToken.Type == token.LPAREN {

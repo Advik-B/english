@@ -4,6 +4,7 @@ import (
 	"english/bytecode"
 	"english/parser"
 	"english/vm"
+	"english/vm/stdlib"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -96,6 +97,7 @@ func RunFile(filename string) {
 	}
 
 	env := vm.NewEnvironment()
+	stdlib.Register(env)
 	lexer := parser.NewLexer(string(content))
 	tokens := lexer.TokenizeAll()
 
@@ -106,7 +108,15 @@ func RunFile(filename string) {
 		os.Exit(1)
 	}
 
-	evaluator := vm.NewEvaluator(env)
+	typeErrs := vm.Check(program)
+	if len(typeErrs) > 0 {
+		for _, e := range typeErrs {
+			fmt.Fprintln(os.Stderr, e.Error())
+		}
+		os.Exit(1)
+	}
+
+	evaluator := vm.NewEvaluator(env, stdlib.Eval)
 	_, err = evaluator.Eval(program)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Runtime error: %v\n", err)
@@ -129,6 +139,14 @@ func CompileFile(filename string, output string) {
 	program, err := p.Parse()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Parse error: %v\n", err)
+		os.Exit(1)
+	}
+
+	typeErrs := vm.Check(program)
+	if len(typeErrs) > 0 {
+		for _, e := range typeErrs {
+			fmt.Fprintln(os.Stderr, e.Error())
+		}
 		os.Exit(1)
 	}
 
@@ -174,7 +192,8 @@ func RunBytecode(filename string) {
 	}
 
 	env := vm.NewEnvironment()
-	evaluator := vm.NewEvaluator(env)
+	stdlib.Register(env)
+	evaluator := vm.NewEvaluator(env, stdlib.Eval)
 	_, err = evaluator.Eval(program)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Runtime error: %v\n", err)

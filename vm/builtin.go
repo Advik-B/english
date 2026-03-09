@@ -1,6 +1,10 @@
 package vm
 
-// evalBuiltinFunctionWrapper is a wrapper to call the package-level evalBuiltinFunction
+import "fmt"
+
 func (ev *Evaluator) evalBuiltinFunction(name string, args []Value) (Value, error) {
-	return evalBuiltinFunction(name, args)
+	if ev.builtinFn == nil {
+		return nil, fmt.Errorf("RuntimeError: no built-in evaluator registered for '%s'", name)
+	}
+	return ev.builtinFn(name, args)
 }

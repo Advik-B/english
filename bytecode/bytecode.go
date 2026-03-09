@@ -61,6 +61,8 @@ const (
 	NodeBreakStatement
 	NodeLocationExpression
 	NodeImportStatement
+	NodeTypedVariableDecl
+	NodeErrorTypeDecl
 )
 
 // Encoder serializes AST to binary format
@@ -138,6 +140,18 @@ func (e *Encoder) encodeStatement(stmt ast.Statement) error {
 		e.writeString(s.Name)
 		e.writeBool(s.IsConstant)
 		return e.encodeExpression(s.Value)
+
+	case *ast.TypedVariableDecl:
+		e.buf.WriteByte(NodeTypedVariableDecl)
+		e.writeString(s.Name)
+		e.writeString(s.TypeName)
+		e.writeBool(s.IsConstant)
+		return e.encodeExpression(s.Value)
+
+	case *ast.ErrorTypeDecl:
+		e.buf.WriteByte(NodeErrorTypeDecl)
+		e.writeString(s.Name)
+		return nil
 
 	case *ast.Assignment:
 		e.buf.WriteByte(NodeAssignment)
@@ -504,6 +518,32 @@ func (d *Decoder) decodeStatement() (ast.Statement, error) {
 			return nil, err
 		}
 		return &ast.VariableDecl{Name: name, IsConstant: isConstant, Value: value}, nil
+
+	case NodeTypedVariableDecl:
+		name, err := d.readString()
+		if err != nil {
+			return nil, err
+		}
+		typeName, err := d.readString()
+		if err != nil {
+			return nil, err
+		}
+		isConstant, err := d.readBool()
+		if err != nil {
+			return nil, err
+		}
+		value, err := d.decodeExpression()
+		if err != nil {
+			return nil, err
+		}
+		return &ast.TypedVariableDecl{Name: name, TypeName: typeName, IsConstant: isConstant, Value: value}, nil
+
+	case NodeErrorTypeDecl:
+		name, err := d.readString()
+		if err != nil {
+			return nil, err
+		}
+		return &ast.ErrorTypeDecl{Name: name}, nil
 
 	case NodeAssignment:
 		name, err := d.readString()

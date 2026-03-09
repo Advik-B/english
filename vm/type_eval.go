@@ -49,6 +49,15 @@ func (ev *Evaluator) evalTryStatement(node *ast.TryStatement) (Value, error) {
 			}
 		}
 
+		// If a specific error type filter is set, check whether this error matches.
+		// If it doesn't match, skip the handler and propagate.
+		if node.ErrorType != "" && errorVal.ErrorType != node.ErrorType {
+			if len(node.FinallyBody) > 0 {
+				ev.executeFinallyBlock(node.FinallyBody)
+			}
+			return nil, tryError
+		}
+
 		// Bind error to variable in error handler scope
 		errorEnv := ev.env.NewChild()
 		errorEnv.Define(node.ErrorVar, errorVal, false)
@@ -122,6 +131,30 @@ func (ev *Evaluator) evalRaiseStatement(node *ast.RaiseStatement) (Value, error)
 		ErrorType: node.ErrorType,
 		CallStack: append([]string{}, ev.callStack...),
 	}
+}
+
+// evalTypedVariableDecl evaluates a variable declaration with an explicit type annotation.
+// Syntax: Declare x as number to be 5.
+func (ev *Evaluator) evalTypedVariableDecl(node *ast.TypedVariableDecl) (Value, error) {
+	var value Value
+	if node.Value != nil {
+		var err error
+		value, err = ev.Eval(node.Value)
+		if err != nil {
+			return nil, err
+		}
+	}
+	if err := ev.env.DefineTyped(node.Name, node.TypeName, value, node.IsConstant); err != nil {
+		return nil, ev.runtimeError(err.Error())
+	}
+	return nil, nil
+}
+
+// evalErrorTypeDecl evaluates a custom error type declaration.
+// Syntax: Declare NetworkError as an error type.
+func (ev *Evaluator) evalErrorTypeDecl(node *ast.ErrorTypeDecl) (Value, error) {
+	ev.env.DefineErrorType(node.Name)
+	return nil, nil
 }
 
 // evalSwapStatement evaluates a swap statement

@@ -2109,3 +2109,159 @@ if output != "60\n" {
 t.Errorf("expected '60', got %q", output)
 }
 }
+
+// ─── Static type annotation tests ────────────────────────────────────────────
+
+func TestTypedDecl_BasicNumber(t *testing.T) {
+code := `Declare x as number to be 5.
+Print x.`
+output := captureOutput(func() { evaluate(code) })
+if output != "5\n" {
+t.Errorf("expected '5', got %q", output)
+}
+}
+
+func TestTypedDecl_BasicText(t *testing.T) {
+code := `Declare name as text to be "Alice".
+Print name.`
+output := captureOutput(func() { evaluate(code) })
+if output != "Alice\n" {
+t.Errorf("expected 'Alice', got %q", output)
+}
+}
+
+func TestTypedDecl_BasicBoolean(t *testing.T) {
+code := `Declare flag as boolean to be true.
+Print flag.`
+output := captureOutput(func() { evaluate(code) })
+if output != "true\n" {
+t.Errorf("expected 'true', got %q", output)
+}
+}
+
+func TestTypedDecl_NoInitialValue(t *testing.T) {
+// Variable declared with type but no initial value should default to nothing.
+code := `Declare score as number.
+Set score to be 42.
+Print score.`
+output := captureOutput(func() { evaluate(code) })
+if output != "42\n" {
+t.Errorf("expected '42', got %q", output)
+}
+}
+
+func TestTypedDecl_TypeEnforced(t *testing.T) {
+// Assigning a text value to a number variable must fail.
+code := `Declare x as number to be 5.
+Set x to be "hello".`
+output := captureOutput(func() { evaluate(code) })
+if output != "" {
+t.Errorf("expected no output (TypeError on reassignment), got %q", output)
+}
+}
+
+func TestTypedDecl_WrongInitType(t *testing.T) {
+// Initialising a number variable with text must fail.
+code := `Declare x as number to be "hello".`
+output := captureOutput(func() { evaluate(code) })
+if output != "" {
+t.Errorf("expected no output (TypeError on init), got %q", output)
+}
+}
+
+func TestTypedDecl_Constant(t *testing.T) {
+code := `Declare PI as number to always be 3.14.
+Print PI.`
+output := captureOutput(func() { evaluate(code) })
+if output != "3.14\n" {
+t.Errorf("expected '3.14', got %q", output)
+}
+}
+
+func TestTypedDecl_UnknownType(t *testing.T) {
+// Unknown type annotation must produce a RuntimeError.
+code := `Declare x as blurgh to be 5.`
+_, err := evaluate(code)
+if err == nil {
+t.Fatal("expected error for unknown type annotation, got nil")
+}
+}
+
+// ─── Custom error type tests ──────────────────────────────────────────────────
+
+func TestCustomError_DeclareAndRaise(t *testing.T) {
+code := `Declare NetworkError as an error type.
+Try doing the following:
+    Raise "Host unreachable" as NetworkError.
+on NetworkError:
+    Print "caught".
+thats it.`
+output := captureOutput(func() { evaluate(code) })
+if output != "caught\n" {
+t.Errorf("expected 'caught', got %q", output)
+}
+}
+
+func TestCustomError_CatchAllStillWorks(t *testing.T) {
+code := `Declare ValidationError as an error type.
+Try doing the following:
+    Raise "bad input" as ValidationError.
+on error:
+    Print "caught".
+thats it.`
+output := captureOutput(func() { evaluate(code) })
+if output != "caught\n" {
+t.Errorf("expected 'caught', got %q", output)
+}
+}
+
+func TestCustomError_TypedCatchDoesNotCatchOtherType(t *testing.T) {
+// A typed catch handler must not intercept errors of a different type.
+code := `Declare NetworkError as an error type.
+Declare DatabaseError as an error type.
+Try doing the following:
+    Try doing the following:
+        Raise "row missing" as DatabaseError.
+    on NetworkError:
+        Print "wrong handler".
+    thats it.
+on DatabaseError:
+    Print "right handler".
+thats it.`
+output := captureOutput(func() { evaluate(code) })
+if output != "right handler\n" {
+t.Errorf("expected 'right handler', got %q", output)
+}
+}
+
+func TestCustomError_FinallyRunsOnTypedMismatch(t *testing.T) {
+// Finally must run even when the typed handler does not match.
+code := `Declare NetworkError as an error type.
+Try doing the following:
+    Try doing the following:
+        Raise "oops" as NetworkError.
+    on NetworkError:
+        Print "inner caught".
+    but finally:
+        Print "inner finally".
+    thats it.
+thats it.`
+output := captureOutput(func() { evaluate(code) })
+if output != "inner caught\ninner finally\n" {
+t.Errorf("expected 'inner caught\\ninner finally\\n', got %q", output)
+}
+}
+
+func TestCustomError_ErrorTypeAccessible(t *testing.T) {
+// The error variable in the catch block should be accessible.
+code := `Declare AppError as an error type.
+Try doing the following:
+    Raise "something broke" as AppError.
+on AppError:
+    Print "ok".
+thats it.`
+output := captureOutput(func() { evaluate(code) })
+if output != "ok\n" {
+t.Errorf("expected 'ok', got %q", output)
+}
+}

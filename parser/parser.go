@@ -318,11 +318,10 @@ func (p *Parser) parseDeclaration() (ast.Statement, error) {
 		return p.parseFunctionDeclaration()
 	}
 
-	// Check if it's a struct declaration: "Declare Person as a structure..."
-	// We need to peek ahead to see if we have "as" followed by "structure"/"struct"
+	// Check if it's a declaration with "as": "Declare X as ..."
+	// This covers structs, typed variables, and custom error types.
 	if p.curToken.Type == token.IDENTIFIER && p.peekToken.Type == token.AS {
-		// Save position and try struct parsing
-		return p.parseStructDeclaration()
+		return p.parseDeclareAs()
 	}
 
 	// Variable or constant declaration
@@ -371,6 +370,48 @@ func (p *Parser) parseDeclaration() (ast.Statement, error) {
 		Value:      value,
 	}, nil
 }
+
+// parseDeclareAs dispatches "Declare X as ..." to the correct parser:
+//   - "Declare X as a structure ..."       → struct declaration
+//   - "Declare X as an error type."        → custom error type declaration
+//   - "Declare X as <typename> to be ..."  → typed variable declaration
+func (p *Parser) parseDeclareAs() (ast.Statement, error) {
+	// curToken is IDENTIFIER (name), peekToken is AS.
+	// Look at the token two positions ahead (after AS) to decide.
+	// p.position currently points to the token after peekToken (i.e., after AS).
+	tokAfterAs := p.tokenAt(p.position)
+	tok2AfterAs := p.tokenAt(p.position + 1)
+
+	isArticle := tokAfterAs.Type == token.IDENTIFIER &&
+		(strings.ToLower(tokAfterAs.Value) == "a" || strings.ToLower(tokAfterAs.Value) == "an")
+
+	if isArticle {
+		// "Declare X as a/an ..."
+		switch {
+		case tok2AfterAs.Type == token.STRUCTURE || tok2AfterAs.Type == token.STRUCT:
+			return p.parseStructDeclaration()
+		case strings.ToLower(tok2AfterAs.Value) == "error":
+			// Might be "Declare X as an error type."
+			tok3AfterAs := p.tokenAt(p.position + 2)
+			if tok3AfterAs.Type == token.TYPE {
+				return p.parseErrorTypeDecl()
+			}
+		}
+	}
+
+	// Fall through: typed variable declaration "Declare X as typename to be value."
+	return p.parseTypedVariableDecl()
+}
+
+// tokenAt safely returns the token at the given absolute position in p.tokens.
+func (p *Parser) tokenAt(pos int) token.Token {
+	if pos >= 0 && pos < len(p.tokens) {
+		return p.tokens[pos]
+	}
+	return token.Token{Type: token.EOF}
+}
+
+
 
 func (p *Parser) parseFunctionDeclaration() (ast.Statement, error) {
 	if err := p.expectToken(token.FUNCTION); err != nil {

@@ -4,6 +4,7 @@ import (
 	"english/ast"
 	"english/token"
 	"fmt"
+	"strings"
 )
 
 // parseTryStatement parses a try/on error/but finally block
@@ -53,16 +54,25 @@ func (p *Parser) parseTryStatement() (ast.Statement, error) {
 	var errorBody []ast.Statement
 	var finallyBody []ast.Statement
 	errorVar := "error" // Default error variable name
+	errorType := ""     // Empty means catch all errors
 
-	// Check for "on error:"
+	// Check for "on <error|TypeName>:"
+	// - "on error:"        catches all errors (backward-compatible)
+	// - "on NetworkError:" catches only errors with ErrorType == "NetworkError"
 	if p.curToken.Type == token.ON {
 		p.nextToken()
 
-		// Expect "error" as an identifier
-		if p.curToken.Type != token.IDENTIFIER || p.curToken.Value != "error" {
-			return nil, fmt.Errorf("expected 'error' after 'on', got %v", p.curToken.Type)
+		// Accept any identifier: "error" (catch-all) or a specific type name
+		if p.curToken.Type != token.IDENTIFIER {
+			return nil, fmt.Errorf("expected error type or 'error' after 'on', got %v", p.curToken.Type)
 		}
+		handlerName := p.curToken.Value
 		p.nextToken()
+
+		if strings.ToLower(handlerName) != "error" {
+			// Type-specific catch: only catch errors whose ErrorType matches
+			errorType = handlerName
+		}
 
 		// Expect ":"
 		if err := p.expectToken(token.COLON); err != nil {
@@ -118,6 +128,7 @@ func (p *Parser) parseTryStatement() (ast.Statement, error) {
 	return &ast.TryStatement{
 		TryBody:     tryBody,
 		ErrorVar:    errorVar,
+		ErrorType:   errorType,
 		ErrorBody:   errorBody,
 		FinallyBody: finallyBody,
 	}, nil
@@ -196,4 +207,49 @@ func (p *Parser) parseSwapStatement() (ast.Statement, error) {
 		Name1: name1,
 		Name2: name2,
 	}, nil
+}
+
+// parseErrorTypeDecl parses a custom error type declaration.
+// Syntax: Declare NetworkError as an error type.
+// This is called from parseDeclareAs when "an/a error type" is detected.
+func (p *Parser) parseErrorTypeDecl() (ast.Statement, error) {
+nameToken := p.curToken
+if nameToken.Type != token.IDENTIFIER {
+return nil, fmt.Errorf("expected error type name, got %v at line %d", nameToken.Type, nameToken.Line)
+}
+p.nextToken() // consume name
+
+// Consume "as"
+if err := p.expectToken(token.AS); err != nil {
+return nil, err
+}
+p.nextToken()
+
+// Consume "an" or "a"
+if p.curToken.Type != token.IDENTIFIER || (strings.ToLower(p.curToken.Value) != "a" && strings.ToLower(p.curToken.Value) != "an") {
+return nil, fmt.Errorf("expected 'a' or 'an' after 'as', got %v", p.curToken.Value)
+}
+p.nextToken()
+
+// Consume "error"
+if p.curToken.Type != token.IDENTIFIER || strings.ToLower(p.curToken.Value) != "error" {
+return nil, fmt.Errorf("expected 'error' after article, got %v", p.curToken.Value)
+}
+p.nextToken()
+
+// Consume "type"
+if err := p.expectToken(token.TYPE); err != nil {
+return nil, err
+}
+p.nextToken()
+
+// Expect period
+if err := p.expectToken(token.PERIOD); err != nil {
+return nil, err
+}
+p.nextToken()
+
+return &ast.ErrorTypeDecl{
+Name: nameToken.Value,
+}, nil
 }

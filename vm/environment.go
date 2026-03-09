@@ -7,34 +7,37 @@ import (
 
 // Environment represents a lexical scope: variables, constants, functions, and structs.
 type Environment struct {
-variables     map[string]Value
-variableTypes map[string]types.TypeKind // declared type; fixed at first Define
-constants     map[string]bool
-functions     map[string]*FunctionValue
-structs       map[string]*StructDefinition
-parent        *Environment
+variables        map[string]Value
+variableTypes    map[string]types.TypeKind // declared type; fixed at first Define
+constants        map[string]bool
+functions        map[string]*FunctionValue
+structs          map[string]*StructDefinition
+customErrorTypes map[string]bool // registered custom error type names
+parent           *Environment
 }
 
 // NewEnvironment creates a new root environment.
 func NewEnvironment() *Environment {
 return &Environment{
-variables:     make(map[string]Value),
-variableTypes: make(map[string]types.TypeKind),
-constants:     make(map[string]bool),
-functions:     make(map[string]*FunctionValue),
-structs:       make(map[string]*StructDefinition),
+variables:        make(map[string]Value),
+variableTypes:    make(map[string]types.TypeKind),
+constants:        make(map[string]bool),
+functions:        make(map[string]*FunctionValue),
+structs:          make(map[string]*StructDefinition),
+customErrorTypes: make(map[string]bool),
 }
 }
 
 // NewChild creates a child scope that inherits from this environment.
 func (e *Environment) NewChild() *Environment {
 return &Environment{
-variables:     make(map[string]Value),
-variableTypes: make(map[string]types.TypeKind),
-constants:     make(map[string]bool),
-functions:     make(map[string]*FunctionValue),
-structs:       make(map[string]*StructDefinition),
-parent:        e,
+variables:        make(map[string]Value),
+variableTypes:    make(map[string]types.TypeKind),
+constants:        make(map[string]bool),
+functions:        make(map[string]*FunctionValue),
+structs:          make(map[string]*StructDefinition),
+customErrorTypes: make(map[string]bool),
+parent:           e,
 }
 }
 
@@ -102,6 +105,51 @@ e.variables[name] = value
 e.constants[name] = isConstant
 e.variableTypes[name] = inferTypeKind(value)
 return nil
+}
+
+// DefineTyped declares a new variable with an explicit type annotation.
+// The type annotation is enforced: the initial value (if any) must match the declared type,
+// and all subsequent assignments must also match.
+func (e *Environment) DefineTyped(name string, typeName string, value Value, isConstant bool) error {
+if _, exists := e.variables[name]; exists {
+return fmt.Errorf("variable '%s' is already defined in this scope", name)
+}
+targetType := types.Parse(typeName)
+if targetType == types.TypeUnknown {
+return fmt.Errorf("TypeError: unknown type '%s'\n  Hint: valid types are number, text, boolean, list, array, lookup table", typeName)
+}
+// Type-check the initial value if provided
+if value != nil {
+actual := inferTypeKind(value)
+if types.Canonical(actual) != types.Canonical(targetType) {
+return fmt.Errorf(
+"TypeError: cannot initialize %s variable '%s' with %s value\n  Hint: use 'cast to' for explicit conversion",
+types.Name(targetType), name, types.Name(actual),
+)
+}
+}
+e.variables[name] = value
+e.constants[name] = isConstant
+e.variableTypes[name] = targetType
+return nil
+}
+
+// DefineErrorType registers a custom error type name in the root environment.
+func (e *Environment) DefineErrorType(name string) {
+root := e
+for root.parent != nil {
+root = root.parent
+}
+root.customErrorTypes[name] = true
+}
+
+// IsKnownErrorType reports whether name is a registered custom error type.
+func (e *Environment) IsKnownErrorType(name string) bool {
+root := e
+for root.parent != nil {
+root = root.parent
+}
+return root.customErrorTypes[name]
 }
 
 // GetFunction retrieves a function searching up the scope chain.

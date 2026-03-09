@@ -44,6 +44,10 @@ func (ev *Evaluator) Eval(node interface{}) (Value, error) {
 		return ev.evalImport(node)
 	case *ast.VariableDecl:
 		return ev.evalVariableDecl(node)
+	case *ast.TypedVariableDecl:
+		return ev.evalTypedVariableDecl(node)
+	case *ast.ErrorTypeDecl:
+		return ev.evalErrorTypeDecl(node)
 	case *ast.Assignment:
 		return ev.evalAssignment(node)
 	case *ast.IndexAssignment:

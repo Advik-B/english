@@ -817,47 +817,46 @@ return fmt.Sprintf("float(%s)", a(0))
 case "to_string":
 return fmt.Sprintf("str(%s)", a(0))
 case "is_empty":
-return fmt.Sprintf("(len(%s) == 0)", a(0))
+	return fmt.Sprintf("(len(%s) == 0)", a(0))
 
-// ── List ──────────────────────────────────────────────────────────────────
-case "count":
-return fmt.Sprintf("len(%s)", a(0))
-case "first":
-return fmt.Sprintf("%s[0]", a(0))
-case "last":
-return fmt.Sprintf("%s[-1]", a(0))
-case "sort":
-return fmt.Sprintf("sorted(%s)", a(0))
-case "reverse":
-return fmt.Sprintf("list(reversed(%s))", a(0))
-case "append":
-return fmt.Sprintf("%s + [%s]", a(0), a(1))
-case "prepend":
-return fmt.Sprintf("[%s] + %s", a(1), a(0))
-case "pop":
-return fmt.Sprintf("%s[:-1]", a(0))
-case "flatten":
-return fmt.Sprintf("_flatten(%s)", a(0))
+	// ── List ──────────────────────────────────────────────────────────────────
+	case "count":
+		return fmt.Sprintf("len(%s)", a(0))
+	case "first":
+		return fmt.Sprintf("%s[0]", a(0))
+	case "last":
+		return fmt.Sprintf("%s[-1]", a(0))
+	case "sort":
+		return fmt.Sprintf("sorted(%s)", a(0))
+	case "reverse":
+		return fmt.Sprintf("list(reversed(%s))", a(0))
+	case "append":
+		// append(list, item) → list + [item]
+		return fmt.Sprintf("%s + [%s]", a(0), a(1))
+	case "pop":
+		return fmt.Sprintf("%s[:-1]", a(0))
+	case "flatten":
+		return fmt.Sprintf("_flatten(%s)", a(0))
 
-// ── Lookup table ──────────────────────────────────────────────────────────
-case "keys":
-return fmt.Sprintf("list(%s.keys())", a(0))
-case "values":
-return fmt.Sprintf("list(%s.values())", a(0))
-case "table_remove":
-return fmt.Sprintf("_table_remove(%s, %s)", a(0), a(1))
+	// ── Lookup table ──────────────────────────────────────────────────────────
+	case "keys":
+		return fmt.Sprintf("list(%s.keys())", a(0))
+	case "values":
+		return fmt.Sprintf("list(%s.values())", a(0))
+	case "table_remove":
+		return fmt.Sprintf("_table_remove(%s, %s)", a(0), a(1))
 
-// ── I/O ───────────────────────────────────────────────────────────────────
-case "ask":
-return fmt.Sprintf("input(%s)", a(0))
-case "read_file":
-return fmt.Sprintf("_read_file(%s)", a(0))
-case "write_file":
-return fmt.Sprintf("_write_file(%s, %s)", a(0), a(1))
-}
+	// ── I/O ───────────────────────────────────────────────────────────────────
+	case "ask":
+		return fmt.Sprintf("input(%s)", a(0))
+	case "read_file":
+		return fmt.Sprintf("_read_file(%s)", a(0))
+	case "write_file":
+		return fmt.Sprintf("_write_file(%s, %s)", a(0), a(1))
+	}
 
-// Unknown / user-defined function — emit a direct call.
-return fmt.Sprintf("%s(%s)", e.Name, strings.Join(args, ", "))
+	// Unknown / user-defined function — emit a direct call.
+	return fmt.Sprintf("%s(%s)", e.Name, strings.Join(args, ", "))
 }
 
 func (t *Transpiler) transpileMethodCallExpr(e *ast.MethodCall) string {

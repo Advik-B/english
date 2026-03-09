@@ -1,0 +1,31 @@
+# Continue Statement Example
+# Demonstrates skipping loop iterations with 'Continue.'
+
+Print "=== Continue Statement ===".
+
+# Print only odd numbers using continue
+Print "Odd numbers from 1 to 10:".
+Declare i to be 1.
+repeat the following while i is less than or equal to 10:
+    Declare mod to be the remainder of i divided by 2.
+    Set i to be i + 1.
+    If mod is equal to 0, then
+        Continue.
+    thats it.
+    Print the value of i - 1.
+thats it.
+
+Print "".
+
+# Skip multiples of 3 in a for-each loop
+Print "Numbers 1-10 skipping multiples of 3:".
+Declare numbers to be [1, 2, 3, 4, 5, 6, 7, 8, 9, 10].
+For each n in numbers, do the following:
+    Declare m to be the remainder of n divided by 3.
+    If m is equal to 0, then
+        Continue.
+    thats it.
+    Print the value of n.
+thats it.
+
+Print "=== Done! ===".

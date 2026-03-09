@@ -1,0 +1,28 @@
+# User Input Example
+# Demonstrates reading input from the user
+
+Print "=== User Input Demo ===".
+Print "This program asks for your name and age, then greets you.".
+Print "".
+
+# Ask for user input using the Ask statement
+Ask "What is your name? " as name.
+
+Ask "How old are you? " as age_str.
+Declare age to be age_str cast to number.
+
+Print "".
+Print "Hello, ".
+Print the value of name.
+
+Declare next_year to be age + 1.
+Print "Next year you will be ".
+Print the value of next_year.
+
+If age is greater than or equal to 18, then
+    Print "You are an adult.".
+otherwise
+    Print "You are a minor.".
+thats it.
+
+Print "=== Done! ===".

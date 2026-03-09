@@ -2,6 +2,7 @@ package vm
 
 import (
 	"english/ast"
+	"english/vm/types"
 	"fmt"
 )
 
@@ -13,8 +14,8 @@ func (ev *Evaluator) evalStructDecl(node *ast.StructDecl) (Value, error) {
 
 	for _, field := range node.Fields {
 		// Parse type name
-		typeKind := ParseTypeString(field.TypeName)
-		typeInfo := &TypeInfo{
+		typeKind := types.Parse(field.TypeName)
+		typeInfo := &types.TypeInfo{
 			Kind: typeKind,
 			Name: field.TypeName,
 		}
@@ -30,23 +31,23 @@ func (ev *Evaluator) evalStructDecl(node *ast.StructDecl) (Value, error) {
 		} else {
 			// Set default values based on type
 			switch typeKind {
-			case TypeI32:
+			case types.TypeI32:
 				defaultValue = int32(0)
-			case TypeI64:
+			case types.TypeI64:
 				defaultValue = int64(0)
-			case TypeU32:
+			case types.TypeU32:
 				defaultValue = uint32(0)
-			case TypeU64:
+			case types.TypeU64:
 				defaultValue = uint64(0)
-			case TypeF32:
+			case types.TypeF32:
 				defaultValue = float32(0.0)
-			case TypeF64:
+			case types.TypeF64:
 				defaultValue = float64(0.0)
-			case TypeString:
+			case types.TypeString:
 				defaultValue = ""
-			case TypeBool:
+			case types.TypeBool:
 				defaultValue = false
-			case TypeList:
+			case types.TypeList:
 				defaultValue = []interface{}{}
 			default:
 				defaultValue = nil

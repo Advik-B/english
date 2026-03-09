@@ -1,0 +1,92 @@
+# nil_check.abc - demonstrates "is something" / "has a value" nil-check syntax
+
+Print "=== Nil-Check Expressions ===".
+Print "".
+
+# - Basic value check -
+Declare name to be "Alice".
+
+If name is something, then
+    Print "name has a value.".
+thats it.
+
+If name has a value, then
+    Print "name has a value (alternate syntax).".
+thats it.
+
+# - Nothing literal -
+Declare result to be nothing.
+
+If result is nothing, then
+    Print "result is nothing.".
+thats it.
+
+If result has no value, then
+    Print "result has no value (alternate syntax).".
+thats it.
+
+# - The "is nothing" form as a postfix operator -
+If result is something, then
+    Print "result is set.".
+otherwise
+    Print "result is not yet set.".
+thats it.
+
+# - Clear a variable -
+Print "".
+Declare score to be 95.
+Print "Before clear:".
+If score is something, then
+    Print "score is set.".
+thats it.
+
+Set score to be nothing.
+Print "After clear:".
+If score has a value, then
+    Print "score is still set.".
+otherwise
+    Print "score was cleared.".
+thats it.
+
+# - Guard pattern -
+Print "".
+Print "=== Guard Pattern ===".
+Declare user to be nothing.
+
+Declare function greet that takes username and does the following:
+    If username is something, then
+        Print "Hello, ".
+        Print username.
+    otherwise
+        Print "Hello, stranger.".
+    thats it.
+thats it.
+
+Call greet with "Bob".
+Call greet with nothing.
+
+# - Works with all types -
+Print "".
+Print "=== All Types ===".
+Declare n to be 42.
+Declare t to be "hello".
+Declare b to be true.
+Declare empty_n to be nothing.
+
+If n is something, then
+    Print "number is something.".
+thats it.
+If t is something, then
+    Print "text is something.".
+thats it.
+If b is something, then
+    Print "boolean is something.".
+thats it.
+If empty_n is something, then
+    Print "empty is something.".
+otherwise
+    Print "empty is nothing.".
+thats it.
+
+Print "".
+Print "=== Done ===".

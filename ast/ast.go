@@ -363,6 +363,80 @@ type SwapStatement struct {
 func (ss *SwapStatement) node()          {}
 func (ss *SwapStatement) statementNode() {}
 
+// ContinueStatement skips the rest of the current loop iteration
+type ContinueStatement struct{}
+
+func (cs *ContinueStatement) node()          {}
+func (cs *ContinueStatement) statementNode() {}
+
+// NothingLiteral represents a null/nil value (nothing, none, null)
+type NothingLiteral struct{}
+
+func (nl *NothingLiteral) node()           {}
+func (nl *NothingLiteral) expressionNode() {}
+
+// AskExpression reads a line of user input after displaying an optional prompt
+type AskExpression struct {
+	Prompt Expression // optional prompt to display
+}
+
+func (ae *AskExpression) node()           {}
+func (ae *AskExpression) expressionNode() {}
+
+// ArrayLiteral is a typed homogeneous array literal: "an array of number [1, 2, 3]"
+type ArrayLiteral struct {
+	ElementType string       // "number", "text", "boolean" — empty = infer from elements
+	Elements    []Expression
+}
+
+func (al *ArrayLiteral) node()           {}
+func (al *ArrayLiteral) expressionNode() {}
+
+// LookupTableLiteral creates an empty lookup table: "a lookup table"
+type LookupTableLiteral struct{}
+
+func (lt *LookupTableLiteral) node()           {}
+func (lt *LookupTableLiteral) expressionNode() {}
+
+// LookupKeyAccess reads a value from a lookup table: "TABLE at KEY" or "the entry KEY in TABLE"
+type LookupKeyAccess struct {
+	Table Expression
+	Key   Expression
+}
+
+func (la *LookupKeyAccess) node()           {}
+func (la *LookupKeyAccess) expressionNode() {}
+
+// LookupKeyAssignment sets a value in a lookup table: "Set TABLE at KEY to be VALUE." or "Set the entry KEY in TABLE to be VALUE."
+type LookupKeyAssignment struct {
+	TableName string
+	Key       Expression
+	Value     Expression
+}
+
+func (la *LookupKeyAssignment) node()          {}
+func (la *LookupKeyAssignment) statementNode() {}
+
+// HasExpression checks whether a lookup table contains a key: "TABLE has KEY"
+type HasExpression struct {
+	Table Expression
+	Key   Expression
+}
+
+func (he *HasExpression) node()           {}
+func (he *HasExpression) expressionNode() {}
+
+// NilCheckExpression checks whether a value is something (not nil) or nothing (nil).
+//   - IsSomethingCheck == true  → "x is something" / "x has a value"  (returns true when x != nil)
+//   - IsSomethingCheck == false → "x is nothing"   / "x has no value" (returns true when x == nil)
+type NilCheckExpression struct {
+	Value           Expression
+	IsSomethingCheck bool // true = "is something"; false = "is nothing"
+}
+
+func (nc *NilCheckExpression) node()           {}
+func (nc *NilCheckExpression) expressionNode() {}
+
 // TypedVariableDecl represents a variable declaration with explicit type
 type TypedVariableDecl struct {
 	Name       string

@@ -96,6 +96,19 @@ const (
 	ALL
 	SAFELY
 
+	// New keywords
+	CONTINUE
+	SKIP
+	NOTHING
+	NOT
+	OR
+	ASK
+	ARRAY
+	LOOKUP
+	TABLE
+	HAS
+	ENTRY
+
 	// Operators and Punctuation
 	PERIOD
 	COMMA
@@ -117,6 +130,8 @@ const (
 	IS_LESS_EQUAL
 	IS_GREATER_EQUAL
 	IS_NOT_EQUAL
+	IS_SOMETHING  // "is something" / "has a value" — not-nil check
+	IS_NOTHING_OP // "is nothing" / "has no value" — nil check
 )
 
 // Token represents a single token from the lexer
@@ -298,6 +313,28 @@ func (t Type) String() string {
 		return "ALL"
 	case SAFELY:
 		return "SAFELY"
+	case CONTINUE:
+		return "CONTINUE"
+	case SKIP:
+		return "SKIP"
+	case NOTHING:
+		return "NOTHING"
+	case NOT:
+		return "NOT"
+	case OR:
+		return "OR"
+	case ASK:
+		return "ASK"
+	case ARRAY:
+		return "ARRAY"
+	case LOOKUP:
+		return "LOOKUP"
+	case TABLE:
+		return "TABLE"
+	case HAS:
+		return "HAS"
+	case ENTRY:
+		return "ENTRY"
 	case PERIOD:
 		return "PERIOD"
 	case COMMA:
@@ -334,6 +371,10 @@ func (t Type) String() string {
 		return "IS_GREATER_EQUAL"
 	case IS_NOT_EQUAL:
 		return "IS_NOT_EQUAL"
+	case IS_SOMETHING:
+		return "IS_SOMETHING"
+	case IS_NOTHING_OP:
+		return "IS_NOTHING_OP"
 	default:
 		return "UNKNOWN"
 	}

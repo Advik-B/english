@@ -1,0 +1,64 @@
+# String Functions Example
+# Demonstrates the extended string standard library
+
+Print "=== Extended String Functions ===".
+
+Declare text to be "Hello, World! Hello, English!".
+
+Print "Original text:".
+Print the value of text.
+Print "".
+
+# Checking prefixes and suffixes
+Print "Starts with 'Hello':".
+Print starts_with(text, "Hello").
+Print "Ends with 'English!':".
+Print ends_with(text, "English!").
+
+# Finding substrings
+Print "Index of 'World':".
+Print index_of(text, "World").
+Print "Index of 'missing':".
+Print index_of(text, "missing").
+
+# Extracting substrings
+Print "Substring from index 7, length 5:".
+Print substring(text, 7, 5).
+
+# Repeating strings
+Print "Repeat 'ha' 5 times:".
+Print str_repeat("ha", 5).
+
+# Counting occurrences
+Print "Count of 'Hello':".
+Print count_occurrences(text, "Hello").
+Print "Count of 'l':".
+Print count_occurrences(text, "l").
+
+# Padding
+Print "Pad '42' to width 8 with '0' on left:".
+Print pad_left("42", 8, "0").
+Print "Pad 'hi' to width 10 with '.' on right:".
+Print pad_right("hi", 10, ".").
+
+# Type Conversions
+Print "".
+Print "=== Type Conversions ===".
+Declare num_str to be "3.14159".
+Declare as_num to be num_str cast to number.
+Print "String '3.14159' cast to number:".
+Print the value of as_num.
+Print "Number 42 cast to text:".
+Print 42 cast to text.
+
+# Checking empty
+Print "".
+Print "=== Empty Checks ===".
+Print "Is '' empty:".
+Print is_empty("").
+Print "Is 'hello' empty:".
+Print is_empty("hello").
+Print "Is [] empty:".
+Print is_empty([]).
+
+Print "=== Done! ===".

@@ -193,6 +193,7 @@ var keywords = map[string]token.Type{
 	"copy":      token.COPY,
 	"swap":      token.SWAP,
 	"casted":    token.CASTED,
+	"cast":      token.CASTED,
 	"type":      token.TYPE,
 	"which":     token.WHICH,
 	"is":        token.IS,
@@ -205,6 +206,19 @@ var keywords = map[string]token.Type{
 	"everything": token.EVERYTHING,
 	"all":       token.ALL,
 	"safely":    token.SAFELY,
+	"continue":  token.CONTINUE,
+	"skip":      token.SKIP,
+	"nothing":   token.NOTHING,
+	"none":      token.NOTHING,
+	"null":      token.NOTHING,
+	"not":       token.NOT,
+	"or":        token.OR,
+	"ask":       token.ASK,
+	"array":     token.ARRAY,
+	"lookup":    token.LOOKUP,
+	"table":     token.TABLE,
+	"has":       token.HAS,
+	"entry":     token.ENTRY,
 }
 
 func (l *Lexer) lookupKeyword(word string) token.Type {
@@ -228,8 +242,13 @@ func (l *Lexer) NextToken() token.Token {
 	}
 
 	// Check for multi-word comparison operators (case-insensitive)
+	// Triggers for "is ..." (e.g. "is equal to") and "has ..." (e.g. "has a value")
 	if (l.ch == 'i' || l.ch == 'I') && l.position+1 < len(l.input) &&
 		strings.ToLower(l.input[l.position:l.position+2]) == "is" {
+		return l.tryMultiWordComparison()
+	}
+	if (l.ch == 'h' || l.ch == 'H') && l.position+2 < len(l.input) &&
+		strings.ToLower(l.input[l.position:l.position+3]) == "has" {
 		return l.tryMultiWordComparison()
 	}
 
@@ -342,6 +361,10 @@ func (l *Lexer) tryMultiWordComparison() token.Token {
 			tokenType = token.IS_GREATER_EQUAL
 		case "is not equal to":
 			tokenType = token.IS_NOT_EQUAL
+		case "is something", "has a value":
+			tokenType = token.IS_SOMETHING
+		case "is nothing", "has no value":
+			tokenType = token.IS_NOTHING_OP
 		default:
 			tokenType = token.ERROR
 		}

@@ -1,0 +1,88 @@
+# lookup_table_demo.abc - demonstrates lookup tables (ordered key-value dictionaries)
+
+Print "=== Lookup Table Demo ===".
+Print "".
+
+# --- Create and populate ---
+Declare ages to be a lookup table.
+
+Set ages at "Alice" to be 30.
+Set ages at "Bob" to be 25.
+Set ages at "Carol" to be 35.
+
+Print "Age of Alice:".
+Print ages at "Alice".
+
+Print "Age of Bob:".
+Print ages at "Bob".
+
+Print "Number of entries:".
+Print count(ages).
+
+# --- Alternative access syntax ---
+Print "".
+Print "=== Entry syntax ===".
+Print "Carol's age via 'the entry' syntax:".
+Print the entry "Carol" in ages.
+
+# --- Key membership test (has) ---
+Print "".
+Print "=== Has Key ===".
+If ages has "Alice", then
+    Print "Table has Alice.".
+thats it.
+If ages has "Dave", then
+    Print "Table has Dave.".
+otherwise
+    Print "Table does not have Dave.".
+thats it.
+
+# --- Iterate over keys ---
+Print "".
+Print "=== All entries (insertion order) ===".
+For each name in ages, do the following:
+    Print the value of name.
+thats it.
+
+# --- keys() and values() stdlib functions ---
+Print "".
+Print "=== keys() and values() ===".
+Print keys(ages).
+Print values(ages).
+
+# --- Remove an entry ---
+Print "".
+Print "=== After removing Bob ===".
+Set ages to be table_remove(ages, "Bob").
+Print count(ages).
+If ages has "Bob", then
+    Print "Bob still present.".
+otherwise
+    Print "Bob removed successfully.".
+thats it.
+
+# --- Number keys ---
+Print "".
+Print "=== Number Keys ===".
+Declare squares to be a lookup table.
+Set squares at 1 to be 1.
+Set squares at 2 to be 4.
+Set squares at 3 to be 9.
+Set squares at 4 to be 16.
+
+Print "Square of 3:".
+Print squares at 3.
+
+If squares has 2, then
+    Print "Has key 2.".
+thats it.
+
+# --- Boolean keys ---
+Print "".
+Print "=== Boolean Keys ===".
+Declare flags to be a lookup table.
+Set flags at true to be "yes".
+Set flags at false to be "no".
+
+Print flags at true.
+Print flags at false.

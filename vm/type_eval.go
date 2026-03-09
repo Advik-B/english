@@ -2,6 +2,7 @@ package vm
 
 import (
 	"english/ast"
+	"english/vm/types"
 	"fmt"
 )
 
@@ -31,17 +32,17 @@ func (ev *Evaluator) evalTryStatement(node *ast.TryStatement) (Value, error) {
 	// Execute error handler if there was an error
 	if tryError != nil && len(node.ErrorBody) > 0 {
 		// Convert error to ErrorValue
-		var errorVal *ErrorValue
-		if errVal, ok := tryError.(*ErrorValue); ok {
+		var errorVal *types.ErrorValue
+		if errVal, ok := tryError.(*types.ErrorValue); ok {
 			errorVal = errVal
 		} else if re, ok := tryError.(*RuntimeError); ok {
-			errorVal = &ErrorValue{
+			errorVal = &types.ErrorValue{
 				Message:   re.Message,
 				ErrorType: "RuntimeError",
 				CallStack: re.CallStack,
 			}
 		} else {
-			errorVal = &ErrorValue{
+			errorVal = &types.ErrorValue{
 				Message:   tryError.Error(),
 				ErrorType: "RuntimeError",
 				CallStack: append([]string{}, ev.callStack...),
@@ -116,7 +117,7 @@ func (ev *Evaluator) evalRaiseStatement(node *ast.RaiseStatement) (Value, error)
 	message := ToString(msgVal)
 
 	// Create and return error value
-	return nil, &ErrorValue{
+	return nil, &types.ErrorValue{
 		Message:   message,
 		ErrorType: node.ErrorType,
 		CallStack: append([]string{}, ev.callStack...),
@@ -173,12 +174,12 @@ func (ev *Evaluator) evalCastExpression(node *ast.CastExpression) (Value, error)
 	}
 
 	// Parse target type
-	targetType := ParseTypeString(node.TypeName)
+	targetType := types.Parse(node.TypeName)
 
 	// Attempt to cast
 	result, err := CastValue(val, targetType)
 	if err != nil {
-		return nil, &ErrorValue{
+		return nil, &types.ErrorValue{
 			Message:   err.Error(),
 			ErrorType: "TypeError",
 			CallStack: append([]string{}, ev.callStack...),
@@ -235,9 +236,9 @@ func deepCopy(val Value) Value {
 			Definition: v.Definition,
 			Fields:     copiedFields,
 		}
-	case *TypedValue:
+	case *types.TypedValue:
 		// Deep copy typed value
-		return &TypedValue{
+		return &types.TypedValue{
 			Value:    deepCopy(v.Value),
 			TypeInfo: v.TypeInfo,
 		}

@@ -374,6 +374,7 @@ func (p *Parser) parseDeclaration() (ast.Statement, error) {
 // parseDeclareAs dispatches "Declare X as ..." to the correct parser:
 //   - "Declare X as a structure ..."       → struct declaration
 //   - "Declare X as an error type."        → custom error type declaration
+//   - "Declare X as a type of Y."          → error subtype declaration
 //   - "Declare X as <typename> to be ..."  → typed variable declaration
 func (p *Parser) parseDeclareAs() (ast.Statement, error) {
 	// curToken is IDENTIFIER (name), peekToken is AS.
@@ -395,6 +396,12 @@ func (p *Parser) parseDeclareAs() (ast.Statement, error) {
 			tok3AfterAs := p.tokenAt(p.position + 2)
 			if tok3AfterAs.Type == token.TYPE {
 				return p.parseErrorTypeDecl()
+			}
+		case tok2AfterAs.Type == token.TYPE:
+			// Might be "Declare X as a type of Y." — error subtype declaration
+			tok3AfterAs := p.tokenAt(p.position + 2)
+			if tok3AfterAs.Type == token.OF {
+				return p.parseErrorSubtypeDecl()
 			}
 		}
 	}
@@ -1350,6 +1357,16 @@ func (p *Parser) parseRelational() (ast.Expression, error) {
 		// "x is nothing" / "x has no value" — postfix nil check (is nil)
 		p.nextToken()
 		return &ast.NilCheckExpression{Value: left, IsSomethingCheck: false}, nil
+
+	case token.IS:
+		// "error is TypeName" — error type check (exact or inherited match)
+		p.nextToken()
+		if p.curToken.Type != token.IDENTIFIER {
+			return nil, fmt.Errorf("expected error type name after 'is', got %v at line %d", p.curToken.Type, p.curToken.Line)
+		}
+		typeName := p.curToken.Value
+		p.nextToken()
+		return &ast.ErrorTypeCheckExpression{Value: left, TypeName: typeName}, nil
 	}
 
 	return left, nil

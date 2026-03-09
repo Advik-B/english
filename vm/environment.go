@@ -13,7 +13,7 @@ variableTypes    map[string]types.TypeKind // declared type; fixed at first Defi
 constants        map[string]bool
 functions        map[string]*FunctionValue
 structs          map[string]*StructDefinition
-customErrorTypes map[string]bool // registered custom error type names
+customErrorTypes map[string]string // error type name → parent type name ("" for root types)
 parent           *Environment
 }
 
@@ -25,7 +25,7 @@ variableTypes:    make(map[string]types.TypeKind),
 constants:        make(map[string]bool),
 functions:        make(map[string]*FunctionValue),
 structs:          make(map[string]*StructDefinition),
-customErrorTypes: make(map[string]bool),
+customErrorTypes: make(map[string]string),
 }
 }
 
@@ -37,7 +37,7 @@ variableTypes:    make(map[string]types.TypeKind),
 constants:        make(map[string]bool),
 functions:        make(map[string]*FunctionValue),
 structs:          make(map[string]*StructDefinition),
-customErrorTypes: make(map[string]bool),
+customErrorTypes: make(map[string]string),
 parent:           e,
 }
 }
@@ -136,13 +136,14 @@ e.variableTypes[name] = targetType
 return nil
 }
 
-// DefineErrorType registers a custom error type name in the root environment.
-func (e *Environment) DefineErrorType(name string) {
+// DefineErrorType registers a custom error type in the root environment.
+// parent is the parent type name; pass "" for a root error type.
+func (e *Environment) DefineErrorType(name, parent string) {
 root := e
 for root.parent != nil {
 root = root.parent
 }
-root.customErrorTypes[name] = true
+root.customErrorTypes[name] = parent
 }
 
 // IsKnownErrorType reports whether name is a registered custom error type.
@@ -151,7 +152,30 @@ root := e
 for root.parent != nil {
 root = root.parent
 }
-return root.customErrorTypes[name]
+_, ok := root.customErrorTypes[name]
+return ok
+}
+
+// IsSubtypeOf reports whether childType is the same as parentType or inherits from it.
+// It walks the parent chain of childType until it either finds parentType or exhausts
+// all ancestors.
+func (e *Environment) IsSubtypeOf(childType, parentType string) bool {
+root := e
+for root.parent != nil {
+root = root.parent
+}
+current := childType
+for current != "" {
+if current == parentType {
+return true
+}
+parent, ok := root.customErrorTypes[current]
+if !ok {
+break
+}
+current = parent
+}
+return false
 }
 
 // GetFunction retrieves a function searching up the scope chain.

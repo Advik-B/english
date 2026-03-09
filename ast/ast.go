@@ -322,10 +322,14 @@ type RaiseStatement struct {
 func (rs *RaiseStatement) node()          {}
 func (rs *RaiseStatement) statementNode() {}
 
-// ErrorTypeDecl declares a custom error type
-// Syntax: Declare NetworkError as an error type.
+// ErrorTypeDecl declares a custom error type.
+// Syntax:
+//
+//	Declare NetworkError as an error type.
+//	Declare CustomErr1 as a type of NetworkError.
 type ErrorTypeDecl struct {
-	Name string
+	Name       string
+	ParentType string // empty for root error types; parent name for subtypes
 }
 
 func (etd *ErrorTypeDecl) node()          {}
@@ -467,3 +471,14 @@ type MethodCall struct {
 
 func (mc *MethodCall) node()           {}
 func (mc *MethodCall) expressionNode() {}
+
+// ErrorTypeCheckExpression checks whether an error value's type matches a named
+// error type (including inherited types).
+// Syntax: error is NetworkError
+type ErrorTypeCheckExpression struct {
+	Value    Expression
+	TypeName string
+}
+
+func (etc *ErrorTypeCheckExpression) node()           {}
+func (etc *ErrorTypeCheckExpression) expressionNode() {}

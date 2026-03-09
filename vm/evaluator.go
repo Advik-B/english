@@ -115,6 +115,8 @@ func (ev *Evaluator) Eval(node interface{}) (Value, error) {
 		return ev.evalHasExpression(node)
 	case *ast.NilCheckExpression:
 		return ev.evalNilCheckExpression(node)
+	case *ast.ErrorTypeCheckExpression:
+		return ev.evalErrorTypeCheckExpression(node)
 	// Struct / type / cast nodes
 	case *ast.StructDecl:
 		return ev.evalStructDecl(node)

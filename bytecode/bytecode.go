@@ -63,6 +63,7 @@ const (
 	NodeImportStatement
 	NodeTypedVariableDecl
 	NodeErrorTypeDecl
+	NodeErrorTypeCheckExpression
 )
 
 // Encoder serializes AST to binary format
@@ -151,6 +152,7 @@ func (e *Encoder) encodeStatement(stmt ast.Statement) error {
 	case *ast.ErrorTypeDecl:
 		e.buf.WriteByte(NodeErrorTypeDecl)
 		e.writeString(s.Name)
+		e.writeString(s.ParentType)
 		return nil
 
 	case *ast.Assignment:
@@ -387,6 +389,11 @@ func (e *Encoder) encodeExpression(expr ast.Expression) error {
 		e.writeString(ex.Name)
 		return nil
 
+	case *ast.ErrorTypeCheckExpression:
+		e.buf.WriteByte(NodeErrorTypeCheckExpression)
+		e.writeString(ex.TypeName)
+		return e.encodeExpression(ex.Value)
+
 	default:
 		return fmt.Errorf("unknown expression type: %T", expr)
 	}
@@ -543,7 +550,11 @@ func (d *Decoder) decodeStatement() (ast.Statement, error) {
 		if err != nil {
 			return nil, err
 		}
-		return &ast.ErrorTypeDecl{Name: name}, nil
+		parentType, err := d.readString()
+		if err != nil {
+			return nil, err
+		}
+		return &ast.ErrorTypeDecl{Name: name, ParentType: parentType}, nil
 
 	case NodeAssignment:
 		name, err := d.readString()
@@ -951,6 +962,17 @@ func (d *Decoder) decodeExpression() (ast.Expression, error) {
 			return nil, err
 		}
 		return &ast.LocationExpression{Name: name}, nil
+
+	case NodeErrorTypeCheckExpression:
+		typeName, err := d.readString()
+		if err != nil {
+			return nil, err
+		}
+		value, err := d.decodeExpression()
+		if err != nil {
+			return nil, err
+		}
+		return &ast.ErrorTypeCheckExpression{TypeName: typeName, Value: value}, nil
 
 	default:
 		return nil, fmt.Errorf("unknown expression node type: %d", nodeType)

@@ -2319,3 +2319,103 @@ if output != "yes\n" {
 t.Errorf("expected 'yes', got %q", output)
 }
 }
+
+// ─── error hierarchy tests ────────────────────────────────────────────────────
+
+func TestErrorHierarchy_ExactMatch(t *testing.T) {
+code := `Declare LibError as an error type.
+Declare SubError as a type of LibError.
+Try doing the following:
+    Raise "oops" as SubError.
+on SubError:
+    Print "exact".
+thats it.`
+output := captureOutput(func() { evaluate(code) })
+if output != "exact\n" {
+t.Errorf("expected 'exact', got %q", output)
+}
+}
+
+func TestErrorHierarchy_ParentCatchesChild(t *testing.T) {
+code := `Declare LibError as an error type.
+Declare SubError as a type of LibError.
+Try doing the following:
+    Raise "oops" as SubError.
+on LibError:
+    Print "parent".
+thats it.`
+output := captureOutput(func() { evaluate(code) })
+if output != "parent\n" {
+t.Errorf("expected 'parent', got %q", output)
+}
+}
+
+func TestErrorHierarchy_NonMatchingDoesNotCatch(t *testing.T) {
+code := `Declare LibError as an error type.
+Declare SubError1 as a type of LibError.
+Declare SubError2 as a type of LibError.
+Try doing the following:
+    Try doing the following:
+        Raise "oops" as SubError1.
+    on SubError2:
+        Print "wrong".
+    thats it.
+on SubError1:
+    Print "correct".
+thats it.`
+output := captureOutput(func() { evaluate(code) })
+if output != "correct\n" {
+t.Errorf("expected 'correct', got %q", output)
+}
+}
+
+func TestErrorHierarchy_CatchAllCatchesChild(t *testing.T) {
+code := `Declare LibError as an error type.
+Declare SubError as a type of LibError.
+Try doing the following:
+    Raise "oops" as SubError.
+on error:
+    Print "catchall".
+thats it.`
+output := captureOutput(func() { evaluate(code) })
+if output != "catchall\n" {
+t.Errorf("expected 'catchall', got %q", output)
+}
+}
+
+func TestErrorHierarchy_ErrorIsExpression(t *testing.T) {
+code := `Declare LibError as an error type.
+Declare SubError1 as a type of LibError.
+Declare SubError2 as a type of LibError.
+Try doing the following:
+    Raise "oops" as SubError1.
+on LibError:
+    If error is SubError1, then
+        Print "matched SubError1".
+    otherwise
+        Print "no match".
+    thats it.
+thats it.`
+output := captureOutput(func() { evaluate(code) })
+if output != "matched SubError1\n" {
+t.Errorf("expected 'matched SubError1', got %q", output)
+}
+}
+
+func TestErrorHierarchy_ErrorIsExpression_SubtypeCheck(t *testing.T) {
+code := `Declare LibError as an error type.
+Declare SubError as a type of LibError.
+Try doing the following:
+    Raise "oops" as SubError.
+on error:
+    If error is LibError, then
+        Print "is LibError".
+    otherwise
+        Print "not LibError".
+    thats it.
+thats it.`
+output := captureOutput(func() { evaluate(code) })
+if output != "is LibError\n" {
+t.Errorf("expected 'is LibError', got %q", output)
+}
+}

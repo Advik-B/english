@@ -209,7 +209,7 @@ func (p *Parser) parseSwapStatement() (ast.Statement, error) {
 	}, nil
 }
 
-// parseErrorTypeDecl parses a custom error type declaration.
+// parseErrorTypeDecl parses a root custom error type declaration.
 // Syntax: Declare NetworkError as an error type.
 // This is called from parseDeclareAs when "an/a error type" is detected.
 func (p *Parser) parseErrorTypeDecl() (ast.Statement, error) {
@@ -251,5 +251,58 @@ p.nextToken()
 
 return &ast.ErrorTypeDecl{
 Name: nameToken.Value,
+}, nil
+}
+
+// parseErrorSubtypeDecl parses an error subtype declaration.
+// Syntax: Declare CustomErr1 as a type of CustomLibError.
+// This is called from parseDeclareAs when "a type of" is detected.
+func (p *Parser) parseErrorSubtypeDecl() (ast.Statement, error) {
+nameToken := p.curToken
+if nameToken.Type != token.IDENTIFIER {
+return nil, fmt.Errorf("expected error type name, got %v at line %d", nameToken.Type, nameToken.Line)
+}
+p.nextToken() // consume name
+
+// Consume "as"
+if err := p.expectToken(token.AS); err != nil {
+return nil, err
+}
+p.nextToken()
+
+// Consume "a" or "an"
+if p.curToken.Type != token.IDENTIFIER || (strings.ToLower(p.curToken.Value) != "a" && strings.ToLower(p.curToken.Value) != "an") {
+return nil, fmt.Errorf("expected 'a' or 'an' after 'as', got %v", p.curToken.Value)
+}
+p.nextToken()
+
+// Consume "type"
+if err := p.expectToken(token.TYPE); err != nil {
+return nil, err
+}
+p.nextToken()
+
+// Consume "of"
+if err := p.expectToken(token.OF); err != nil {
+return nil, err
+}
+p.nextToken()
+
+// Consume parent type name
+if p.curToken.Type != token.IDENTIFIER {
+return nil, fmt.Errorf("expected parent error type name after 'of', got %v at line %d", p.curToken.Type, p.curToken.Line)
+}
+parentName := p.curToken.Value
+p.nextToken()
+
+// Expect period
+if err := p.expectToken(token.PERIOD); err != nil {
+return nil, err
+}
+p.nextToken()
+
+return &ast.ErrorTypeDecl{
+Name:       nameToken.Value,
+ParentType: parentName,
 }, nil
 }

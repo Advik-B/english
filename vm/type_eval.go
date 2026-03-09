@@ -50,8 +50,9 @@ func (ev *Evaluator) evalTryStatement(node *ast.TryStatement) (Value, error) {
 		}
 
 		// If a specific error type filter is set, check whether this error matches.
+		// A match is exact type equality or any inherited parent type.
 		// If it doesn't match, skip the handler and propagate.
-		if node.ErrorType != "" && errorVal.ErrorType != node.ErrorType {
+		if node.ErrorType != "" && !ev.env.IsSubtypeOf(errorVal.ErrorType, node.ErrorType) {
 			if len(node.FinallyBody) > 0 {
 				ev.executeFinallyBlock(node.FinallyBody)
 			}
@@ -152,9 +153,24 @@ func (ev *Evaluator) evalTypedVariableDecl(node *ast.TypedVariableDecl) (Value, 
 
 // evalErrorTypeDecl evaluates a custom error type declaration.
 // Syntax: Declare NetworkError as an error type.
+//         Declare CustomErr1 as a type of NetworkError.
 func (ev *Evaluator) evalErrorTypeDecl(node *ast.ErrorTypeDecl) (Value, error) {
-	ev.env.DefineErrorType(node.Name)
+	ev.env.DefineErrorType(node.Name, node.ParentType)
 	return nil, nil
+}
+
+// evalErrorTypeCheckExpression evaluates "error is TypeName" — returns true if
+// the value is an ErrorValue whose type is TypeName or a subtype of TypeName.
+func (ev *Evaluator) evalErrorTypeCheckExpression(node *ast.ErrorTypeCheckExpression) (Value, error) {
+	val, err := ev.Eval(node.Value)
+	if err != nil {
+		return nil, err
+	}
+	errVal, ok := val.(*types.ErrorValue)
+	if !ok {
+		return false, nil
+	}
+	return ev.env.IsSubtypeOf(errVal.ErrorType, node.TypeName), nil
 }
 
 // evalSwapStatement evaluates a swap statement

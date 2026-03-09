@@ -1,7 +1,6 @@
 package vm
 
 import (
-	"fmt"
 	"strings"
 )
 
@@ -86,9 +85,4 @@ func getTypeName(v Value) string {
 	default:
 		return "unknown"
 	}
-}
-
-// typeMismatchError creates a type mismatch error for binary operations
-func typeMismatchError(left, right Value, operation string) error {
-	return fmt.Errorf("mismatched types %s and %s for operation %q", getTypeName(left), getTypeName(right), operation)
 }

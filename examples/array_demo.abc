@@ -1,0 +1,54 @@
+# array_demo.abc — demonstrates homogeneous typed arrays
+
+Print "=== Homogeneous Arrays ===".
+Print "".
+
+# ─── Declare a number array ───────────────────────────────────────────────────
+Declare scores to be an array of number [85, 92, 78, 95, 88].
+
+Print "Scores:".
+Print the value of scores.
+
+Print "Count:".
+Print count(scores).
+
+Print "Sum:".
+Print sum(scores).
+
+Print "First score:".
+Print first(scores).
+
+Print "Last score:".
+Print last(scores).
+
+# ─── Append (type-checked) ────────────────────────────────────────────────────
+Set scores to be append(scores, 91).
+Print "After adding 91:".
+Print the value of scores.
+
+# ─── Element access ───────────────────────────────────────────────────────────
+Print "Score at position 2:".
+Print the item at position 2 of scores.
+
+# ─── Iterate ─────────────────────────────────────────────────────────────────
+Print "".
+Print "All scores:".
+For each score in scores, do the following:
+    Print the value of score.
+thats it.
+
+# ─── Text array ───────────────────────────────────────────────────────────────
+Print "".
+Print "=== Text Array ===".
+Declare names to be an array of text ["Alice", "Bob", "Carol"].
+Print the value of names.
+Set names to be append(names, "Dave").
+Print count(names).
+Print first(names).
+Print last(names).
+
+# ─── Type safety ─────────────────────────────────────────────────────────────
+Print "".
+Print "=== Type Safety ===".
+Print "Appending wrong type raises TypeError (demonstration skipped).".
+Print "Use 'cast to' for explicit conversion if needed.".

@@ -383,6 +383,49 @@ type AskExpression struct {
 func (ae *AskExpression) node()           {}
 func (ae *AskExpression) expressionNode() {}
 
+// ArrayLiteral is a typed homogeneous array literal: "an array of number [1, 2, 3]"
+type ArrayLiteral struct {
+	ElementType string       // "number", "text", "boolean" — empty = infer from elements
+	Elements    []Expression
+}
+
+func (al *ArrayLiteral) node()           {}
+func (al *ArrayLiteral) expressionNode() {}
+
+// LookupTableLiteral creates an empty lookup table: "a lookup table"
+type LookupTableLiteral struct{}
+
+func (lt *LookupTableLiteral) node()           {}
+func (lt *LookupTableLiteral) expressionNode() {}
+
+// LookupKeyAccess reads a value from a lookup table: "TABLE at KEY" or "the entry KEY in TABLE"
+type LookupKeyAccess struct {
+	Table Expression
+	Key   Expression
+}
+
+func (la *LookupKeyAccess) node()           {}
+func (la *LookupKeyAccess) expressionNode() {}
+
+// LookupKeyAssignment sets a value in a lookup table: "Set TABLE at KEY to be VALUE." or "Set the entry KEY in TABLE to be VALUE."
+type LookupKeyAssignment struct {
+	TableName string
+	Key       Expression
+	Value     Expression
+}
+
+func (la *LookupKeyAssignment) node()          {}
+func (la *LookupKeyAssignment) statementNode() {}
+
+// HasExpression checks whether a lookup table contains a key: "TABLE has KEY"
+type HasExpression struct {
+	Table Expression
+	Key   Expression
+}
+
+func (he *HasExpression) node()           {}
+func (he *HasExpression) expressionNode() {}
+
 // TypedVariableDecl represents a variable declaration with explicit type
 type TypedVariableDecl struct {
 	Name       string

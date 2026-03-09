@@ -1,187 +1,223 @@
 package vm
 
-import "fmt"
+import (
+"english/vm/types"
+"fmt"
+)
 
-// Compare compares two values based on an operator
-func Compare(op string, left, right Value) (bool, error) {
-	switch op {
-	case "is equal to":
-		return Equals(left, right), nil
-	case "is less than":
-		l, err := ToNumber(left)
-		if err != nil {
-			return false, err
-		}
-		r, err := ToNumber(right)
-		if err != nil {
-			return false, err
-		}
-		return l < r, nil
-	case "is greater than":
-		l, err := ToNumber(left)
-		if err != nil {
-			return false, err
-		}
-		r, err := ToNumber(right)
-		if err != nil {
-			return false, err
-		}
-		return l > r, nil
-	case "is less than or equal to":
-		l, err := ToNumber(left)
-		if err != nil {
-			return false, err
-		}
-		r, err := ToNumber(right)
-		if err != nil {
-			return false, err
-		}
-		return l <= r, nil
-	case "is greater than or equal to":
-		l, err := ToNumber(left)
-		if err != nil {
-			return false, err
-		}
-		r, err := ToNumber(right)
-		if err != nil {
-			return false, err
-		}
-		return l >= r, nil
-	case "is not equal to":
-		return !Equals(left, right), nil
-	default:
-		return false, fmt.Errorf("unknown comparison operator: %s", op)
-	}
-}
+// ─── Arithmetic ───────────────────────────────────────────────────────────────
 
-// Equals checks if two values are equal
-func Equals(left, right Value) bool {
-	switch l := left.(type) {
-	case float64:
-		switch r := right.(type) {
-		case float64:
-			return l == r
-		default:
-			return false
-		}
-	case string:
-		switch r := right.(type) {
-		case string:
-			return l == r
-		default:
-			return false
-		}
-	case bool:
-		switch r := right.(type) {
-		case bool:
-			return l == r
-		default:
-			return false
-		}
-	case nil:
-		return right == nil
-	default:
-		return false
-	}
-}
-
-// Add adds two values
+// Add adds two values.  Strict rules:
+//   - number + number   → number (arithmetic)
+//   - text   + text     → text   (concatenation)
+//   - array  + array    → array  (concatenation, same element type required)
+//   - any other combination is a TypeError
 func Add(left, right Value) (Value, error) {
-	switch l := left.(type) {
-	case float64:
-		// When left is a number, right must also be a number
-		switch r := right.(type) {
-		case float64:
-			return l + r, nil
-		case string:
-			return nil, typeMismatchError(left, right, "add")
-		default:
-			rNum, err := ToNumber(right)
-			if err != nil {
-				return nil, typeMismatchError(left, right, "add")
-			}
-			return l + rNum, nil
-		}
-	case string:
-		// When left is a string, concatenate with string representation of right
-		return l + ToString(right), nil
-	case []interface{}:
-		switch r := right.(type) {
-		case []interface{}:
-			return append(l, r...), nil
-		default:
-			return append(l, r), nil
-		}
-	default:
-		return nil, fmt.Errorf("cannot add %T and %T", left, right)
-	}
+switch l := left.(type) {
+case float64:
+r, ok := right.(float64)
+if !ok {
+return nil, types.NewTypeError("+", "number", typeKindName(inferTypeKind(right)))
+}
+return l + r, nil
+case string:
+r, ok := right.(string)
+if !ok {
+return nil, types.NewTypeError("+", "text", typeKindName(inferTypeKind(right)))
+}
+return l + r, nil
+case *ArrayValue:
+r, ok := right.(*ArrayValue)
+if !ok {
+return nil, types.NewTypeError("+", "array", typeKindName(inferTypeKind(right)))
+}
+if l.ElementType != r.ElementType {
+return nil, fmt.Errorf(
+"TypeError: cannot concatenate array of %s with array of %s",
+typeKindName(l.ElementType), typeKindName(r.ElementType),
+)
+}
+combined := make([]interface{}, len(l.Elements)+len(r.Elements))
+copy(combined, l.Elements)
+copy(combined[len(l.Elements):], r.Elements)
+return &ArrayValue{ElementType: l.ElementType, Elements: combined}, nil
+default:
+return nil, fmt.Errorf(
+"TypeError: '+' is not defined for %s",
+typeKindName(inferTypeKind(left)),
+)
+}
 }
 
-// Subtract subtracts two values
+// Subtract subtracts two numbers.
 func Subtract(left, right Value) (Value, error) {
-	l, err := ToNumber(left)
-	if err != nil {
-		return nil, fmt.Errorf("cannot subtract: left operand is not a number (got %T)\n  Hint: Subtraction only works with numbers", left)
-	}
-	r, err := ToNumber(right)
-	if err != nil {
-		return nil, fmt.Errorf("cannot subtract: right operand is not a number (got %T)\n  Hint: Subtraction only works with numbers", right)
-	}
-	return l - r, nil
+l, err := requireNumber(left, "-")
+if err != nil {
+return nil, err
+}
+r, err := requireNumber(right, "-")
+if err != nil {
+return nil, err
+}
+return l - r, nil
 }
 
-// Multiply multiplies two values
+// Multiply multiplies two numbers.
 func Multiply(left, right Value) (Value, error) {
-	switch l := left.(type) {
-	case float64:
-		r, err := ToNumber(right)
-		if err != nil {
-			return nil, err
-		}
-		return l * r, nil
-	case string:
-		r, err := ToNumber(right)
-		if err != nil {
-			return nil, err
-		}
-		result := ""
-		for i := 0; i < int(r); i++ {
-			result += l
-		}
-		return result, nil
-	default:
-		return nil, fmt.Errorf("cannot multiply %T and %T", left, right)
-	}
+l, err := requireNumber(left, "*")
+if err != nil {
+return nil, err
+}
+r, err := requireNumber(right, "*")
+if err != nil {
+return nil, err
+}
+return l * r, nil
 }
 
-// Divide divides two values
+// Divide divides two numbers.  Division by zero is an error.
 func Divide(left, right Value) (Value, error) {
-	l, err := ToNumber(left)
-	if err != nil {
-		return nil, fmt.Errorf("cannot divide: left operand is not a number (got %T)\n  Hint: Division only works with numbers", left)
-	}
-	r, err := ToNumber(right)
-	if err != nil {
-		return nil, fmt.Errorf("cannot divide: right operand is not a number (got %T)\n  Hint: Division only works with numbers", right)
-	}
-	if r == 0 {
-		return nil, fmt.Errorf("division by zero\n  Hint: You cannot divide by zero - check your expression")
-	}
-	return l / r, nil
+l, err := requireNumber(left, "/")
+if err != nil {
+return nil, err
+}
+r, err := requireNumber(right, "/")
+if err != nil {
+return nil, err
+}
+if r == 0 {
+return nil, fmt.Errorf("RuntimeError: division by zero")
+}
+return l / r, nil
 }
 
-// Modulo calculates the remainder of two values
+// Modulo computes the integer remainder of two numbers.
 func Modulo(left, right Value) (Value, error) {
-	l, err := ToNumber(left)
-	if err != nil {
-		return nil, fmt.Errorf("cannot get remainder: left operand is not a number (got %T)\n  Hint: Remainder only works with numbers", left)
-	}
-	r, err := ToNumber(right)
-	if err != nil {
-		return nil, fmt.Errorf("cannot get remainder: right operand is not a number (got %T)\n  Hint: Remainder only works with numbers", right)
-	}
-	if r == 0 {
-		return nil, fmt.Errorf("division by zero\n  Hint: You cannot get remainder when dividing by zero")
-	}
-	return float64(int64(l) % int64(r)), nil
+l, err := requireNumber(left, "remainder")
+if err != nil {
+return nil, err
+}
+r, err := requireNumber(right, "remainder")
+if err != nil {
+return nil, err
+}
+if r == 0 {
+return nil, fmt.Errorf("RuntimeError: division by zero in remainder")
+}
+return float64(int64(l) % int64(r)), nil
+}
+
+// ─── Comparison ───────────────────────────────────────────────────────────────
+
+// Compare evaluates a comparison expression and returns a boolean.
+// Strict rules:
+//   - "is equal to" / "is not equal to": any two values of the SAME type
+//   - ordering operators: numbers only
+func Compare(op string, left, right Value) (bool, error) {
+switch op {
+case "is equal to":
+return strictEquals(left, right)
+case "is not equal to":
+eq, err := strictEquals(left, right)
+return !eq, err
+case "is less than":
+return strictOrderCompare(left, right, func(a, b float64) bool { return a < b })
+case "is greater than":
+return strictOrderCompare(left, right, func(a, b float64) bool { return a > b })
+case "is less than or equal to":
+return strictOrderCompare(left, right, func(a, b float64) bool { return a <= b })
+case "is greater than or equal to":
+return strictOrderCompare(left, right, func(a, b float64) bool { return a >= b })
+default:
+return false, fmt.Errorf("unknown comparison operator: %s", op)
+}
+}
+
+// strictEquals checks equality without any implicit conversion.
+// Two values are equal only if they are the same type AND the same value.
+// Exception: nil == nil is always true (nothing == nothing).
+func strictEquals(left, right Value) (bool, error) {
+if left == nil && right == nil {
+return true, nil
+}
+if left == nil || right == nil {
+return false, nil // nothing ≠ any concrete value
+}
+lk := types.Canonical(inferTypeKind(left))
+rk := types.Canonical(inferTypeKind(right))
+if lk != rk {
+return false, nil // different types are never equal (no implicit conversion)
+}
+return Equals(left, right), nil
+}
+
+// Equals performs a same-type equality check (no type coercion).
+func Equals(left, right Value) bool {
+if left == nil && right == nil {
+return true
+}
+if left == nil || right == nil {
+return false
+}
+switch l := left.(type) {
+case float64:
+if r, ok := right.(float64); ok {
+return l == r
+}
+case string:
+if r, ok := right.(string); ok {
+return l == r
+}
+case bool:
+if r, ok := right.(bool); ok {
+return l == r
+}
+}
+return false
+}
+
+// strictOrderCompare applies an ordering predicate to two numbers.
+func strictOrderCompare(left, right Value, pred func(float64, float64) bool) (bool, error) {
+l, err := requireNumber(left, "comparison")
+if err != nil {
+return false, err
+}
+r, err := requireNumber(right, "comparison")
+if err != nil {
+return false, err
+}
+return pred(l, r), nil
+}
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+// requireNumber unwraps any numeric Value to float64 or returns a TypeError.
+func requireNumber(v Value, op string) (float64, error) {
+switch val := v.(type) {
+case float64:
+return val, nil
+case int32:
+return float64(val), nil
+case int64:
+return float64(val), nil
+case uint32:
+return float64(val), nil
+case uint64:
+return float64(val), nil
+case float32:
+return float64(val), nil
+default:
+return 0, fmt.Errorf(
+"TypeError: '%s' requires number, got %s",
+op, typeKindName(inferTypeKind(v)),
+)
+}
+}
+
+// typeMismatchError builds a type mismatch error (kept for compatibility).
+func typeMismatchError(left, right Value, op string) error {
+return fmt.Errorf(
+"TypeError: '%s' requires matching types, got %s and %s",
+op, typeKindName(inferTypeKind(left)), typeKindName(inferTypeKind(right)),
+)
 }

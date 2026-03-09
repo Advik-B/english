@@ -103,6 +103,11 @@ const (
 	NOT
 	OR
 	ASK
+	ARRAY
+	LOOKUP
+	TABLE
+	HAS
+	ENTRY
 
 	// Operators and Punctuation
 	PERIOD
@@ -318,6 +323,16 @@ func (t Type) String() string {
 		return "OR"
 	case ASK:
 		return "ASK"
+	case ARRAY:
+		return "ARRAY"
+	case LOOKUP:
+		return "LOOKUP"
+	case TABLE:
+		return "TABLE"
+	case HAS:
+		return "HAS"
+	case ENTRY:
+		return "ENTRY"
 	case PERIOD:
 		return "PERIOD"
 	case COMMA:

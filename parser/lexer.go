@@ -214,6 +214,11 @@ var keywords = map[string]token.Type{
 	"not":       token.NOT,
 	"or":        token.OR,
 	"ask":       token.ASK,
+	"array":     token.ARRAY,
+	"lookup":    token.LOOKUP,
+	"table":     token.TABLE,
+	"has":       token.HAS,
+	"entry":     token.ENTRY,
 }
 
 func (l *Lexer) lookupKeyword(word string) token.Type {

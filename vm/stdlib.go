@@ -2,6 +2,7 @@ package vm
 
 import (
 	"bufio"
+	"english/vm/types"
 	"fmt"
 	"math"
 	"math/rand"
@@ -16,6 +17,7 @@ func RegisterStdlib(env *Environment) {
 	registerStringFunctions(env)
 	registerListFunctions(env)
 	registerIOFunctions(env)
+	registerLookupTableFunctions(env)
 	registerMathConstants(env)
 }
 
@@ -90,6 +92,14 @@ func registerListFunctions(env *Environment) {
 // registerIOFunctions registers input/output functions
 func registerIOFunctions(env *Environment) {
 	env.DefineFunction("ask", &FunctionValue{Name: "ask", Parameters: []string{"prompt"}, Body: nil, Closure: env})
+}
+
+// registerLookupTableFunctions registers lookup table stdlib functions
+func registerLookupTableFunctions(env *Environment) {
+	env.DefineFunction("keys", &FunctionValue{Name: "keys", Parameters: []string{"table"}, Body: nil, Closure: env})
+	env.DefineFunction("values", &FunctionValue{Name: "values", Parameters: []string{"table"}, Body: nil, Closure: env})
+	env.DefineFunction("table_remove", &FunctionValue{Name: "table_remove", Parameters: []string{"table", "key"}, Body: nil, Closure: env})
+	env.DefineFunction("table_has", &FunctionValue{Name: "table_has", Parameters: []string{"table", "key"}, Body: nil, Closure: env})
 }
 
 // evalBuiltinFunction evaluates a built-in stdlib function
@@ -369,14 +379,33 @@ func evalBuiltinFunction(name string, args []Value) (Value, error) {
 
 	// ── List ──────────────────────────────────────────────────────────────────
 	case "append":
-		list, ok := args[0].([]interface{})
-		if !ok {
-			return nil, NewRuntimeError("append expects a list as first argument")
+		switch col := args[0].(type) {
+		case []interface{}:
+			result := make([]interface{}, len(col)+1)
+			copy(result, col)
+			result[len(col)] = args[1]
+			return result, nil
+		case *ArrayValue:
+			// Enforce homogeneity
+			elemKind := inferTypeKind(args[1])
+			if col.ElementType != types.TypeUnknown && args[1] != nil &&
+				types.Canonical(elemKind) != types.Canonical(col.ElementType) {
+				return nil, fmt.Errorf(
+					"TypeError: cannot append %s to array of %s",
+					typeKindName(elemKind), typeKindName(col.ElementType),
+				)
+			}
+			newElems := make([]interface{}, len(col.Elements)+1)
+			copy(newElems, col.Elements)
+			newElems[len(col.Elements)] = args[1]
+			et := col.ElementType
+			if et == types.TypeUnknown && args[1] != nil {
+				et = types.Canonical(elemKind)
+			}
+			return &ArrayValue{ElementType: et, Elements: newElems}, nil
+		default:
+			return nil, fmt.Errorf("TypeError: append expects list or array, got %s", typeKindName(inferTypeKind(args[0])))
 		}
-		result := make([]interface{}, len(list)+1)
-		copy(result, list)
-		result[len(list)] = args[1]
-		return result, nil
 	case "remove":
 		list, ok := args[0].([]interface{})
 		if !ok {
@@ -439,19 +468,33 @@ func evalBuiltinFunction(name string, args []Value) (Value, error) {
 		}
 		return result, nil
 	case "sum":
-		list, ok := args[0].([]interface{})
-		if !ok {
-			return nil, NewRuntimeError("sum expects a list")
-		}
-		total := 0.0
-		for _, item := range list {
-			n, err := ToNumber(item)
-			if err != nil {
-				return nil, NewRuntimeError(fmt.Sprintf("sum: cannot add non-number value '%v'", item))
+		switch col := args[0].(type) {
+		case []interface{}:
+			total := 0.0
+			for _, item := range col {
+				n, err := ToNumber(item)
+				if err != nil {
+					return nil, fmt.Errorf("TypeError: sum requires a list or array of numbers, got %s element", typeKindName(inferTypeKind(item)))
+				}
+				total += n
 			}
-			total += n
+			return total, nil
+		case *ArrayValue:
+			if col.ElementType != types.TypeUnknown && !types.IsNumeric(col.ElementType) {
+				return nil, fmt.Errorf("TypeError: sum requires a number array, got array of %s", typeKindName(col.ElementType))
+			}
+			total := 0.0
+			for _, item := range col.Elements {
+				n, err := ToNumber(item)
+				if err != nil {
+					return nil, fmt.Errorf("TypeError: sum requires a number array")
+				}
+				total += n
+			}
+			return total, nil
+		default:
+			return nil, fmt.Errorf("TypeError: sum expects list or array, got %s", typeKindName(inferTypeKind(args[0])))
 		}
-		return total, nil
 	case "unique":
 		list, ok := args[0].([]interface{})
 		if !ok {
@@ -471,23 +514,35 @@ func evalBuiltinFunction(name string, args []Value) (Value, error) {
 		}
 		return result, nil
 	case "first":
-		list, ok := args[0].([]interface{})
-		if !ok {
-			return nil, NewRuntimeError("first expects a list")
+		switch col := args[0].(type) {
+		case []interface{}:
+			if len(col) == 0 {
+				return nil, fmt.Errorf("RuntimeError: first called on empty list")
+			}
+			return col[0], nil
+		case *ArrayValue:
+			if len(col.Elements) == 0 {
+				return nil, fmt.Errorf("RuntimeError: first called on empty array")
+			}
+			return col.Elements[0], nil
+		default:
+			return nil, fmt.Errorf("TypeError: first expects list or array, got %s", typeKindName(inferTypeKind(args[0])))
 		}
-		if len(list) == 0 {
-			return nil, NewRuntimeError("first: list is empty")
-		}
-		return list[0], nil
 	case "last":
-		list, ok := args[0].([]interface{})
-		if !ok {
-			return nil, NewRuntimeError("last expects a list")
+		switch col := args[0].(type) {
+		case []interface{}:
+			if len(col) == 0 {
+				return nil, fmt.Errorf("RuntimeError: last called on empty list")
+			}
+			return col[len(col)-1], nil
+		case *ArrayValue:
+			if len(col.Elements) == 0 {
+				return nil, fmt.Errorf("RuntimeError: last called on empty array")
+			}
+			return col.Elements[len(col.Elements)-1], nil
+		default:
+			return nil, fmt.Errorf("TypeError: last expects list or array, got %s", typeKindName(inferTypeKind(args[0])))
 		}
-		if len(list) == 0 {
-			return nil, NewRuntimeError("last: list is empty")
-		}
-		return list[len(list)-1], nil
 	case "flatten":
 		list, ok := args[0].([]interface{})
 		if !ok {
@@ -506,15 +561,18 @@ func evalBuiltinFunction(name string, args []Value) (Value, error) {
 		}
 		return result, nil
 	case "count":
-		list, ok := args[0].([]interface{})
-		if !ok {
-			// For strings, return character count
-			if s, ok := args[0].(string); ok {
-				return float64(len(s)), nil
-			}
-			return nil, NewRuntimeError("count expects a list or string")
+		switch col := args[0].(type) {
+		case []interface{}:
+			return float64(len(col)), nil
+		case *ArrayValue:
+			return float64(len(col.Elements)), nil
+		case *LookupTableValue:
+			return float64(len(col.Entries)), nil
+		case string:
+			return float64(len(col)), nil
+		default:
+			return nil, fmt.Errorf("TypeError: count expects list, array, lookup table, or text; got %s", typeKindName(inferTypeKind(args[0])))
 		}
-		return float64(len(list)), nil
 	case "slice":
 		list, ok := args[0].([]interface{})
 		if !ok {
@@ -554,6 +612,77 @@ func evalBuiltinFunction(name string, args []Value) (Value, error) {
 			return "", nil
 		}
 		return strings.TrimRight(line, "\r\n"), nil
+
+	// ─── Lookup table functions ───────────────────────────────────────────────
+	case "keys":
+		if len(args) != 1 {
+			return nil, fmt.Errorf("keys() expects 1 argument")
+		}
+		lt, ok := args[0].(*LookupTableValue)
+		if !ok {
+			return nil, fmt.Errorf("TypeError: keys() expects a lookup table, got %s", typeKindName(inferTypeKind(args[0])))
+		}
+		result := make([]interface{}, 0, len(lt.KeyOrder))
+		for _, k := range lt.KeyOrder {
+			orig, _, ok := types.DeserializeKey(k)
+			if ok {
+				result = append(result, orig)
+			} else {
+				result = append(result, k)
+			}
+		}
+		return result, nil
+
+	case "values":
+		if len(args) != 1 {
+			return nil, fmt.Errorf("values() expects 1 argument")
+		}
+		lt, ok := args[0].(*LookupTableValue)
+		if !ok {
+			return nil, fmt.Errorf("TypeError: values() expects a lookup table, got %s", typeKindName(inferTypeKind(args[0])))
+		}
+		result := make([]interface{}, 0, len(lt.KeyOrder))
+		for _, k := range lt.KeyOrder {
+			result = append(result, lt.Entries[k])
+		}
+		return result, nil
+
+	case "table_remove":
+		if len(args) != 2 {
+			return nil, fmt.Errorf("table_remove() expects 2 arguments")
+		}
+		lt, ok := args[0].(*LookupTableValue)
+		if !ok {
+			return nil, fmt.Errorf("TypeError: table_remove() expects a lookup table, got %s", typeKindName(inferTypeKind(args[0])))
+		}
+		serialKey, err := types.SerializeKey(args[1])
+		if err != nil {
+			return nil, err
+		}
+		// Return a new table without the key (functional style)
+		newTable := types.NewLookupTable()
+		for _, k := range lt.KeyOrder {
+			if k != serialKey {
+				newTable.Set(k, lt.Entries[k])
+			}
+		}
+		return newTable, nil
+
+	case "table_has":
+		if len(args) != 2 {
+			return nil, fmt.Errorf("table_has() expects 2 arguments")
+		}
+		lt, ok := args[0].(*LookupTableValue)
+		if !ok {
+			return nil, fmt.Errorf("TypeError: table_has() expects a lookup table, got %s", typeKindName(inferTypeKind(args[0])))
+		}
+		serialKey, err := types.SerializeKey(args[1])
+		if err != nil {
+			return nil, err
+		}
+		_, exists := lt.Entries[serialKey]
+		return exists, nil
+
 	}
 
 	return nil, NewRuntimeError("unknown built-in function: " + name)

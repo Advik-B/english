@@ -1,53 +1,76 @@
 package vm
 
 import (
-	"english/ast"
-	"fmt"
+"english/ast"
+"english/vm/types"
+"fmt"
 )
 
-// Value represents a runtime value in the interpreter
-type Value interface{}
+// Value is the universal runtime value interface for the English language.
+// Every evaluated expression produces a Value.
+type Value = interface{}
 
-// FunctionValue represents a user-defined function
+// FunctionValue represents a user-defined function.
+// It lives in vm/ (not vm/types/) because it holds a *Environment closure.
 type FunctionValue struct {
-	Name       string
-	Parameters []string
-	Body       []ast.Statement
-	Closure    *Environment
+Name       string
+Parameters []string
+Body       []ast.Statement
+Closure    *Environment
 }
 
-// ReturnValue is used to implement return statements
-type ReturnValue struct {
-	Value Value
+func (f *FunctionValue) String() string {
+return fmt.Sprintf("<function %s>", f.Name)
 }
 
-// BreakValue is used to implement break statements
+// ─── Control-flow sentinels ───────────────────────────────────────────────────
+
+// ReturnValue wraps a function's return payload.
+type ReturnValue struct{ Value Value }
+
+// BreakValue signals a loop break.
 type BreakValue struct{}
 
-// ContinueValue is used to implement continue statements
+// ContinueValue signals a loop continue.
 type ContinueValue struct{}
 
-// RuntimeError represents an error during execution
+// ─── Runtime error (non-catchable) ───────────────────────────────────────────
+
+// RuntimeError is a non-catchable interpreter error with an optional call stack.
 type RuntimeError struct {
-	Message   string
-	CallStack []string
+Message   string
+CallStack []string
 }
 
 func (e *RuntimeError) Error() string {
-	result := fmt.Sprintf("Runtime Error: %s\n", e.Message)
-	if len(e.CallStack) > 0 {
-		result += "\nCall Stack (most recent first):\n"
-		for i, frame := range e.CallStack {
-			result += fmt.Sprintf("  %d. %s\n", i+1, frame)
-		}
-	}
-	return result
+result := fmt.Sprintf("Runtime Error: %s\n", e.Message)
+if len(e.CallStack) > 0 {
+result += "\nCall Stack (most recent first):\n"
+for i, frame := range e.CallStack {
+result += fmt.Sprintf("  %d. %s\n", i+1, frame)
+}
+}
+return result
 }
 
-// NewRuntimeError creates a new runtime error
+// NewRuntimeError creates a RuntimeError with a default stdlib call-stack frame.
 func NewRuntimeError(message string) error {
-	return &RuntimeError{
-		Message:   message,
-		CallStack: []string{"<stdlib>"},
-	}
+return &RuntimeError{Message: message, CallStack: []string{"<stdlib>"}}
 }
+
+// ─── Reference value ─────────────────────────────────────────────────────────
+
+// ReferenceValue holds a reference to a named variable in a specific environment.
+// Lives in vm/ because it references *Environment.
+type ReferenceValue struct {
+Name string
+Env  *Environment
+}
+
+// ─── Type aliases for vm/types composite types ───────────────────────────────
+
+// ArrayValue is re-exported from vm/types for convenience within vm/.
+type ArrayValue = types.ArrayValue
+
+// LookupTableValue is re-exported from vm/types for convenience within vm/.
+type LookupTableValue = types.LookupTableValue

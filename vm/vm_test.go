@@ -159,14 +159,17 @@ func TestEnvironmentGetAllFunctions(t *testing.T) {
 // ============================================
 
 func TestToNumber(t *testing.T) {
+	// Strict type system: ToNumber only accepts actual numeric values.
+	// Text-to-number coercion requires explicit "cast to number".
 	tests := []struct {
 		input    Value
 		expected float64
 		hasError bool
 	}{
 		{float64(5), 5, false},
-		{"10", 10, false},
-		{"3.14", 3.14, false},
+		{float64(3.14), 3.14, false},
+		{"10", 0, true},    // text needs explicit cast
+		{"3.14", 0, true},  // text needs explicit cast
 		{"invalid", 0, true},
 		{[]interface{}{}, 0, true},
 	}
@@ -196,7 +199,7 @@ func TestToString(t *testing.T) {
 		{float64(5), "5"},
 		{float64(3.14), "3.14"},
 		{"hello", "hello"},
-		{nil, "nil"},
+		{nil, "nothing"}, // nil displays as "nothing" (the language keyword)
 		{true, "true"},
 		{false, "false"},
 		{[]interface{}{float64(1), float64(2), float64(3)}, "[1 2 3]"},
@@ -211,25 +214,34 @@ func TestToString(t *testing.T) {
 }
 
 func TestToBool(t *testing.T) {
+	// With strict typing, ToBool only accepts boolean values (and nil for nothing).
+	// Truthy/falsy coercion of numbers, strings, and lists is intentionally removed.
 	tests := []struct {
-		input    Value
-		expected bool
+		input     Value
+		expected  bool
+		expectErr bool
 	}{
-		{true, true},
-		{false, false},
-		{float64(1), true},
-		{float64(0), false},
-		{"hello", true},
-		{"", false},
-		{[]interface{}{1}, true},
-		{[]interface{}{}, false},
-		{nil, false},
+		{true, true, false},
+		{false, false, false},
+		{nil, false, false},   // nothing is always false
+		{float64(1), false, true},  // TypeError: number is not boolean
+		{"hello", false, true},     // TypeError: text is not boolean
+		{[]interface{}{1}, false, true}, // TypeError: list is not boolean
 	}
 
 	for _, test := range tests {
-		result := ToBool(test.input)
-		if result != test.expected {
-			t.Errorf("ToBool(%v) = %v, want %v", test.input, result, test.expected)
+		result, err := ToBool(test.input)
+		if test.expectErr {
+			if err == nil {
+				t.Errorf("ToBool(%v): expected TypeError, got nil error", test.input)
+			}
+		} else {
+			if err != nil {
+				t.Errorf("ToBool(%v): unexpected error: %v", test.input, err)
+			}
+			if result != test.expected {
+				t.Errorf("ToBool(%v) = %v, want %v", test.input, result, test.expected)
+			}
 		}
 	}
 }
@@ -239,34 +251,20 @@ func TestToBool(t *testing.T) {
 // ============================================
 
 func TestAdd(t *testing.T) {
-	tests := []struct {
-		left     Value
-		right    Value
-		expected Value
-	}{
-		{float64(5), float64(3), float64(8)},
-		{"Hello", " World", "Hello World"},
-		{[]interface{}{1}, []interface{}{2}, []interface{}{1, 2}},
-	}
-
-	for _, test := range tests {
-		result, err := Add(test.left, test.right)
-		if err != nil {
-			t.Errorf("Add(%v, %v) error: %v", test.left, test.right, err)
-			continue
-		}
-		switch expected := test.expected.(type) {
-		case float64:
-			if result != expected {
-				t.Errorf("Add(%v, %v) = %v, want %v", test.left, test.right, result, expected)
-			}
-		case string:
-			if result != expected {
-				t.Errorf("Add(%v, %v) = %v, want %v", test.left, test.right, result, expected)
-			}
-		}
-	}
+// Strict typing: only same-type addition. list+list via '+' is removed; use append().
+if _, err := Add(float64(5), float64(3)); err != nil {
+t.Errorf("Add(5, 3): unexpected error: %v", err)
 }
+r, err := Add("Hello", " World")
+if err != nil || r != "Hello World" {
+t.Errorf("Add(text,text): got %v, %v", r, err)
+}
+// list+list is now a TypeError
+if _, err := Add([]interface{}{1}, []interface{}{2}); err == nil {
+t.Error("Add(list, list): expected TypeError, got nil")
+}
+}
+
 
 func TestSubtract(t *testing.T) {
 	result, err := Subtract(float64(10), float64(3))
@@ -285,26 +283,16 @@ func TestSubtract(t *testing.T) {
 }
 
 func TestMultiply(t *testing.T) {
-	tests := []struct {
-		left     Value
-		right    Value
-		expected Value
-	}{
-		{float64(5), float64(3), float64(15)},
-		{"ab", float64(3), "ababab"},
-	}
-
-	for _, test := range tests {
-		result, err := Multiply(test.left, test.right)
-		if err != nil {
-			t.Errorf("Multiply(%v, %v) error: %v", test.left, test.right, err)
-			continue
-		}
-		if result != test.expected {
-			t.Errorf("Multiply(%v, %v) = %v, want %v", test.left, test.right, result, test.expected)
-		}
-	}
+// Strict typing: only number*number. String repetition removed; use str_repeat().
+r, err := Multiply(float64(5), float64(3))
+if err != nil || r != float64(15) {
+t.Errorf("Multiply(5,3): got %v, %v", r, err)
 }
+if _, err := Multiply("ab", float64(3)); err == nil {
+t.Error("Multiply(text,number): expected TypeError, got nil")
+}
+}
+
 
 func TestDivide(t *testing.T) {
 	result, err := Divide(float64(10), float64(2))
@@ -727,7 +715,9 @@ Print the value of x.`
 }
 
 func TestEvaluatorStringMultiplication(t *testing.T) {
-	code := `Declare x to be "ab" * 3.
+	// String * number is no longer supported with strict typing.
+	// Use str_repeat() for text repetition.
+	code := `Declare x to be str_repeat("ab", 3).
 Print the value of x.`
 
 	output := captureOutput(func() {
@@ -980,16 +970,20 @@ Print the length of myList.`
 }
 
 func TestEvaluatorListAddition(t *testing.T) {
+	// list + list via '+' is no longer supported (strict typing).
+	// Lists are heterogeneous; use append() for arrays or build combined lists manually.
+	// This test now verifies that the TypeError is raised.
 	code := `Declare list1 to be [1, 2].
 Declare list2 to be [3, 4].
-Declare combined to be list1 + list2.
-Print the length of combined.`
+Declare combined to be list1 + list2.`
 
+	// evaluate captures panics/errors gracefully; the result should be empty (error path)
 	output := captureOutput(func() {
 		evaluate(code)
 	})
-	if output != "4\n" {
-		t.Errorf("Expected '4', got %q", output)
+	// We just want to confirm no output was produced (error stops execution)
+	if output != "" {
+		t.Errorf("Expected no output (TypeError), got %q", output)
 	}
 }
 
@@ -1789,5 +1783,170 @@ evaluate(code)
 
 if !strings.Contains(output, "casted keyword works") {
 t.Errorf("Expected 'casted keyword works', got: %q", output)
+}
+}
+
+// ============================================
+// TYPE SYSTEM TESTS (static typing)
+// ============================================
+
+func TestTypeSystem_VariableTypeLocked(t *testing.T) {
+// Once a variable is declared, its type is fixed.
+code := `Declare x to be 5.
+Set x to be "hello".`
+output := captureOutput(func() { evaluate(code) })
+if output != "" {
+t.Errorf("Expected no output (TypeError on reassignment), got %q", output)
+}
+}
+
+func TestTypeSystem_BooleanConditionRequired(t *testing.T) {
+// Conditions must be boolean; number is not accepted.
+code := `Declare n to be 5.
+If n, then
+    Print "bad".
+thats it.`
+output := captureOutput(func() { evaluate(code) })
+if output != "" {
+t.Errorf("Expected no output (TypeError: condition must be boolean), got %q", output)
+}
+}
+
+func TestTypeSystem_CastToExplicit(t *testing.T) {
+code := `Declare s to be "42".
+Declare n to be s cast to number.
+If n is greater than 41, then
+    Print "ok".
+thats it.`
+output := captureOutput(func() { evaluate(code) })
+if output != "ok\n" {
+t.Errorf("Expected 'ok', got %q", output)
+}
+}
+
+func TestTypeSystem_StrictArithmetic(t *testing.T) {
+// number + text must be a TypeError
+code := `Declare n to be 5.
+Declare t to be "hi".
+Declare x to be n + t.`
+output := captureOutput(func() { evaluate(code) })
+if output != "" {
+t.Errorf("Expected no output (TypeError: number + text), got %q", output)
+}
+}
+
+func TestTypeSystem_ArrayHomogeneous(t *testing.T) {
+code := `Declare arr to be an array of number [1, 2, 3].
+Print count(arr).
+Print sum(arr).
+Print first(arr).
+Print last(arr).`
+output := captureOutput(func() { evaluate(code) })
+expected := "3\n6\n1\n3\n"
+if output != expected {
+t.Errorf("Array test: expected %q, got %q", expected, output)
+}
+}
+
+func TestTypeSystem_ArrayRejectsWrongType(t *testing.T) {
+code := `Declare arr to be an array of number [1, 2].
+Set arr to be append(arr, "hello").`
+output := captureOutput(func() { evaluate(code) })
+if output != "" {
+t.Errorf("Expected no output (TypeError: append wrong type), got %q", output)
+}
+}
+
+func TestTypeSystem_ArrayMixedLiteralRejects(t *testing.T) {
+code := `Declare arr to be an array of number [1, "two", 3].`
+output := captureOutput(func() { evaluate(code) })
+if output != "" {
+t.Errorf("Expected no output (TypeError: mixed array literal), got %q", output)
+}
+}
+
+func TestTypeSystem_LookupTable(t *testing.T) {
+code := `Declare ages to be a lookup table.
+Set ages at "Alice" to be 30.
+Set ages at "Bob" to be 25.
+Print ages at "Alice".
+Print count(ages).
+If ages has "Alice", then
+    Print "yes".
+thats it.
+If ages has "Carol", then
+    Print "no".
+otherwise
+    Print "absent".
+thats it.`
+output := captureOutput(func() { evaluate(code) })
+expected := "30\n2\nyes\nabsent\n"
+if output != expected {
+t.Errorf("LookupTable test: expected %q, got %q", expected, output)
+}
+}
+
+func TestTypeSystem_LookupTableEntryAccess(t *testing.T) {
+code := `Declare t to be a lookup table.
+Set t at 1 to be "one".
+Set t at 2 to be "two".
+Print the entry 1 in t.
+Print the entry 2 in t.`
+output := captureOutput(func() { evaluate(code) })
+expected := "one\ntwo\n"
+if output != expected {
+t.Errorf("LookupTable entry access: expected %q, got %q", expected, output)
+}
+}
+
+func TestTypeSystem_LookupTableIteration(t *testing.T) {
+code := `Declare scores to be a lookup table.
+Set scores at "A" to be 90.
+Set scores at "B" to be 80.
+Set scores at "C" to be 70.
+For each k in scores, do the following:
+    Print the value of k.
+thats it.`
+output := captureOutput(func() { evaluate(code) })
+expected := "A\nB\nC\n"
+if output != expected {
+t.Errorf("LookupTable iteration: expected %q, got %q", expected, output)
+}
+}
+
+func TestTypeSystem_LookupTableKeys(t *testing.T) {
+code := `Declare t to be a lookup table.
+Set t at "x" to be 1.
+Set t at "y" to be 2.
+Print count(keys(t)).`
+output := captureOutput(func() { evaluate(code) })
+if output != "2\n" {
+t.Errorf("LookupTable keys(): expected '2', got %q", output)
+}
+}
+
+func TestTypeSystem_ArrayForeach(t *testing.T) {
+code := `Declare nums to be an array of number [10, 20, 30].
+Declare total to be 0.
+For each n in nums, do the following:
+    Set total to be total + n.
+thats it.
+Print total.`
+output := captureOutput(func() { evaluate(code) })
+if output != "60\n" {
+t.Errorf("Array foreach: expected '60', got %q", output)
+}
+}
+
+func TestTypeSystem_NothingAssignableToAnyVar(t *testing.T) {
+// nothing (nil) can be assigned to any typed variable (universal null)
+code := `Declare x to be 5.
+Set x to be nothing.
+If x is equal to nothing, then
+    Print "null".
+thats it.`
+output := captureOutput(func() { evaluate(code) })
+if output != "null\n" {
+t.Errorf("Nothing assignability: expected 'null', got %q", output)
 }
 }

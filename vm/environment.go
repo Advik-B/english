@@ -1,126 +1,166 @@
 package vm
 
-import "fmt"
+import (
+"english/vm/types"
+"fmt"
+)
 
-// Environment represents a scope for variables and functions
+// Environment represents a lexical scope: variables, constants, functions, and structs.
 type Environment struct {
-	variables map[string]Value
-	constants map[string]bool
-	functions map[string]*FunctionValue
-	structs   map[string]*StructDefinition
-	parent    *Environment
+variables     map[string]Value
+variableTypes map[string]types.TypeKind // declared type; fixed at first Define
+constants     map[string]bool
+functions     map[string]*FunctionValue
+structs       map[string]*StructDefinition
+parent        *Environment
 }
 
-// NewEnvironment creates a new environment
+// NewEnvironment creates a new root environment.
 func NewEnvironment() *Environment {
-	return &Environment{
-		variables: make(map[string]Value),
-		constants: make(map[string]bool),
-		functions: make(map[string]*FunctionValue),
-		structs:   make(map[string]*StructDefinition),
-	}
+return &Environment{
+variables:     make(map[string]Value),
+variableTypes: make(map[string]types.TypeKind),
+constants:     make(map[string]bool),
+functions:     make(map[string]*FunctionValue),
+structs:       make(map[string]*StructDefinition),
+}
 }
 
-// NewChild creates a child environment
+// NewChild creates a child scope that inherits from this environment.
 func (e *Environment) NewChild() *Environment {
-	return &Environment{
-		variables: make(map[string]Value),
-		constants: make(map[string]bool),
-		functions: make(map[string]*FunctionValue),
-		structs:   make(map[string]*StructDefinition),
-		parent:    e,
-	}
+return &Environment{
+variables:     make(map[string]Value),
+variableTypes: make(map[string]types.TypeKind),
+constants:     make(map[string]bool),
+functions:     make(map[string]*FunctionValue),
+structs:       make(map[string]*StructDefinition),
+parent:        e,
+}
 }
 
-// Get retrieves a variable from the environment
+// Get retrieves a variable value, searching up the scope chain.
 func (e *Environment) Get(name string) (Value, bool) {
-	if val, ok := e.variables[name]; ok {
-		return val, ok
-	}
-	if e.parent != nil {
-		return e.parent.Get(name)
-	}
-	return nil, false
+if val, ok := e.variables[name]; ok {
+return val, true
+}
+if e.parent != nil {
+return e.parent.Get(name)
+}
+return nil, false
 }
 
-// Set assigns a value to a variable
+// GetVarType returns the declared TypeKind of a variable in the scope chain.
+func (e *Environment) GetVarType(name string) (types.TypeKind, bool) {
+if tk, ok := e.variableTypes[name]; ok {
+return tk, true
+}
+if e.parent != nil {
+return e.parent.GetVarType(name)
+}
+return types.TypeUnknown, false
+}
+
+// Set assigns a new value to an existing variable, enforcing the declared type.
+//
+// Assigning nothing (nil) is always permitted — it acts as a typed null.
 func (e *Environment) Set(name string, value Value) error {
-	if e.constants[name] {
-		return fmt.Errorf("cannot reassign constant '%s'\n  Hint: Constants are declared with 'to be always' or 'to always be'", name)
-	}
-	if _, exists := e.variables[name]; exists {
-		e.variables[name] = value
-		return nil
-	}
-	// Look up the scope chain for the variable and set it where it's found
-	if e.parent != nil {
-		return e.parent.Set(name, value)
-	}
-	e.variables[name] = value
-	return nil
+if e.constants[name] {
+return fmt.Errorf(
+"TypeError: cannot reassign constant '%s'\n  Hint: constants are declared with 'to be always'",
+name,
+)
+}
+if _, exists := e.variables[name]; exists {
+if value != nil {
+declared := e.variableTypes[name]
+actual := inferTypeKind(value)
+if declared != types.TypeNull && declared != types.TypeUnknown &&
+types.Canonical(actual) != types.Canonical(declared) {
+return fmt.Errorf(
+"TypeError: cannot assign %s to variable '%s' (declared as %s)\n  Hint: use 'cast to' for explicit conversion",
+types.Name(actual), name, types.Name(declared),
+)
+}
+}
+e.variables[name] = value
+return nil
+}
+if e.parent != nil {
+return e.parent.Set(name, value)
+}
+// Variable unknown — create it dynamically (needed for stdlib internals)
+e.variables[name] = value
+return nil
 }
 
-// Define declares a new variable
+// Define declares a new variable in the current scope, inferring its type from value.
 func (e *Environment) Define(name string, value Value, isConstant bool) error {
-	if _, exists := e.variables[name]; exists {
-		return fmt.Errorf("variable %s already defined", name)
-	}
-	e.variables[name] = value
-	e.constants[name] = isConstant
-	return nil
+if _, exists := e.variables[name]; exists {
+return fmt.Errorf("variable '%s' is already defined in this scope", name)
+}
+e.variables[name] = value
+e.constants[name] = isConstant
+e.variableTypes[name] = inferTypeKind(value)
+return nil
 }
 
-// GetFunction retrieves a function from the environment
+// GetFunction retrieves a function searching up the scope chain.
 func (e *Environment) GetFunction(name string) (*FunctionValue, bool) {
-	if fn, ok := e.functions[name]; ok {
-		return fn, ok
-	}
-	if e.parent != nil {
-		return e.parent.GetFunction(name)
-	}
-	return nil, false
+if fn, ok := e.functions[name]; ok {
+return fn, true
+}
+if e.parent != nil {
+return e.parent.GetFunction(name)
+}
+return nil, false
 }
 
-// DefineFunction declares a new function
+// DefineFunction registers a function in the current scope.
 func (e *Environment) DefineFunction(name string, fn *FunctionValue) {
-	e.functions[name] = fn
+e.functions[name] = fn
 }
 
-// GetAllVariables returns a copy of all variables in the current scope
+// GetAllVariables returns a shallow copy of variables in this scope only.
 func (e *Environment) GetAllVariables() map[string]Value {
-	result := make(map[string]Value)
-	for k, v := range e.variables {
-		result[k] = v
-	}
-	return result
+result := make(map[string]Value, len(e.variables))
+for k, v := range e.variables {
+result[k] = v
+}
+return result
 }
 
-// GetAllFunctions returns a copy of all functions in the current scope
+// GetAllFunctions returns a shallow copy of functions in this scope only.
 func (e *Environment) GetAllFunctions() map[string]*FunctionValue {
-	result := make(map[string]*FunctionValue)
-	for k, v := range e.functions {
-		result[k] = v
-	}
-	return result
+result := make(map[string]*FunctionValue, len(e.functions))
+for k, v := range e.functions {
+result[k] = v
+}
+return result
 }
 
-// IsConstant returns whether a variable is a constant
+// IsConstant returns whether a variable is a constant (searches up the chain).
 func (e *Environment) IsConstant(name string) bool {
-	return e.constants[name]
+if c, ok := e.constants[name]; ok {
+return c
+}
+if e.parent != nil {
+return e.parent.IsConstant(name)
+}
+return false
 }
 
-// GetStruct retrieves a struct definition from the environment
+// GetStruct retrieves a struct definition searching up the scope chain.
 func (e *Environment) GetStruct(name string) (*StructDefinition, bool) {
-	if s, ok := e.structs[name]; ok {
-		return s, ok
-	}
-	if e.parent != nil {
-		return e.parent.GetStruct(name)
-	}
-	return nil, false
+if s, ok := e.structs[name]; ok {
+return s, true
+}
+if e.parent != nil {
+return e.parent.GetStruct(name)
+}
+return nil, false
 }
 
-// DefineStruct declares a new struct definition
+// DefineStruct registers a struct definition in the current scope.
 func (e *Environment) DefineStruct(name string, def *StructDefinition) {
-	e.structs[name] = def
+e.structs[name] = def
 }

@@ -468,10 +468,14 @@ func (p *Parser) parseAssignment() (ast.Statement, error) {
 	p.nextToken()
 
 	// Check for "Set the item at position X in Y to be Z"
+	// or "Set the entry KEY in TABLE to be VALUE"
 	if p.curToken.Type == token.THE {
 		p.nextToken()
 		if p.curToken.Type == token.ITEM {
 			return p.parseIndexAssignment()
+		}
+		if p.curToken.Type == token.ENTRY {
+			return p.parseLookupKeyAssignment()
 		}
 		return nil, fmt.Errorf("unexpected token after 'Set the': %v", p.curToken.Type)
 	}
@@ -481,6 +485,31 @@ func (p *Parser) parseAssignment() (ast.Statement, error) {
 		return nil, fmt.Errorf("expected identifier after 'Set'")
 	}
 	p.nextToken()
+
+	// "Set TABLE at KEY to be VALUE." — lookup table shorthand write
+	if p.curToken.Type == token.AT {
+		p.nextToken() // consume AT
+		key, err := p.parseExpression()
+		if err != nil {
+			return nil, err
+		}
+		if p.curToken.Type != token.TO {
+			return nil, fmt.Errorf("expected 'to' after lookup key at line %d", p.curToken.Line)
+		}
+		p.nextToken()
+		if p.curToken.Type == token.BE {
+			p.nextToken()
+		}
+		value, err := p.parseExpression()
+		if err != nil {
+			return nil, err
+		}
+		if err := p.expectToken(token.PERIOD); err != nil {
+			return nil, err
+		}
+		p.nextToken()
+		return &ast.LookupKeyAssignment{TableName: nameToken.Value, Key: key, Value: value}, nil
+	}
 
 	if err := p.expectToken(token.TO); err != nil {
 		return nil, err
@@ -1281,17 +1310,18 @@ func (p *Parser) parseExpression() (ast.Expression, error) {
 	return p.parseCast()
 }
 
-// parseCast handles postfix "cast to <type>" on any expression
+// parseCast handles postfix operators on any expression:
+//   - "cast to <type>" / "casted to <type>" — explicit type conversion
+//   - "has <key>"                            — lookup table key check
 func (p *Parser) parseCast() (ast.Expression, error) {
 	expr, err := p.parseAdditive()
 	if err != nil {
 		return nil, err
 	}
 
-	// Check for postfix "cast to <type>" or "casted to <type>"
+	// Postfix "cast to <type>" or "casted to <type>"
 	if p.curToken.Type == token.CASTED {
 		p.nextToken() // consume "cast"/"casted"
-		// Consume optional "to"
 		if p.curToken.Type == token.TO {
 			p.nextToken()
 		}
@@ -1300,6 +1330,29 @@ func (p *Parser) parseCast() (ast.Expression, error) {
 			return nil, fmt.Errorf("expected type name after 'cast to' at line %d", p.curToken.Line)
 		}
 		return &ast.CastExpression{Value: expr, TypeName: typeName}, nil
+	}
+
+	// Postfix "has <key>" — lookup table membership test
+	if p.curToken.Type == token.HAS {
+		p.nextToken() // consume HAS
+		key, err := p.parseExpression()
+		if err != nil {
+			return nil, err
+		}
+		return &ast.HasExpression{Table: expr, Key: key}, nil
+	}
+
+	// Postfix "at <key>" — lookup table / array access
+	if p.curToken.Type == token.AT {
+		// Peek: if followed by POSITION it is the existing list index expression
+		// (handled in parsePrimary when THE·ITEM·AT·POSITION is already consumed).
+		// Here we only handle the new "identifier at key" shorthand.
+		p.nextToken() // consume AT
+		key, err := p.parseExpression()
+		if err != nil {
+			return nil, err
+		}
+		return &ast.LookupKeyAccess{Table: expr, Key: key}, nil
 	}
 
 	return expr, nil
@@ -1453,7 +1506,7 @@ func (p *Parser) parsePrimary() (ast.Expression, error) {
 		return p.parseList()
 
 	case token.THE:
-		// Handle "the item at position X in Y" or "the length of X" or "the remainder of X divided by Y" or "the location of X" or "the type of X" or "the name of person" (field access)
+		// Handle "the item at position X in Y", "the length of X", "the entry KEY in TABLE", etc.
 		p.nextToken()
 		if p.curToken.Type == token.ITEM {
 			return p.parseIndexExpression()
@@ -1470,13 +1523,16 @@ func (p *Parser) parsePrimary() (ast.Expression, error) {
 		if p.curToken.Type == token.TYPE {
 			return p.parseTypeExpression()
 		}
+		// "the entry KEY in TABLE" — lookup table access
+		if p.curToken.Type == token.ENTRY {
+			return p.parseLookupKeyAccess()
+		}
 		// Check for field access: "the name of person"
 		if p.curToken.Type == token.IDENTIFIER {
 			fieldName := p.curToken.Value
 			p.nextToken()
 			if p.curToken.Type == token.OF {
 				p.nextToken()
-				// Parse the object expression
 				obj, err := p.parseExpression()
 				if err != nil {
 					return nil, err
@@ -1486,11 +1542,8 @@ func (p *Parser) parsePrimary() (ast.Expression, error) {
 					Field:  fieldName,
 				}, nil
 			}
-			// Not field access, restore identifier
 			return &ast.Identifier{Name: fieldName}, nil
 		}
-		// Fall back to treating "the" as part of other constructs
-		// Put back THE token context - this is for "the value of" pattern
 		if p.curToken.Type == token.VALUE {
 			p.nextToken()
 			if p.curToken.Type == token.OF {
@@ -1522,6 +1575,18 @@ func (p *Parser) parsePrimary() (ast.Expression, error) {
 			if p.curToken.Type == token.COPY {
 				// "a copy of x"
 				return p.parseCopyExpression()
+			}
+			if p.curToken.Type == token.LOOKUP {
+				// "a lookup table"
+				p.nextToken() // consume LOOKUP
+				if p.curToken.Type == token.TABLE {
+					p.nextToken() // consume TABLE
+				}
+				return &ast.LookupTableLiteral{}, nil
+			}
+			if p.curToken.Type == token.ARRAY {
+				// "an array of [elements]" or "an array of number [elements]"
+				return p.parseArrayLiteral()
 			}
 			// Not a special phrase, treat "a"/"an" as identifier
 			return &ast.Identifier{Name: name}, nil
@@ -1598,7 +1663,7 @@ func (p *Parser) parsePrimary() (ast.Expression, error) {
 	}
 }
 
-// parseIndexExpression parses "item at position X in Y"
+// parseIndexExpression parses "item at position X in/of Y"
 func (p *Parser) parseIndexExpression() (ast.Expression, error) {
 	// Already consumed "the", now at "item"
 	if err := p.expectToken(token.ITEM); err != nil {
@@ -1621,8 +1686,9 @@ func (p *Parser) parseIndexExpression() (ast.Expression, error) {
 		return nil, err
 	}
 
-	if err := p.expectToken(token.IN); err != nil {
-		return nil, err
+	// Accept both "in" and "of": "the item at position 0 in list" / "of list"
+	if p.curToken.Type != token.IN && p.curToken.Type != token.OF {
+		return nil, fmt.Errorf("expected 'in' or 'of' after index, got %v at line %d", p.curToken.Type, p.curToken.Line)
 	}
 	p.nextToken()
 
@@ -1903,4 +1969,113 @@ func (p *Parser) parseFunctionCallArgs() ([]ast.Expression, error) {
 	}
 
 	return args, nil
+}
+
+// parseArrayLiteral parses "an array of [TYPE] [elements]"
+// Cursor is on ARRAY token when called.
+func (p *Parser) parseArrayLiteral() (ast.Expression, error) {
+p.nextToken() // consume ARRAY
+
+if p.curToken.Type != token.OF {
+return nil, fmt.Errorf("expected 'of' after 'array' at line %d", p.curToken.Line)
+}
+p.nextToken() // consume OF
+
+// Optional element type hint before the bracket
+elementType := ""
+if p.curToken.Type != token.LBRACKET {
+elementType = p.parseTypeName()
+}
+
+	if p.curToken.Type != token.LBRACKET {
+		typeSuffix := ""
+		if elementType != "" {
+			typeSuffix = " " + elementType
+		}
+		return nil, fmt.Errorf("expected '[' after 'array of%s' at line %d", typeSuffix, p.curToken.Line)
+	}
+p.nextToken() // consume [
+
+var elements []ast.Expression
+for p.curToken.Type != token.RBRACKET && p.curToken.Type != token.EOF {
+elem, err := p.parseExpression()
+if err != nil {
+return nil, err
+}
+elements = append(elements, elem)
+if p.curToken.Type == token.COMMA {
+p.nextToken()
+}
+}
+if p.curToken.Type != token.RBRACKET {
+return nil, fmt.Errorf("expected ']' to close array literal at line %d", p.curToken.Line)
+}
+p.nextToken() // consume ]
+
+return &ast.ArrayLiteral{ElementType: elementType, Elements: elements}, nil
+}
+
+// parseLookupKeyAccess parses "the entry KEY in TABLE".
+// Cursor is on ENTRY when called.
+func (p *Parser) parseLookupKeyAccess() (ast.Expression, error) {
+p.nextToken() // consume ENTRY
+
+key, err := p.parseExpression()
+if err != nil {
+return nil, err
+}
+
+if p.curToken.Type != token.IN {
+return nil, fmt.Errorf("expected 'in' after lookup key at line %d", p.curToken.Line)
+}
+p.nextToken() // consume IN
+
+table, err := p.parseExpression()
+if err != nil {
+return nil, err
+}
+
+return &ast.LookupKeyAccess{Table: table, Key: key}, nil
+}
+
+// parseLookupKeyAssignment parses "the entry KEY in TABLE to be VALUE."
+// Cursor is on ENTRY when called (parseAssignment has already consumed "Set the").
+func (p *Parser) parseLookupKeyAssignment() (ast.Statement, error) {
+p.nextToken() // consume ENTRY
+
+key, err := p.parseExpression()
+if err != nil {
+return nil, err
+}
+
+if p.curToken.Type != token.IN {
+return nil, fmt.Errorf("expected 'in' after entry key at line %d", p.curToken.Line)
+}
+p.nextToken() // consume IN
+
+if p.curToken.Type != token.IDENTIFIER {
+return nil, fmt.Errorf("expected table name after 'in' at line %d", p.curToken.Line)
+}
+tableName := p.curToken.Value
+p.nextToken()
+
+if p.curToken.Type != token.TO {
+return nil, fmt.Errorf("expected 'to' after table name at line %d", p.curToken.Line)
+}
+p.nextToken()
+if p.curToken.Type == token.BE {
+p.nextToken()
+}
+
+value, err := p.parseExpression()
+if err != nil {
+return nil, err
+}
+
+if err := p.expectToken(token.PERIOD); err != nil {
+return nil, err
+}
+p.nextToken()
+
+return &ast.LookupKeyAssignment{TableName: tableName, Key: key, Value: value}, nil
 }

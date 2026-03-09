@@ -1,8 +1,9 @@
 package vm
 
 import (
-"english/vm/types"
-"fmt"
+	"english/vm/types"
+	"fmt"
+	"strings"
 )
 
 // Environment represents a lexical scope: variables, constants, functions, and structs.
@@ -116,7 +117,8 @@ return fmt.Errorf("variable '%s' is already defined in this scope", name)
 }
 targetType := types.Parse(typeName)
 if targetType == types.TypeUnknown {
-return fmt.Errorf("TypeError: unknown type '%s'\n  Hint: valid types are number, text, boolean, list, array, lookup table", typeName)
+return fmt.Errorf("TypeError: unknown type '%s'\n  Hint: valid types are %s",
+typeName, strings.Join(types.UserTypeNames(), ", "))
 }
 // Type-check the initial value if provided
 if value != nil {

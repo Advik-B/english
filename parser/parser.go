@@ -411,8 +411,6 @@ func (p *Parser) tokenAt(pos int) token.Token {
 	return token.Token{Type: token.EOF}
 }
 
-
-
 func (p *Parser) parseFunctionDeclaration() (ast.Statement, error) {
 	if err := p.expectToken(token.FUNCTION); err != nil {
 		return nil, err

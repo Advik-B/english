@@ -68,10 +68,30 @@ func (t *Transpiler) transpileStatement(stmt ast.Statement) {
 // ─── Individual statement translators ────────────────────────────────────────
 
 func (t *Transpiler) transpileImport(s *ast.ImportStatement) {
+	// Import statements have no direct Python equivalent; they are emitted as
+	// informational comments. When comments are suppressed (e.g. for .101 files),
+	// import statements produce no output at all.
+	if !t.keepComments {
+		return
+	}
 	if len(s.Items) > 0 {
 		t.writeLine(fmt.Sprintf("# from %q import %s", s.Path, strings.Join(s.Items, ", ")))
 	} else {
 		t.writeLine(fmt.Sprintf("# import %q", s.Path))
+	}
+}
+
+func (t *Transpiler) transpileComment(s *ast.CommentStatement) {
+	// Comments are only emitted when keepComments is true (i.e. .abc source files).
+	// .101 bytecode files never contain CommentStatement nodes, but this guard
+	// provides an explicit defense in depth.
+	if !t.keepComments {
+		return
+	}
+	if s.Text == "" {
+		t.writeLine("#")
+	} else {
+		t.writeLine(fmt.Sprintf("# %s", s.Text))
 	}
 }
 

@@ -220,7 +220,7 @@ func TranspileFile(filename string) {
 			os.Exit(1)
 		}
 
-		pySource = transpiler.NewTranspiler().Transpile(prog)
+		pySource = transpiler.NewTranspilerStripped().Transpile(prog)
 	} else {
 		content, err := os.ReadFile(filename)
 		if err != nil {

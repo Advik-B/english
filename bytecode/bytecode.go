@@ -96,11 +96,24 @@ func (e *Encoder) Encode(program *ast.Program) ([]byte, error) {
 	return e.buf.Bytes(), nil
 }
 
+// filterComments returns stmts with all CommentStatement nodes removed.
+// Comments are stripped from the bytecode; they carry no runtime meaning.
+func filterComments(stmts []ast.Statement) []ast.Statement {
+	filtered := make([]ast.Statement, 0, len(stmts))
+	for _, s := range stmts {
+		if _, ok := s.(*ast.CommentStatement); !ok {
+			filtered = append(filtered, s)
+		}
+	}
+	return filtered
+}
+
 func (e *Encoder) encodeProgram(p *ast.Program) error {
 	e.buf.WriteByte(NodeProgram)
-	e.writeUint32(uint32(len(p.Statements)))
+	stmts := filterComments(p.Statements)
+	e.writeUint32(uint32(len(stmts)))
 
-	for _, stmt := range p.Statements {
+	for _, stmt := range stmts {
 		if err := e.encodeStatement(stmt); err != nil {
 			return err
 		}
@@ -167,8 +180,9 @@ func (e *Encoder) encodeStatement(stmt ast.Statement) error {
 		for _, param := range s.Parameters {
 			e.writeString(param)
 		}
-		e.writeUint32(uint32(len(s.Body)))
-		for _, bodyStmt := range s.Body {
+		body := filterComments(s.Body)
+		e.writeUint32(uint32(len(body)))
+		for _, bodyStmt := range body {
 			if err := e.encodeStatement(bodyStmt); err != nil {
 				return err
 			}
@@ -184,8 +198,9 @@ func (e *Encoder) encodeStatement(stmt ast.Statement) error {
 		if err := e.encodeExpression(s.Condition); err != nil {
 			return err
 		}
-		e.writeUint32(uint32(len(s.Then)))
-		for _, thenStmt := range s.Then {
+		then := filterComments(s.Then)
+		e.writeUint32(uint32(len(then)))
+		for _, thenStmt := range then {
 			if err := e.encodeStatement(thenStmt); err != nil {
 				return err
 			}
@@ -196,8 +211,9 @@ func (e *Encoder) encodeStatement(stmt ast.Statement) error {
 				return err
 			}
 		}
-		e.writeUint32(uint32(len(s.Else)))
-		for _, elseStmt := range s.Else {
+		els := filterComments(s.Else)
+		e.writeUint32(uint32(len(els)))
+		for _, elseStmt := range els {
 			if err := e.encodeStatement(elseStmt); err != nil {
 				return err
 			}
@@ -209,8 +225,9 @@ func (e *Encoder) encodeStatement(stmt ast.Statement) error {
 		if err := e.encodeExpression(s.Condition); err != nil {
 			return err
 		}
-		e.writeUint32(uint32(len(s.Body)))
-		for _, bodyStmt := range s.Body {
+		body := filterComments(s.Body)
+		e.writeUint32(uint32(len(body)))
+		for _, bodyStmt := range body {
 			if err := e.encodeStatement(bodyStmt); err != nil {
 				return err
 			}
@@ -222,8 +239,9 @@ func (e *Encoder) encodeStatement(stmt ast.Statement) error {
 		if err := e.encodeExpression(s.Count); err != nil {
 			return err
 		}
-		e.writeUint32(uint32(len(s.Body)))
-		for _, bodyStmt := range s.Body {
+		body := filterComments(s.Body)
+		e.writeUint32(uint32(len(body)))
+		for _, bodyStmt := range body {
 			if err := e.encodeStatement(bodyStmt); err != nil {
 				return err
 			}
@@ -236,8 +254,9 @@ func (e *Encoder) encodeStatement(stmt ast.Statement) error {
 		if err := e.encodeExpression(s.List); err != nil {
 			return err
 		}
-		e.writeUint32(uint32(len(s.Body)))
-		for _, bodyStmt := range s.Body {
+		body := filterComments(s.Body)
+		e.writeUint32(uint32(len(body)))
+		for _, bodyStmt := range body {
 			if err := e.encodeStatement(bodyStmt); err != nil {
 				return err
 			}
@@ -294,6 +313,10 @@ func (e *Encoder) encodeStatement(stmt ast.Statement) error {
 		e.writeBool(s.IsSafe)
 		return nil
 
+	case *ast.CommentStatement:
+		// Comments are stripped from the bytecode; they carry no runtime meaning.
+		return nil
+
 	default:
 		return fmt.Errorf("unknown statement type: %T", stmt)
 	}
@@ -304,8 +327,9 @@ func (e *Encoder) encodeElseIfPart(part *ast.ElseIfPart) error {
 	if err := e.encodeExpression(part.Condition); err != nil {
 		return err
 	}
-	e.writeUint32(uint32(len(part.Body)))
-	for _, stmt := range part.Body {
+	body := filterComments(part.Body)
+	e.writeUint32(uint32(len(body)))
+	for _, stmt := range body {
 		if err := e.encodeStatement(stmt); err != nil {
 			return err
 		}

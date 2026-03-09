@@ -741,3 +741,109 @@ Set the item at position 0 in nums to be 9.`, "nums[0] = 9"},
 		}
 	}
 }
+
+// ─── Comment carry-over (.abc behaviour) ─────────────────────────────────────
+
+// transpileStripped parses English source and transpiles using NewTranspilerStripped
+// (the mode used for .101 bytecode files — no comments in output).
+func transpileStripped(t *testing.T, src string) string {
+t.Helper()
+lexer := parser.NewLexer(src)
+tokens := lexer.TokenizeAll()
+p := parser.NewParser(tokens)
+prog, err := p.Parse()
+if err != nil {
+t.Fatalf("parse error: %v", err)
+}
+result := transpiler.NewTranspilerStripped().Transpile(prog)
+return strings.TrimSpace(result)
+}
+
+func TestCommentCarriedOver(t *testing.T) {
+out := transpile(t, `# This is a comment
+Print "hello".`)
+// The banner should be present.
+assertContains(t, out, "# Transpiled from English language source")
+// The source comment should appear.
+assertContains(t, out, "# This is a comment")
+}
+
+func TestEmptyCommentCarriedOver(t *testing.T) {
+// A bare '#' with no text should produce a Python '#' line.
+out := transpile(t, `#
+Print "hello".`)
+assertContains(t, out, "# Transpiled from English language source")
+assertContainsLine(t, out, "#")
+}
+
+func TestCommentInsideFunction(t *testing.T) {
+out := transpile(t, `Declare function greet that takes name and does the following:
+    # say hello
+    Print "Hello", the value of name.
+thats it.`)
+assertContains(t, out, "# say hello")
+}
+
+func TestImportCommentCarriedOver(t *testing.T) {
+out := transpile(t, `Import "math".
+Print "x".`)
+// Import produces a Python comment when keepComments is true.
+assertContains(t, out, `# import "math"`)
+}
+
+func TestMultipleComments(t *testing.T) {
+out := transpile(t, `# First comment
+# Second comment
+Print "hi".`)
+assertContains(t, out, "# First comment")
+assertContains(t, out, "# Second comment")
+}
+
+// ─── Comment suppression (.101 / stripped mode) ───────────────────────────────
+
+func TestStrippedModeNoBanner(t *testing.T) {
+out := transpileStripped(t, `Print "hello".`)
+if strings.Contains(out, "#") {
+t.Errorf("stripped mode should produce no '#' lines, got:\n%s", out)
+}
+}
+
+func TestStrippedModeNoSourceComments(t *testing.T) {
+out := transpileStripped(t, `# This is a comment
+Print "hello".`)
+if strings.Contains(out, "#") {
+t.Errorf("stripped mode should produce no '#' lines, got:\n%s", out)
+}
+// The actual code should still be emitted.
+assertContains(t, out, `print("hello")`)
+}
+
+func TestStrippedModeNoImportComments(t *testing.T) {
+out := transpileStripped(t, `Import "math".
+Print "hi".`)
+if strings.Contains(out, "#") {
+t.Errorf("stripped mode should produce no '#' lines at all, got:\n%s", out)
+}
+}
+
+func TestStrippedModeCodeStillCorrect(t *testing.T) {
+// Stripping comments must not affect the generated code itself.
+out := transpileStripped(t, `# compute something
+Declare x to be 5 + 3.
+Print the value of x.`)
+assertContains(t, out, "x = 5 + 3")
+assertContains(t, out, "print(x)")
+if strings.Contains(out, "#") {
+t.Errorf("stripped mode should produce no '#' lines, got:\n%s", out)
+}
+}
+
+func TestStrippedModeNoConstantComment(t *testing.T) {
+// Constants use typing.Final; the Final annotation itself is not a comment.
+// There should be no '#' lines in stripped output.
+out := transpileStripped(t, `Declare PI to always be 3.14.`)
+assertContains(t, out, "PI: Final = 3.14")
+if strings.Contains(out, "#") {
+t.Errorf("stripped mode should produce no '#' lines, got:\n%s", out)
+}
+}

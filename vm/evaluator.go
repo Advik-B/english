@@ -131,6 +131,9 @@ func (ev *Evaluator) Eval(node interface{}) (Value, error) {
 		return ev.evalRaiseStatement(node)
 	case *ast.SwapStatement:
 		return ev.evalSwapStatement(node)
+	case *ast.CommentStatement:
+		// Comments are no-ops at runtime.
+		return nil, nil
 	case *ast.TypeExpression:
 		return ev.evalTypeExpression(node)
 	case *ast.CastExpression:

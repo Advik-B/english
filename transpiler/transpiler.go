@@ -19,6 +19,15 @@ type Transpiler struct {
 	indent int
 	buf    strings.Builder
 
+	// keepComments controls whether source comments are carried through to the
+	// generated Python output.
+	//
+	// true  (default, for .abc source files)  – CommentStatement nodes become
+	//       Python # comments, and the file banner is included.
+	// false (for .101 bytecode files)          – all comments are suppressed;
+	//       the generated Python contains no comment lines at all.
+	keepComments bool
+
 	// Python module imports required by the generated code.
 	needsMath   bool
 	needsCopy   bool
@@ -34,10 +43,22 @@ type Transpiler struct {
 	methodFields map[string]bool
 }
 
-// NewTranspiler creates a new Transpiler instance.
+// NewTranspiler creates a Transpiler that preserves source comments in the
+// generated Python output. Use this when transpiling .abc source files.
 func NewTranspiler() *Transpiler {
 	return &Transpiler{
-		helpers: make(map[string]bool),
+		helpers:      make(map[string]bool),
+		keepComments: true,
+	}
+}
+
+// NewTranspilerStripped creates a Transpiler that suppresses all comment lines
+// in the generated Python output. Use this when transpiling .101 bytecode files,
+// which contain no source comments.
+func NewTranspilerStripped() *Transpiler {
+	return &Transpiler{
+		helpers:      make(map[string]bool),
+		keepComments: false,
 	}
 }
 
@@ -67,7 +88,13 @@ func (t *Transpiler) Transpile(program *ast.Program) string {
 
 	// Assemble the final file.
 	var out strings.Builder
-	out.WriteString("# Transpiled from English language source\n")
+
+	// The banner and any generated comment lines are only emitted when comments
+	// are enabled (i.e. for .abc source files). .101 bytecode files produce
+	// comment-free Python.
+	if t.keepComments {
+		out.WriteString("# Transpiled from English language source\n")
+	}
 
 	if t.needsMath {
 		out.WriteString("import math\n")

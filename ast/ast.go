@@ -426,6 +426,17 @@ type HasExpression struct {
 func (he *HasExpression) node()           {}
 func (he *HasExpression) expressionNode() {}
 
+// NilCheckExpression checks whether a value is something (not nil) or nothing (nil).
+//   - IsSomethingCheck == true  → "x is something" / "x has a value"  (returns true when x != nil)
+//   - IsSomethingCheck == false → "x is nothing"   / "x has no value" (returns true when x == nil)
+type NilCheckExpression struct {
+	Value           Expression
+	IsSomethingCheck bool // true = "is something"; false = "is nothing"
+}
+
+func (nc *NilCheckExpression) node()           {}
+func (nc *NilCheckExpression) expressionNode() {}
+
 // TypedVariableDecl represents a variable declaration with explicit type
 type TypedVariableDecl struct {
 	Name       string

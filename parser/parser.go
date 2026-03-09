@@ -1301,6 +1301,16 @@ func (p *Parser) parseRelational() (ast.Expression, error) {
 			Operator: op,
 			Right:    right,
 		}, nil
+
+	case token.IS_SOMETHING:
+		// "x is something" / "x has a value" — postfix nil check (not nil)
+		p.nextToken()
+		return &ast.NilCheckExpression{Value: left, IsSomethingCheck: true}, nil
+
+	case token.IS_NOTHING_OP:
+		// "x is nothing" / "x has no value" — postfix nil check (is nil)
+		p.nextToken()
+		return &ast.NilCheckExpression{Value: left, IsSomethingCheck: false}, nil
 	}
 
 	return left, nil

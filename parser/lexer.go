@@ -242,8 +242,13 @@ func (l *Lexer) NextToken() token.Token {
 	}
 
 	// Check for multi-word comparison operators (case-insensitive)
+	// Triggers for "is ..." (e.g. "is equal to") and "has ..." (e.g. "has a value")
 	if (l.ch == 'i' || l.ch == 'I') && l.position+1 < len(l.input) &&
 		strings.ToLower(l.input[l.position:l.position+2]) == "is" {
+		return l.tryMultiWordComparison()
+	}
+	if (l.ch == 'h' || l.ch == 'H') && l.position+2 < len(l.input) &&
+		strings.ToLower(l.input[l.position:l.position+3]) == "has" {
 		return l.tryMultiWordComparison()
 	}
 
@@ -356,6 +361,10 @@ func (l *Lexer) tryMultiWordComparison() token.Token {
 			tokenType = token.IS_GREATER_EQUAL
 		case "is not equal to":
 			tokenType = token.IS_NOT_EQUAL
+		case "is something", "has a value":
+			tokenType = token.IS_SOMETHING
+		case "is nothing", "has no value":
+			tokenType = token.IS_NOTHING_OP
 		default:
 			tokenType = token.ERROR
 		}

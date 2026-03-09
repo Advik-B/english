@@ -109,6 +109,8 @@ func (ev *Evaluator) Eval(node interface{}) (Value, error) {
 		return ev.evalLookupKeyAssignment(node)
 	case *ast.HasExpression:
 		return ev.evalHasExpression(node)
+	case *ast.NilCheckExpression:
+		return ev.evalNilCheckExpression(node)
 	// Struct / type / cast nodes
 	case *ast.StructDecl:
 		return ev.evalStructDecl(node)
@@ -1049,4 +1051,18 @@ return nil, err
 
 _, exists := lt.Entries[serialKey]
 return exists, nil
+}
+
+// evalNilCheckExpression evaluates "x is something" / "x has a value" (IsSomethingCheck=true)
+// and "x is nothing" / "x has no value" (IsSomethingCheck=false).
+// Both always return a boolean — compatible with strict boolean conditions.
+func (ev *Evaluator) evalNilCheckExpression(nc *ast.NilCheckExpression) (Value, error) {
+val, err := ev.Eval(nc.Value)
+if err != nil {
+return nil, err
+}
+if nc.IsSomethingCheck {
+return val != nil, nil // true when the variable holds a non-nothing value
+}
+return val == nil, nil // true when the variable is nothing
 }

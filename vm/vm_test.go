@@ -1950,3 +1950,108 @@ if output != "null\n" {
 t.Errorf("Nothing assignability: expected 'null', got %q", output)
 }
 }
+
+// ============================================
+// NIL-CHECK EXPRESSION TESTS ("is something" / "has a value")
+// ============================================
+
+func TestNilCheck_IsSomething(t *testing.T) {
+code := `Declare x to be 42.
+If x is something, then
+    Print "something".
+thats it.`
+output := captureOutput(func() { evaluate(code) })
+if output != "something\n" {
+t.Errorf("expected 'something', got %q", output)
+}
+}
+
+func TestNilCheck_IsNothing(t *testing.T) {
+code := `Declare x to be nothing.
+If x is something, then
+    Print "something".
+otherwise
+    Print "nothing".
+thats it.`
+output := captureOutput(func() { evaluate(code) })
+if output != "nothing\n" {
+t.Errorf("expected 'nothing', got %q", output)
+}
+}
+
+func TestNilCheck_HasAValue(t *testing.T) {
+code := `Declare x to be "hello".
+If x has a value, then
+    Print "has value".
+thats it.`
+output := captureOutput(func() { evaluate(code) })
+if output != "has value\n" {
+t.Errorf("expected 'has value', got %q", output)
+}
+}
+
+func TestNilCheck_HasNoValue(t *testing.T) {
+code := `Declare x to be nothing.
+If x has no value, then
+    Print "no value".
+thats it.`
+output := captureOutput(func() { evaluate(code) })
+if output != "no value\n" {
+t.Errorf("expected 'no value', got %q", output)
+}
+}
+
+func TestNilCheck_IsNothingKeyword(t *testing.T) {
+code := `Declare x to be nothing.
+If x is nothing, then
+    Print "is nothing".
+thats it.`
+output := captureOutput(func() { evaluate(code) })
+if output != "is nothing\n" {
+t.Errorf("expected 'is nothing', got %q", output)
+}
+}
+
+func TestNilCheck_AfterClear(t *testing.T) {
+code := `Declare x to be 5.
+If x is something, then
+    Print "before".
+thats it.
+Set x to be nothing.
+If x is something, then
+    Print "after set".
+otherwise
+    Print "cleared".
+thats it.`
+output := captureOutput(func() { evaluate(code) })
+expected := "before\ncleared\n"
+if output != expected {
+t.Errorf("expected %q, got %q", expected, output)
+}
+}
+
+func TestNilCheck_WithText(t *testing.T) {
+code := `Declare name to be "Alice".
+If name is something, then
+    Print "name is set".
+thats it.`
+output := captureOutput(func() { evaluate(code) })
+if output != "name is set\n" {
+t.Errorf("expected 'name is set', got %q", output)
+}
+}
+
+func TestNilCheck_ReturnsBool(t *testing.T) {
+// The nil-check must return a boolean — usable in and/or expressions
+code := `Declare x to be 5.
+Declare y to be nothing.
+If x is something, then
+    If y is nothing, then
+        Print "ok".
+    thats it.
+thats it.`
+output := captureOutput(func() { evaluate(code) })
+if output != "ok\n" {
+t.Errorf("expected 'ok', got %q", output)
+}
+}

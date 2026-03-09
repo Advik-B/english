@@ -130,6 +130,8 @@ const (
 	IS_LESS_EQUAL
 	IS_GREATER_EQUAL
 	IS_NOT_EQUAL
+	IS_SOMETHING  // "is something" / "has a value" — not-nil check
+	IS_NOTHING_OP // "is nothing" / "has no value" — nil check
 )
 
 // Token represents a single token from the lexer
@@ -369,6 +371,10 @@ func (t Type) String() string {
 		return "IS_GREATER_EQUAL"
 	case IS_NOT_EQUAL:
 		return "IS_NOT_EQUAL"
+	case IS_SOMETHING:
+		return "IS_SOMETHING"
+	case IS_NOTHING_OP:
+		return "IS_NOTHING_OP"
 	default:
 		return "UNKNOWN"
 	}

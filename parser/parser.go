@@ -96,6 +96,10 @@ func (p *Parser) Parse() (*ast.Program, error) {
 
 func (p *Parser) parseStatement() (ast.Statement, error) {
 	switch p.curToken.Type {
+	case token.COMMENT:
+		stmt := &ast.CommentStatement{Text: p.curToken.Value}
+		p.nextToken()
+		return stmt, nil
 	case token.IMPORT:
 		return p.parseImport()
 	case token.DECLARE:

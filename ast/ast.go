@@ -482,3 +482,12 @@ type ErrorTypeCheckExpression struct {
 
 func (etc *ErrorTypeCheckExpression) node()           {}
 func (etc *ErrorTypeCheckExpression) expressionNode() {}
+
+// CommentStatement carries a source comment through to the output.
+// Text holds the comment body (everything after the leading '#', trimmed).
+type CommentStatement struct {
+Text string
+}
+
+func (cs *CommentStatement) node()          {}
+func (cs *CommentStatement) statementNode() {}

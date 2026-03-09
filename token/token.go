@@ -133,6 +133,7 @@ const (
 	IS_SOMETHING  // "is something" / "has a value" — not-nil check
 	IS_NOTHING_OP // "is nothing" / "has no value" — nil check
 	POSSESSIVE    // standalone 's — postfix possessive operator (e.g. "hello"'s title)
+	COMMENT       // # … — source comment; Value holds the text after '#' (trimmed)
 )
 
 // Token represents a single token from the lexer
@@ -378,6 +379,8 @@ func (t Type) String() string {
 		return "IS_NOTHING_OP"
 	case POSSESSIVE:
 		return "POSSESSIVE"
+	case COMMENT:
+		return "COMMENT"
 	default:
 		return "UNKNOWN"
 	}

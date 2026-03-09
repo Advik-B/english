@@ -80,12 +80,20 @@ func (l *Lexer) skipWhitespace() {
 	}
 }
 
-func (l *Lexer) skipComment() {
-	if l.ch == '#' {
-		for l.ch != '\n' && l.ch != 0 {
-			l.readChar()
-		}
+func (l *Lexer) readComment() (token.Token, bool) {
+	if l.ch != '#' {
+		return token.Token{}, false
 	}
+	line := l.line
+	col := l.col
+	l.readChar() // skip '#'
+	var sb strings.Builder
+	for l.ch != '\n' && l.ch != 0 {
+		sb.WriteByte(l.ch)
+		l.readChar()
+	}
+	text := strings.TrimSpace(sb.String())
+	return token.Token{Type: token.COMMENT, Value: text, Line: line, Col: col}, true
 }
 
 func (l *Lexer) readString(quote byte) string {
@@ -259,7 +267,12 @@ func (l *Lexer) lookupKeyword(word string) token.Type {
 // NextToken returns the next token from the input
 func (l *Lexer) NextToken() token.Token {
 	l.skipWhitespace()
-	l.skipComment()
+
+	// Emit COMMENT token so the parser (and transpiler) can carry comments through.
+	if tok, ok := l.readComment(); ok {
+		l.lastTokenType = tok.Type
+		return tok
+	}
 	l.skipWhitespace()
 
 	line := l.line

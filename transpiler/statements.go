@@ -58,6 +58,8 @@ func (t *Transpiler) transpileStatement(stmt ast.Statement) {
 		t.writeLine(fmt.Sprintf("%s, %s = %s, %s", s.Name1, s.Name2, s.Name2, s.Name1))
 	case *ast.StructDecl:
 		t.transpileStructDecl(s)
+	case *ast.CommentStatement:
+		t.transpileComment(s)
 	default:
 		t.writeLine(fmt.Sprintf("# unsupported statement: %T", stmt))
 	}

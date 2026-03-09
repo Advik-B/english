@@ -9,12 +9,13 @@ import (
 
 // Lexer tokenizes English language source code
 type Lexer struct {
-	input        string
-	position     int
-	line         int
-	col          int
-	readPosition int
-	ch           byte
+	input         string
+	position      int
+	line          int
+	col           int
+	readPosition  int
+	ch            byte
+	lastTokenType token.Type // type of the most recently emitted token
 }
 
 // NewLexer creates a new lexer for the given input
@@ -44,6 +45,33 @@ func (l *Lexer) peekChar() byte {
 		return 0
 	}
 	return l.input[l.readPosition]
+}
+
+// peekCharN returns the character n positions ahead of the current position
+// (n=1 is the same as peekChar).
+func (l *Lexer) peekCharN(n int) byte {
+	pos := l.readPosition + n - 1
+	if pos >= len(l.input) {
+		return 0
+	}
+	return l.input[pos]
+}
+
+// isIdentChar reports whether b can appear in an identifier (letter, digit, or underscore).
+func isIdentChar(b byte) bool {
+	return (b >= 'a' && b <= 'z') || (b >= 'A' && b <= 'Z') || (b >= '0' && b <= '9') || b == '_'
+}
+
+// isPossessiveContext reports whether a possessive 's can follow a token of the given type.
+// Only tokens that end a value expression (identifiers, literals, closing delimiters)
+// allow a following 's to be treated as the possessive marker.
+func isPossessiveContext(t token.Type) bool {
+	switch t {
+	case token.IDENTIFIER, token.STRING, token.NUMBER,
+		token.RPAREN, token.RBRACKET, token.TRUE, token.FALSE:
+		return true
+	}
+	return false
 }
 
 func (l *Lexer) skipWhitespace() {
@@ -291,9 +319,25 @@ func (l *Lexer) NextToken() token.Token {
 	case '=':
 		tok = token.Token{Type: token.ASSIGN, Value: "=", Line: line, Col: col}
 		l.readChar()
-	case '"', '\'':
-		quote := l.ch
-		str := l.readString(quote)
+	case '\'':
+		// Emit a POSSESSIVE token when the apostrophe-s follows an expression
+		// (identifier, string literal, number, closing paren/bracket), and is
+		// immediately followed by a non-identifier character.  This enables:
+		//   "hello"'s title   →   MethodCall{Object:"hello", MethodName:"title"}
+		//   42's is_integer   →   MethodCall{Object:42,       MethodName:"is_integer"}
+		// Single-quoted strings ('hello') are still lexed normally when they appear
+		// at the start of an expression (i.e. the previous token was not a value).
+		if l.peekChar() == 's' && !isIdentChar(l.peekCharN(2)) &&
+			isPossessiveContext(l.lastTokenType) {
+			l.readChar() // consume '
+			l.readChar() // consume s
+			tok = token.Token{Type: token.POSSESSIVE, Value: "'s", Line: line, Col: col}
+		} else {
+			str := l.readString(l.ch)
+			tok = token.Token{Type: token.STRING, Value: str, Line: line, Col: col}
+		}
+	case '"':
+		str := l.readString(l.ch)
 		tok = token.Token{Type: token.STRING, Value: str, Line: line, Col: col}
 	case '\n':
 		tok = token.Token{Type: token.NEWLINE, Value: "\n", Line: line, Col: col}
@@ -301,16 +345,21 @@ func (l *Lexer) NextToken() token.Token {
 	default:
 		if unicode.IsDigit(rune(l.ch)) {
 			num := l.readNumber()
-			return token.Token{Type: token.NUMBER, Value: num, Line: line, Col: col}
+			tok := token.Token{Type: token.NUMBER, Value: num, Line: line, Col: col}
+			l.lastTokenType = tok.Type
+			return tok
 		} else if unicode.IsLetter(rune(l.ch)) || l.ch == '_' {
 			ident := l.readIdentifier()
 			tokenType := l.lookupKeyword(ident)
-			return token.Token{Type: tokenType, Value: ident, Line: line, Col: col}
+			tok := token.Token{Type: tokenType, Value: ident, Line: line, Col: col}
+			l.lastTokenType = tok.Type
+			return tok
 		}
 		tok = token.Token{Type: token.ERROR, Value: string(l.ch), Line: line, Col: col}
 		l.readChar()
 	}
 
+	l.lastTokenType = tok.Type
 	return tok
 }
 
@@ -412,7 +461,10 @@ func (l *Lexer) TokenizeAll() []token.Token {
 	var tokens []token.Token
 	for {
 		tok := l.NextToken()
-		if tok.Type != token.NEWLINE { // Skip newlines for now
+		// Update lastTokenType for every non-whitespace token so the possessive
+		// detector has accurate context on the next call.
+		if tok.Type != token.NEWLINE {
+			l.lastTokenType = tok.Type
 			tokens = append(tokens, tok)
 		}
 		if tok.Type == token.EOF {

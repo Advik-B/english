@@ -358,7 +358,15 @@ func Eval(name string, args []vm.Value) (vm.Value, error) {
 		if err != nil {
 			return nil, err
 		}
-		return strings.Title(strings.ToLower(text)), nil //nolint:staticcheck
+		// str.title(): uppercase the first letter of each word.
+		// Implemented without the deprecated strings.Title.
+		words := strings.Fields(strings.ToLower(text))
+		for i, w := range words {
+			if len(w) > 0 {
+				words[i] = strings.ToUpper(w[:1]) + w[1:]
+			}
+		}
+		return strings.Join(words, " "), nil
 	case "capitalize":
 		text, err := requireText("capitalize", args[0])
 		if err != nil {

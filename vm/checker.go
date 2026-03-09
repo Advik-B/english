@@ -179,7 +179,7 @@ func (tc *TypeChecker) checkStatement(stmt ast.Statement) {
 		tc.checkExpression(s.Value)
 	case *ast.CallStatement:
 		if s.FunctionCall != nil {
-			tc.checkFunctionCallArgs(s.FunctionCall.Name, s.FunctionCall.Arguments, 0)
+			tc.checkFunctionCallArgs(s.FunctionCall.Name, s.FunctionCall.Arguments)
 			for _, arg := range s.FunctionCall.Arguments {
 				tc.checkExpression(arg)
 			}
@@ -196,13 +196,13 @@ func (tc *TypeChecker) checkStatement(stmt ast.Statement) {
 func (tc *TypeChecker) checkExpression(expr ast.Expression) {
 	switch e := expr.(type) {
 	case *ast.FunctionCall:
-		tc.checkFunctionCallArgs(e.Name, e.Arguments, 0)
+		tc.checkFunctionCallArgs(e.Name, e.Arguments)
 		for _, arg := range e.Arguments {
 			tc.checkExpression(arg)
 		}
 	case *ast.MethodCall:
 		allArgs := append([]ast.Expression{e.Object}, e.Arguments...)
-		tc.checkFunctionCallArgs(e.MethodName, allArgs, 0)
+		tc.checkFunctionCallArgs(e.MethodName, allArgs)
 		tc.checkExpression(e.Object)
 		for _, arg := range e.Arguments {
 			tc.checkExpression(arg)
@@ -226,7 +226,7 @@ func (tc *TypeChecker) checkExpression(expr ast.Expression) {
 	}
 }
 
-func (tc *TypeChecker) checkFunctionCallArgs(name string, args []ast.Expression, _ int) {
+func (tc *TypeChecker) checkFunctionCallArgs(name string, args []ast.Expression) {
 	expected, ok := builtinArgTypes[name]
 	if !ok {
 		return

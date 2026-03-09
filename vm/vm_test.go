@@ -2422,3 +2422,93 @@ if output != "is LibError\n" {
 t.Errorf("expected 'is LibError', got %q", output)
 }
 }
+
+// ─── new stdlib method tests ──────────────────────────────────────────────────
+
+func TestTextMethods(t *testing.T) {
+tests := []struct{ code, want string }{
+{`Print title of "hello world".`, "Hello World\n"},
+{`Print "hello world"'s title.`, "Hello World\n"},
+{`Print capitalize of "hello world".`, "Hello world\n"},
+{`Print "hello world"'s capitalize.`, "Hello world\n"},
+{`Print swapcase of "Hello World".`, "hELLO wORLD\n"},
+{`Print trim_left of "  hi".`, "hi\n"},
+{`Print trim_right of "hi  ".`, "hi\n"},
+{`Print is_digit of "123".`, "true\n"},
+{`Print is_digit of "12a".`, "false\n"},
+{`Print is_alpha of "abc".`, "true\n"},
+{`Print is_alnum of "abc123".`, "true\n"},
+{`Print is_space of "   ".`, "true\n"},
+{`Print is_upper of "HELLO".`, "true\n"},
+{`Print is_lower of "hello".`, "true\n"},
+{`Print is_integer of 5.0.`, "true\n"},
+{`Print is_integer of 5.5.`, "false\n"},
+{`Print sign of -3.`, "-1\n"},
+{`Print sign of 0.`, "0\n"},
+{`Print sign of 7.`, "1\n"},
+}
+for _, tt := range tests {
+got := captureOutput(func() { evaluate(tt.code) })
+if got != tt.want {
+t.Errorf("code=%q: expected %q, got %q", tt.code, tt.want, got)
+}
+}
+}
+
+func TestListMethods(t *testing.T) {
+tests := []struct{ code, want string }{
+{`Print average of [2, 4, 6].`, "4\n"},
+{`Print min_value of [3, 1, 4].`, "1\n"},
+{`Print max_value of [3, 1, 4].`, "4\n"},
+{`Print product of [1, 2, 3, 4].`, "24\n"},
+{`Print any_true of [false, false, true].`, "true\n"},
+{`Print all_true of [true, true, false].`, "false\n"},
+{`Print sorted_desc of [1, 3, 2].`, "[3 2 1]\n"},
+}
+for _, tt := range tests {
+got := captureOutput(func() { evaluate(tt.code) })
+if got != tt.want {
+t.Errorf("code=%q: expected %q, got %q", tt.code, tt.want, got)
+}
+}
+}
+
+func TestCompileTimeTypeError_TextOnNumber(t *testing.T) {
+_, err := evaluate(`Print title of 42.`)
+if err == nil {
+t.Fatal("expected type error, got nil")
+}
+if !strings.Contains(err.Error(), "TypeError") {
+t.Errorf("expected TypeError, got: %v", err)
+}
+}
+
+func TestCompileTimeTypeError_NumberOnText(t *testing.T) {
+_, err := evaluate(`Print is_integer of "hello".`)
+if err == nil {
+t.Fatal("expected type error, got nil")
+}
+if !strings.Contains(err.Error(), "TypeError") {
+t.Errorf("expected TypeError, got: %v", err)
+}
+}
+
+func TestCompileTimeTypeError_ListOnText(t *testing.T) {
+_, err := evaluate(`Print average of "hello".`)
+if err == nil {
+t.Fatal("expected type error, got nil")
+}
+if !strings.Contains(err.Error(), "TypeError") {
+t.Errorf("expected TypeError, got: %v", err)
+}
+}
+
+func TestCompileTimeTypeError_PossessiveSyntax(t *testing.T) {
+_, err := evaluate(`Declare n as number to be 5. Print n's title.`)
+if err == nil {
+t.Fatal("expected type error, got nil")
+}
+if !strings.Contains(err.Error(), "TypeError") {
+t.Errorf("expected TypeError, got: %v", err)
+}
+}

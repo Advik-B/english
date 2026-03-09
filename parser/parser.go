@@ -1421,6 +1421,24 @@ func (p *Parser) parseCast() (ast.Expression, error) {
 		return &ast.LookupKeyAccess{Table: expr, Key: key}, nil
 	}
 
+	// Postfix possessive: expr's method
+	// Handles string literals and other non-identifier expressions:
+	//   "hello"'s title   →   MethodCall{Object: "hello", MethodName: "title"}
+	if p.curToken.Type == token.POSSESSIVE {
+		p.nextToken() // consume 's
+		if p.curToken.Type != token.IDENTIFIER {
+			return nil, fmt.Errorf("expected method name after 's, got %v at line %d", p.curToken.Type, p.curToken.Line)
+		}
+		methodName := p.curToken.Value
+		p.nextToken()
+		var args []ast.Expression
+		if p.curToken.Type == token.WITH {
+			p.nextToken()
+			args = p.parseCallArguments()
+		}
+		return &ast.MethodCall{Object: expr, MethodName: methodName, Arguments: args}, nil
+	}
+
 	return expr, nil
 }
 

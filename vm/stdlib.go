@@ -55,6 +55,7 @@ func registerMathFunctions(env *Environment) {
 func registerStringFunctions(env *Environment) {
 	env.DefineFunction("uppercase", &FunctionValue{Name: "uppercase", Parameters: []string{"text"}, Body: nil, Closure: env})
 	env.DefineFunction("lowercase", &FunctionValue{Name: "lowercase", Parameters: []string{"text"}, Body: nil, Closure: env})
+	env.DefineFunction("casefold", &FunctionValue{Name: "casefold", Parameters: []string{"text"}, Body: nil, Closure: env})
 	env.DefineFunction("split", &FunctionValue{Name: "split", Parameters: []string{"text", "separator"}, Body: nil, Closure: env})
 	env.DefineFunction("join", &FunctionValue{Name: "join", Parameters: []string{"list", "separator"}, Body: nil, Closure: env})
 	env.DefineFunction("trim", &FunctionValue{Name: "trim", Parameters: []string{"text"}, Body: nil, Closure: env})
@@ -240,6 +241,10 @@ func evalBuiltinFunction(name string, args []Value) (Value, error) {
 	case "uppercase":
 		return strings.ToUpper(ToString(args[0])), nil
 	case "lowercase":
+		return strings.ToLower(ToString(args[0])), nil
+	case "casefold":
+		// casefold converts text to a case-folded (lowercase) form suitable for
+		// case-insensitive comparisons.  Equivalent to Python's str.casefold().
 		return strings.ToLower(ToString(args[0])), nil
 	case "split":
 		text := ToString(args[0])

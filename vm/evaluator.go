@@ -924,6 +924,53 @@ func (ev *Evaluator) evalFunctionCall(fc *ast.FunctionCall) (Value, error) {
 	return nil, nil
 }
 
+// callFunction invokes a named function with pre-evaluated argument values.
+// This is used by evalMethodCall for the stdlib-fallback path.
+func (ev *Evaluator) callFunction(name string, args []Value) (Value, error) {
+	fn, ok := ev.env.GetFunction(name)
+	if !ok {
+		suggestion := ev.findSimilarFunction(name)
+		if suggestion != "" {
+			return nil, ev.runtimeError(fmt.Sprintf("undefined function '%s'\n  Perhaps you meant: '%s'", name, suggestion))
+		}
+		return nil, ev.runtimeError(fmt.Sprintf("undefined function '%s'", name))
+	}
+
+	// Built-in (stdlib) path
+	if fn.Body == nil {
+		return evalBuiltinFunction(name, args)
+	}
+
+	// User-defined function path
+	if len(args) != len(fn.Parameters) {
+		return nil, ev.runtimeError(fmt.Sprintf("function '%s' expects %d argument(s), got %d", name, len(fn.Parameters), len(args)))
+	}
+
+	funcEnv := fn.Closure.NewChild()
+	for i, param := range fn.Parameters {
+		funcEnv.Define(param, args[i], false)
+	}
+
+	oldEnv := ev.env
+	ev.env = funcEnv
+	ev.callStack = append(ev.callStack, fmt.Sprintf("%s(...)", name))
+	defer func() {
+		ev.env = oldEnv
+		ev.callStack = ev.callStack[:len(ev.callStack)-1]
+	}()
+
+	for _, stmt := range fn.Body {
+		val, err := ev.Eval(stmt)
+		if err != nil {
+			return nil, err
+		}
+		if retVal, ok := val.(*ReturnValue); ok {
+			return retVal.Value, nil
+		}
+	}
+	return nil, nil
+}
+
 func (ev *Evaluator) findSimilarFunction(name string) string {
 	var candidates []string
 

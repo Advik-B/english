@@ -2265,3 +2265,57 @@ if output != "ok\n" {
 t.Errorf("expected 'ok', got %q", output)
 }
 }
+
+// ─── casefold tests ───────────────────────────────────────────────────────────
+
+func TestCasefold_Function(t *testing.T) {
+code := `Print casefold("HELLO").`
+output := captureOutput(func() { evaluate(code) })
+if output != "hello\n" {
+t.Errorf("casefold('HELLO') expected 'hello', got %q", output)
+}
+}
+
+func TestCasefold_OfSyntax(t *testing.T) {
+code := `Declare s to be "WORLD".
+Print casefold of s.`
+output := captureOutput(func() { evaluate(code) })
+if output != "world\n" {
+t.Errorf("casefold of s expected 'world', got %q", output)
+}
+}
+
+func TestCasefold_PossessiveSyntax(t *testing.T) {
+code := `Declare s to be "WORLD".
+Print s's casefold.`
+output := captureOutput(func() { evaluate(code) })
+if output != "world\n" {
+t.Errorf("s's casefold expected 'world', got %q", output)
+}
+}
+
+func TestCasefold_PossessiveInCondition(t *testing.T) {
+code := `Declare answer to be "Y".
+If answer's casefold is equal to "y", then
+    Print "yes".
+otherwise
+    Print "no".
+thats it.`
+output := captureOutput(func() { evaluate(code) })
+if output != "yes\n" {
+t.Errorf("expected 'yes', got %q", output)
+}
+}
+
+func TestCasefold_OfInCondition(t *testing.T) {
+code := `Declare answer to be "Y".
+If casefold of answer is equal to "y", then
+    Print "yes".
+otherwise
+    Print "no".
+thats it.`
+output := captureOutput(func() { evaluate(code) })
+if output != "yes\n" {
+t.Errorf("expected 'yes', got %q", output)
+}
+}

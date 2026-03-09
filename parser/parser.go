@@ -1654,6 +1654,28 @@ func (p *Parser) parsePrimary() (ast.Expression, error) {
 		
 		p.nextToken()
 
+		// Possessive expression: "x's method" → MethodCall{Object: x, MethodName: method}
+		// e.g. "her_love_txt's casefold" → casefold applied to her_love_txt
+		if len(name) > 2 && name[len(name)-2:] == "'s" {
+			objectName := name[:len(name)-2]
+			if p.curToken.Type == token.IDENTIFIER {
+				methodName := p.curToken.Value
+				p.nextToken()
+				var args []ast.Expression
+				if p.curToken.Type == token.WITH {
+					p.nextToken()
+					args = p.parseCallArguments()
+				}
+				return &ast.MethodCall{
+					Object:     &ast.Identifier{Name: objectName},
+					MethodName: methodName,
+					Arguments:  args,
+				}, nil
+			}
+			// No method name after possessive — treat as plain identifier
+			name = objectName
+		}
+
 		// Check if it's a function call
 		if p.curToken.Type == token.LPAREN {
 			p.nextToken()

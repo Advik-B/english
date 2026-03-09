@@ -1,9 +1,9 @@
-# nil_check.abc — demonstrates "is something" / "has a value" nil-check syntax
+# nil_check.abc - demonstrates "is something" / "has a value" nil-check syntax
 
 Print "=== Nil-Check Expressions ===".
 Print "".
 
-# ─── Basic value check ───────────────────────────────────────────────────────
+# - Basic value check -
 Declare name to be "Alice".
 
 If name is something, then
@@ -14,7 +14,7 @@ If name has a value, then
     Print "name has a value (alternate syntax).".
 thats it.
 
-# ─── Nothing literal ─────────────────────────────────────────────────────────
+# - Nothing literal -
 Declare result to be nothing.
 
 If result is nothing, then
@@ -25,14 +25,14 @@ If result has no value, then
     Print "result has no value (alternate syntax).".
 thats it.
 
-# ─── The "is nothing" form as a postfix operator ─────────────────────────────
+# - The "is nothing" form as a postfix operator -
 If result is something, then
     Print "result is set.".
 otherwise
     Print "result is not yet set.".
 thats it.
 
-# ─── Clear a variable ────────────────────────────────────────────────────────
+# - Clear a variable -
 Print "".
 Declare score to be 95.
 Print "Before clear:".
@@ -48,7 +48,7 @@ otherwise
     Print "score was cleared.".
 thats it.
 
-# ─── Guard pattern ───────────────────────────────────────────────────────────
+# - Guard pattern -
 Print "".
 Print "=== Guard Pattern ===".
 Declare user to be nothing.
@@ -65,7 +65,7 @@ thats it.
 Call greet with "Bob".
 Call greet with nothing.
 
-# ─── Works with all types ────────────────────────────────────────────────────
+# - Works with all types -
 Print "".
 Print "=== All Types ===".
 Declare n to be 42.

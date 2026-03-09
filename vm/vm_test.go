@@ -2055,3 +2055,57 @@ if output != "ok\n" {
 t.Errorf("expected 'ok', got %q", output)
 }
 }
+
+// ============================================
+// NATURAL ENGLISH AGGREGATE SYNTAX TESTS
+// ============================================
+
+func TestNaturalEnglish_FirstOf(t *testing.T) {
+code := `Declare names to be ["Alice", "Bob", "Carol"].
+Declare result to be first of names.
+Print result.`
+output := captureOutput(func() { evaluate(code) })
+if output != "Alice\n" {
+t.Errorf("expected 'Alice', got %q", output)
+}
+}
+
+func TestNaturalEnglish_LastOf(t *testing.T) {
+code := `Declare names to be ["Alice", "Bob", "Carol"].
+Declare result to be last of names.
+Print result.`
+output := captureOutput(func() { evaluate(code) })
+if output != "Carol\n" {
+t.Errorf("expected 'Carol', got %q", output)
+}
+}
+
+func TestNaturalEnglish_TheNumberOf(t *testing.T) {
+code := `Declare names to be an array of text ["Alice", "Bob", "Carol"].
+Declare n to be the number of names.
+Print n.`
+output := captureOutput(func() { evaluate(code) })
+if output != "3\n" {
+t.Errorf("expected '3', got %q", output)
+}
+}
+
+func TestNaturalEnglish_TheSizeOf(t *testing.T) {
+code := `Declare items to be [1, 2, 3, 4, 5].
+Declare n to be the size of items.
+Print n.`
+output := captureOutput(func() { evaluate(code) })
+if output != "5\n" {
+t.Errorf("expected '5', got %q", output)
+}
+}
+
+func TestNaturalEnglish_SumOf(t *testing.T) {
+code := `Declare nums to be [10, 20, 30].
+Declare total to be sum of nums.
+Print total.`
+output := captureOutput(func() { evaluate(code) })
+if output != "60\n" {
+t.Errorf("expected '60', got %q", output)
+}
+}

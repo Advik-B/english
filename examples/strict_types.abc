@@ -1,21 +1,21 @@
-# strict_types.abc — demonstrates the strict static type system
+# strict_types.abc - demonstrates the strict static type system
 
 Print "=== Strict Static Type System ===".
 Print "".
 
-# ─── Type inference at declaration ───────────────────────────────────────────
+# --- Type inference at declaration ---
 Print "Types are inferred at declaration and fixed forever.".
 Declare counter to be 0.
 Declare greeting to be "Hello".
 Declare active to be true.
 
-# ─── Valid reassignment (same type) ──────────────────────────────────────────
+# --- Valid reassignment (same type) ---
 Set counter to be counter + 1.
 Set greeting to be "Hi there".
 Set active to be false.
 Print "Valid reassignments work fine.".
 
-# ─── Explicit cast to convert types ──────────────────────────────────────────
+# --- Explicit cast to convert types ---
 Print "".
 Print "=== Explicit Cast ===".
 Declare age_str to be "25".
@@ -28,7 +28,7 @@ Declare score to be 97.
 Declare score_label to be score cast to text.
 Print starts_with(score_label, "9").
 
-# ─── Strict arithmetic (no mixing types) ─────────────────────────────────────
+# --- Strict arithmetic (no mixing types) ---
 Print "".
 Print "=== Strict Arithmetic ===".
 Declare a to be 10.
@@ -37,7 +37,7 @@ Print a + b.
 Print a - b.
 Print a * b.
 
-# ─── Strict text concatenation ───────────────────────────────────────────────
+# --- Strict text concatenation ---
 Print "".
 Print "=== Strict Text Concatenation ===".
 Declare first_name to be "Jane".
@@ -45,7 +45,7 @@ Declare last_name to be "Doe".
 Declare full_name to be first_name + " " + last_name.
 Print the value of full_name.
 
-# ─── Boolean conditions must be boolean ──────────────────────────────────────
+# --- Boolean conditions must be boolean ---
 Print "".
 Print "=== Boolean Conditions ===".
 Declare x to be 5.
@@ -58,7 +58,7 @@ If not done, then
     Print "Logical 'not' on boolean: OK.".
 thats it.
 
-# ─── nothing is universal null ───────────────────────────────────────────────
+# --- nothing is universal null ---
 Print "".
 Print "=== Nothing (null) ===".
 Declare result to be nothing.

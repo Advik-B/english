@@ -1,9 +1,9 @@
-# lookup_table_demo.abc — demonstrates lookup tables (ordered key-value dictionaries)
+# lookup_table_demo.abc - demonstrates lookup tables (ordered key-value dictionaries)
 
 Print "=== Lookup Table Demo ===".
 Print "".
 
-# ─── Create and populate ─────────────────────────────────────────────────────
+# --- Create and populate ---
 Declare ages to be a lookup table.
 
 Set ages at "Alice" to be 30.
@@ -19,13 +19,13 @@ Print ages at "Bob".
 Print "Number of entries:".
 Print count(ages).
 
-# ─── Alternative access syntax ───────────────────────────────────────────────
+# --- Alternative access syntax ---
 Print "".
 Print "=== Entry syntax ===".
 Print "Carol's age via 'the entry' syntax:".
 Print the entry "Carol" in ages.
 
-# ─── Key membership test (has) ───────────────────────────────────────────────
+# --- Key membership test (has) ---
 Print "".
 Print "=== Has Key ===".
 If ages has "Alice", then
@@ -37,20 +37,20 @@ otherwise
     Print "Table does not have Dave.".
 thats it.
 
-# ─── Iterate over keys ───────────────────────────────────────────────────────
+# --- Iterate over keys ---
 Print "".
 Print "=== All entries (insertion order) ===".
 For each name in ages, do the following:
     Print the value of name.
 thats it.
 
-# ─── keys() and values() stdlib functions ────────────────────────────────────
+# --- keys() and values() stdlib functions ---
 Print "".
 Print "=== keys() and values() ===".
 Print keys(ages).
 Print values(ages).
 
-# ─── Remove an entry ─────────────────────────────────────────────────────────
+# --- Remove an entry ---
 Print "".
 Print "=== After removing Bob ===".
 Set ages to be table_remove(ages, "Bob").
@@ -61,7 +61,7 @@ otherwise
     Print "Bob removed successfully.".
 thats it.
 
-# ─── Number keys ─────────────────────────────────────────────────────────────
+# --- Number keys ---
 Print "".
 Print "=== Number Keys ===".
 Declare squares to be a lookup table.
@@ -77,7 +77,7 @@ If squares has 2, then
     Print "Has key 2.".
 thats it.
 
-# ─── Boolean keys ─────────────────────────────────────────────────────────────
+# --- Boolean keys ---
 Print "".
 Print "=== Boolean Keys ===".
 Declare flags to be a lookup table.

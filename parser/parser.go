@@ -1540,12 +1540,23 @@ func (p *Parser) parsePrimary() (ast.Expression, error) {
 		// Check for field access: "the name of person"
 		if p.curToken.Type == token.IDENTIFIER {
 			fieldName := p.curToken.Value
+			lowerFieldName := strings.ToLower(fieldName)
 			p.nextToken()
 			if p.curToken.Type == token.OF {
 				p.nextToken()
 				obj, err := p.parseExpression()
 				if err != nil {
 					return nil, err
+				}
+				// Map natural-English aggregate phrases to stdlib function calls.
+				// e.g. "the number of names" → count(names)
+				aggregateFuncs := map[string]string{
+					"number": "count",
+					"size":   "count",
+					"sum":    "sum",
+				}
+				if funcName, ok := aggregateFuncs[lowerFieldName]; ok {
+					return &ast.FunctionCall{Name: funcName, Arguments: []ast.Expression{obj}}, nil
 				}
 				return &ast.FieldAccess{
 					Object: obj,
@@ -1618,6 +1629,21 @@ func (p *Parser) parsePrimary() (ast.Expression, error) {
 			return &ast.FunctionCall{
 				Name:      name,
 				Arguments: args,
+			}, nil
+		}
+
+		// "first of X", "last of X", "sum of X" etc. — natural-English function-call syntax.
+		// Any bare identifier followed by "of" is treated as a single-argument function call.
+		// The name is passed as-is (original case) to match how all other function calls work.
+		if p.curToken.Type == token.OF {
+			p.nextToken()
+			arg, err := p.parseExpression()
+			if err != nil {
+				return nil, err
+			}
+			return &ast.FunctionCall{
+				Name:      name,
+				Arguments: []ast.Expression{arg},
 			}, nil
 		}
 

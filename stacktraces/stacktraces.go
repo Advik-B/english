@@ -158,10 +158,10 @@ func renderColored(err error) string {
 }
 
 func renderRuntimeError(sb *strings.Builder, re RuntimeError) {
-	sep := separatorStyle.Render(strings.Repeat("─", 50))
+	sep := separatorStyle.Render(strings.Repeat("-", 50))
 
 	sb.WriteString("\n")
-	sb.WriteString(headerStyle.Render(" ✖  Runtime Error "))
+	sb.WriteString(headerStyle.Render(" Runtime Error "))
 	sb.WriteString("\n")
 	sb.WriteString(sep)
 	sb.WriteString("\n\n")
@@ -193,10 +193,10 @@ func renderRuntimeError(sb *strings.Builder, re RuntimeError) {
 }
 
 func renderGenericError(sb *strings.Builder, err error) {
-	sep := separatorStyle.Render(strings.Repeat("─", 50))
+	sep := separatorStyle.Render(strings.Repeat("-", 50))
 
 	sb.WriteString("\n")
-	sb.WriteString(headerStyle.Render(" ✖  Error "))
+	sb.WriteString(headerStyle.Render(" Error "))
 	sb.WriteString("\n")
 	sb.WriteString(sep)
 	sb.WriteString("\n\n")

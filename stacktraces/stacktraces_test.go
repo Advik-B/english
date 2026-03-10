@@ -2,11 +2,18 @@ package stacktraces_test
 
 import (
 	"errors"
+	"regexp"
 	"strings"
 	"testing"
 
 	"english/stacktraces"
 )
+
+// stripANSI removes ANSI escape sequences from s so that tests can check
+// the plain-text content of coloured output independently of styling.
+var ansiRe = regexp.MustCompile(`\x1b\[[0-9;]*m`)
+
+func stripANSI(s string) string { return ansiRe.ReplaceAllString(s, "") }
 
 // fakeRuntimeError is a test double that satisfies stacktraces.RuntimeError.
 type fakeRuntimeError struct {
@@ -357,7 +364,7 @@ func TestRenderWithColor_SyntaxError(t *testing.T) {
 	got := stacktraces.RenderWithColor(se, true)
 
 	for _, want := range []string{"Syntax Error", "'pi' cannot start", "5", "3", "Set pi"} {
-		if !strings.Contains(got, want) {
+		if !strings.Contains(stripANSI(got), want) {
 			t.Errorf("expected %q in coloured syntax error output, got:\n%s", want, got)
 		}
 	}

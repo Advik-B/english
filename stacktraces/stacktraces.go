@@ -6,6 +6,7 @@
 package stacktraces
 
 import (
+	"english/highlight"
 	"fmt"
 	"os"
 	"strings"
@@ -340,7 +341,7 @@ func renderSyntaxError(sb *strings.Builder, se SyntaxError) {
 
 	if hint := se.SyntaxHint(); hint != "" {
 		sb.WriteString("\n  ")
-		sb.WriteString(hintStyle.Render("Hint: " + hint))
+		sb.WriteString(hintStyle.Render("Hint: ") + hintStyle.Render(highlight.HighlightInline(hint, true)))
 		sb.WriteString("\n")
 	}
 

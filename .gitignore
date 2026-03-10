@@ -8,6 +8,10 @@ english
 # Compiled bytecode files
 *.101
 
+# Transpiled Python output
+*.abc.py
+*.101.py
+
 # Bytecode cache directory
 __engcache__/
 

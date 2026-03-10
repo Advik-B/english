@@ -8,12 +8,13 @@ import (
 
 // parseStructDeclaration parses a struct declaration
 // Syntax: declare Person as a structure with the following fields:
-//           name is a string.
-//           age is an unsigned integer with 18 being the default.
-//           let talk be a function that does the following:
-//               print "hello, my name is", name.
-//           thats it.
-//         thats it.
+//
+//	  name is a string.
+//	  age is an unsigned integer with 18 being the default.
+//	  let talk be a function that does the following:
+//	      print "hello, my name is", name.
+//	  thats it.
+//	thats it.
 func (p *Parser) parseStructDeclaration() (ast.Statement, error) {
 	nameToken := p.curToken
 	if p.curToken.Type != token.IDENTIFIER {
@@ -128,7 +129,8 @@ func (p *Parser) parseStructDeclaration() (ast.Statement, error) {
 
 // parseStructField parses a field declaration within a struct
 // Syntax: name is a string.
-//         age is an unsigned integer with 18 being the default.
+//
+//	age is an unsigned integer with 18 being the default.
 func (p *Parser) parseStructField() (*ast.StructField, error) {
 	nameToken := p.curToken
 	if p.curToken.Type != token.IDENTIFIER {
@@ -332,7 +334,8 @@ func (p *Parser) parseStructMethod() (*ast.FunctionDecl, error) {
 // parseStructInstantiation parses creating a new struct instance
 // This is called from parsePrimary when we see "new"
 // Syntax: a new instance of Person
-//         a new instance of Person with the following fields: ...
+//
+//	a new instance of Person with the following fields: ...
 func (p *Parser) parseStructInstantiation() (ast.Expression, error) {
 	// We're at "new"
 	p.nextToken()
@@ -452,66 +455,67 @@ func (p *Parser) parseStructInstantiation() (ast.Expression, error) {
 
 // parseTypedVariableDecl parses a typed variable declaration.
 // Syntax: Declare x as number to be 5.
-//         Declare x as number.         (no initial value — defaults to nothing)
-//         Declare x as text to always be "hi".
+//
+//	Declare x as number.         (no initial value — defaults to nothing)
+//	Declare x as text to always be "hi".
 func (p *Parser) parseTypedVariableDecl() (ast.Statement, error) {
-nameToken := p.curToken
-if nameToken.Type != token.IDENTIFIER {
-return nil, fmt.Errorf("expected variable name, got %v at line %d", nameToken.Type, nameToken.Line)
-}
-p.nextToken() // consume name
+	nameToken := p.curToken
+	if nameToken.Type != token.IDENTIFIER {
+		return nil, fmt.Errorf("expected variable name, got %v at line %d", nameToken.Type, nameToken.Line)
+	}
+	p.nextToken() // consume name
 
-// Consume "as"
-if err := p.expectToken(token.AS); err != nil {
-return nil, err
-}
-p.nextToken()
+	// Consume "as"
+	if err := p.expectToken(token.AS); err != nil {
+		return nil, err
+	}
+	p.nextToken()
 
-// Read the type name (e.g. "number", "text", "boolean")
-if p.curToken.Type != token.IDENTIFIER {
-return nil, fmt.Errorf("expected type name after 'as', got %v at line %d", p.curToken.Type, p.curToken.Line)
-}
-typeName := p.curToken.Value
-p.nextToken()
+	// Read the type name (e.g. "number", "text", "boolean")
+	if p.curToken.Type != token.IDENTIFIER {
+		return nil, fmt.Errorf("expected type name after 'as', got %v at line %d", p.curToken.Type, p.curToken.Line)
+	}
+	typeName := p.curToken.Value
+	p.nextToken()
 
-isConstant := false
-var value ast.Expression
+	isConstant := false
+	var value ast.Expression
 
-// Optional "to be [always] <value>" or just "."
-if p.curToken.Type == token.TO {
-p.nextToken() // consume TO
+	// Optional "to be [always] <value>" or just "."
+	if p.curToken.Type == token.TO {
+		p.nextToken() // consume TO
 
-if p.curToken.Type == token.ALWAYS {
-isConstant = true
-p.nextToken()
-}
+		if p.curToken.Type == token.ALWAYS {
+			isConstant = true
+			p.nextToken()
+		}
 
-if err := p.expectToken(token.BE); err != nil {
-return nil, err
-}
-p.nextToken() // consume BE
+		if err := p.expectToken(token.BE); err != nil {
+			return nil, err
+		}
+		p.nextToken() // consume BE
 
-if !isConstant && p.curToken.Type == token.ALWAYS {
-isConstant = true
-p.nextToken()
-}
+		if !isConstant && p.curToken.Type == token.ALWAYS {
+			isConstant = true
+			p.nextToken()
+		}
 
-var err error
-value, err = p.parseExpression()
-if err != nil {
-return nil, err
-}
-}
+		var err error
+		value, err = p.parseExpression()
+		if err != nil {
+			return nil, err
+		}
+	}
 
-if err := p.expectToken(token.PERIOD); err != nil {
-return nil, err
-}
-p.nextToken()
+	if err := p.expectToken(token.PERIOD); err != nil {
+		return nil, err
+	}
+	p.nextToken()
 
-return &ast.TypedVariableDecl{
-Name:       nameToken.Value,
-TypeName:   typeName,
-IsConstant: isConstant,
-Value:      value,
-}, nil
+	return &ast.TypedVariableDecl{
+		Name:       nameToken.Value,
+		TypeName:   typeName,
+		IsConstant: isConstant,
+		Value:      value,
+	}, nil
 }

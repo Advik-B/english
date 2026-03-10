@@ -9,12 +9,13 @@ import (
 
 // parseTryStatement parses a try/on error/but finally block
 // Syntax: try doing the following:
-//           print 10 / 0.
-//         on error:
-//           print error.
-//         but finally:
-//           print "this is always executed".
-//         thats it.
+//
+//	  print 10 / 0.
+//	on error:
+//	  print error.
+//	but finally:
+//	  print "this is always executed".
+//	thats it.
 func (p *Parser) parseTryStatement() (ast.Statement, error) {
 	// Skip "try"
 	p.nextToken()
@@ -50,7 +51,7 @@ func (p *Parser) parseTryStatement() (ast.Statement, error) {
 
 	// The parseBlock consumes up to "thats" but not including it
 	// We need to check if we have "on error:" next
-	
+
 	var errorBody []ast.Statement
 	var finallyBody []ast.Statement
 	errorVar := "error" // Default error variable name
@@ -136,7 +137,8 @@ func (p *Parser) parseTryStatement() (ast.Statement, error) {
 
 // parseRaiseStatement parses a raise statement
 // Syntax: raise "10 / 0 SHOULD NOT COMPUTE" as RuntimeError.
-//         raise "error message".
+//
+//	raise "error message".
 func (p *Parser) parseRaiseStatement() (ast.Statement, error) {
 	// Skip "raise"
 	p.nextToken()
@@ -213,96 +215,96 @@ func (p *Parser) parseSwapStatement() (ast.Statement, error) {
 // Syntax: Declare NetworkError as an error type.
 // This is called from parseDeclareAs when "an/a error type" is detected.
 func (p *Parser) parseErrorTypeDecl() (ast.Statement, error) {
-nameToken := p.curToken
-if nameToken.Type != token.IDENTIFIER {
-return nil, fmt.Errorf("expected error type name, got %v at line %d", nameToken.Type, nameToken.Line)
-}
-p.nextToken() // consume name
+	nameToken := p.curToken
+	if nameToken.Type != token.IDENTIFIER {
+		return nil, fmt.Errorf("expected error type name, got %v at line %d", nameToken.Type, nameToken.Line)
+	}
+	p.nextToken() // consume name
 
-// Consume "as"
-if err := p.expectToken(token.AS); err != nil {
-return nil, err
-}
-p.nextToken()
+	// Consume "as"
+	if err := p.expectToken(token.AS); err != nil {
+		return nil, err
+	}
+	p.nextToken()
 
-// Consume "an" or "a"
-if p.curToken.Type != token.IDENTIFIER || (strings.ToLower(p.curToken.Value) != "a" && strings.ToLower(p.curToken.Value) != "an") {
-return nil, fmt.Errorf("expected 'a' or 'an' after 'as', got %v", p.curToken.Value)
-}
-p.nextToken()
+	// Consume "an" or "a"
+	if p.curToken.Type != token.IDENTIFIER || (strings.ToLower(p.curToken.Value) != "a" && strings.ToLower(p.curToken.Value) != "an") {
+		return nil, fmt.Errorf("expected 'a' or 'an' after 'as', got %v", p.curToken.Value)
+	}
+	p.nextToken()
 
-// Consume "error"
-if p.curToken.Type != token.IDENTIFIER || strings.ToLower(p.curToken.Value) != "error" {
-return nil, fmt.Errorf("expected 'error' after article, got %v", p.curToken.Value)
-}
-p.nextToken()
+	// Consume "error"
+	if p.curToken.Type != token.IDENTIFIER || strings.ToLower(p.curToken.Value) != "error" {
+		return nil, fmt.Errorf("expected 'error' after article, got %v", p.curToken.Value)
+	}
+	p.nextToken()
 
-// Consume "type"
-if err := p.expectToken(token.TYPE); err != nil {
-return nil, err
-}
-p.nextToken()
+	// Consume "type"
+	if err := p.expectToken(token.TYPE); err != nil {
+		return nil, err
+	}
+	p.nextToken()
 
-// Expect period
-if err := p.expectToken(token.PERIOD); err != nil {
-return nil, err
-}
-p.nextToken()
+	// Expect period
+	if err := p.expectToken(token.PERIOD); err != nil {
+		return nil, err
+	}
+	p.nextToken()
 
-return &ast.ErrorTypeDecl{
-Name: nameToken.Value,
-}, nil
+	return &ast.ErrorTypeDecl{
+		Name: nameToken.Value,
+	}, nil
 }
 
 // parseErrorSubtypeDecl parses an error subtype declaration.
 // Syntax: Declare CustomErr1 as a type of CustomLibError.
 // This is called from parseDeclareAs when "a type of" is detected.
 func (p *Parser) parseErrorSubtypeDecl() (ast.Statement, error) {
-nameToken := p.curToken
-if nameToken.Type != token.IDENTIFIER {
-return nil, fmt.Errorf("expected error type name, got %v at line %d", nameToken.Type, nameToken.Line)
-}
-p.nextToken() // consume name
+	nameToken := p.curToken
+	if nameToken.Type != token.IDENTIFIER {
+		return nil, fmt.Errorf("expected error type name, got %v at line %d", nameToken.Type, nameToken.Line)
+	}
+	p.nextToken() // consume name
 
-// Consume "as"
-if err := p.expectToken(token.AS); err != nil {
-return nil, err
-}
-p.nextToken()
+	// Consume "as"
+	if err := p.expectToken(token.AS); err != nil {
+		return nil, err
+	}
+	p.nextToken()
 
-// Consume "a" or "an"
-if p.curToken.Type != token.IDENTIFIER || (strings.ToLower(p.curToken.Value) != "a" && strings.ToLower(p.curToken.Value) != "an") {
-return nil, fmt.Errorf("expected 'a' or 'an' after 'as', got %v", p.curToken.Value)
-}
-p.nextToken()
+	// Consume "a" or "an"
+	if p.curToken.Type != token.IDENTIFIER || (strings.ToLower(p.curToken.Value) != "a" && strings.ToLower(p.curToken.Value) != "an") {
+		return nil, fmt.Errorf("expected 'a' or 'an' after 'as', got %v", p.curToken.Value)
+	}
+	p.nextToken()
 
-// Consume "type"
-if err := p.expectToken(token.TYPE); err != nil {
-return nil, err
-}
-p.nextToken()
+	// Consume "type"
+	if err := p.expectToken(token.TYPE); err != nil {
+		return nil, err
+	}
+	p.nextToken()
 
-// Consume "of"
-if err := p.expectToken(token.OF); err != nil {
-return nil, err
-}
-p.nextToken()
+	// Consume "of"
+	if err := p.expectToken(token.OF); err != nil {
+		return nil, err
+	}
+	p.nextToken()
 
-// Consume parent type name
-if p.curToken.Type != token.IDENTIFIER {
-return nil, fmt.Errorf("expected parent error type name after 'of', got %v at line %d", p.curToken.Type, p.curToken.Line)
-}
-parentName := p.curToken.Value
-p.nextToken()
+	// Consume parent type name
+	if p.curToken.Type != token.IDENTIFIER {
+		return nil, fmt.Errorf("expected parent error type name after 'of', got %v at line %d", p.curToken.Type, p.curToken.Line)
+	}
+	parentName := p.curToken.Value
+	p.nextToken()
 
-// Expect period
-if err := p.expectToken(token.PERIOD); err != nil {
-return nil, err
-}
-p.nextToken()
+	// Expect period
+	if err := p.expectToken(token.PERIOD); err != nil {
+		return nil, err
+	}
+	p.nextToken()
 
-return &ast.ErrorTypeDecl{
-Name:       nameToken.Value,
-ParentType: parentName,
-}, nil
+	return &ast.ErrorTypeDecl{
+		Name:       nameToken.Value,
+		ParentType: parentName,
+	}, nil
 }

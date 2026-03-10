@@ -30,8 +30,8 @@ type Symbol struct {
 
 // Reference represents a reference to a symbol
 type Reference struct {
-	Name  string
-	Range Range
+	Name         string
+	Range        Range
 	IsDefinition bool
 }
 
@@ -48,11 +48,11 @@ type AnalysisResult struct {
 
 // FunctionInfo contains information about a function
 type FunctionInfo struct {
-	Name       string
-	Parameters []string
-	Range      Range
-	DefRange   Range
-	Body       []ast.Statement
+	Name          string
+	Parameters    []string
+	Range         Range
+	DefRange      Range
+	Body          []ast.Statement
 	Documentation string
 }
 
@@ -216,11 +216,11 @@ func (a *Analyzer) extractFromStatement(stmt ast.Statement, result *AnalysisResu
 
 		// Add to functions map
 		result.Functions[s.Name] = &FunctionInfo{
-			Name:       s.Name,
-			Parameters: s.Parameters,
-			Range:      sym.Range,
-			DefRange:   sym.DefRange,
-			Body:       s.Body,
+			Name:          s.Name,
+			Parameters:    s.Parameters,
+			Range:         sym.Range,
+			DefRange:      sym.DefRange,
+			Body:          s.Body,
 			Documentation: a.generateFunctionDoc(s),
 		}
 
@@ -417,7 +417,7 @@ func (a *Analyzer) findIdentifierRange(name string, doc *Document) Range {
 				break
 			}
 			idx += searchStart // Adjust for search offset
-			
+
 			// Check for whole word match
 			before := idx == 0 || !isWordChar(line[idx-1])
 			after := idx+len(name) >= len(line) || !isWordChar(line[idx+len(name)])
@@ -427,7 +427,7 @@ func (a *Analyzer) findIdentifierRange(name string, doc *Document) Range {
 					End:   Position{Line: lineNum, Character: idx + len(name)},
 				}
 			}
-			
+
 			// Move past this occurrence
 			searchStart = idx + 1
 		}
@@ -539,8 +539,8 @@ func (a *Analyzer) GetCompletions(doc *Document, pos Position, result *AnalysisR
 // getKeywordCompletions returns keyword completions
 func (a *Analyzer) getKeywordCompletions(prefix string) []CompletionItem {
 	keywords := []struct {
-		label  string
-		detail string
+		label   string
+		detail  string
 		snippet string
 	}{
 		{"Declare", "Declare a variable", "Declare ${1:name} to be ${2:value}."},
@@ -811,7 +811,7 @@ func (a *Analyzer) GetSignatureHelp(doc *Document, pos Position, result *Analysi
 	}
 
 	sig := SignatureInformation{
-		Label:      funcName + "(" + strings.Join(funcInfo.Parameters, ", ") + ")",
+		Label: funcName + "(" + strings.Join(funcInfo.Parameters, ", ") + ")",
 		Documentation: MarkupContent{
 			Kind:  MarkupKindMarkdown,
 			Value: funcInfo.Documentation,

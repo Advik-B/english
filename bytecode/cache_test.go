@@ -21,12 +21,12 @@ func TestGetCachePath(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			cachePath := GetCachePath(tt.sourcePath)
-			
+
 			// Check that cache path is in __engcache__ directory
 			if filepath.Dir(cachePath) != CacheDir {
 				t.Errorf("Cache path should be in %s directory, got: %s", CacheDir, cachePath)
 			}
-			
+
 			// Check that cache path has .101 extension
 			if filepath.Ext(cachePath) != ".101" {
 				t.Errorf("Cache path should have .101 extension, got: %s", cachePath)

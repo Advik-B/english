@@ -190,7 +190,7 @@ type ClientCapabilities struct {
 
 // WorkspaceClientCapabilities defines workspace-specific client capabilities
 type WorkspaceClientCapabilities struct {
-	ApplyEdit              bool                            `json:"applyEdit,omitempty"`
+	ApplyEdit              bool                             `json:"applyEdit,omitempty"`
 	WorkspaceEdit          *WorkspaceEditClientCapabilities `json:"workspaceEdit,omitempty"`
 	DidChangeConfiguration *struct {
 		DynamicRegistration bool `json:"dynamicRegistration,omitempty"`
@@ -204,10 +204,10 @@ type WorkspaceClientCapabilities struct {
 	ExecuteCommand *struct {
 		DynamicRegistration bool `json:"dynamicRegistration,omitempty"`
 	} `json:"executeCommand,omitempty"`
-	Configuration            bool `json:"configuration,omitempty"`
-	WorkspaceFolders         bool `json:"workspaceFolders,omitempty"`
-	SemanticTokens           *SemanticTokensWorkspaceClientCapabilities `json:"semanticTokens,omitempty"`
-	CodeLens                 *struct {
+	Configuration    bool                                       `json:"configuration,omitempty"`
+	WorkspaceFolders bool                                       `json:"workspaceFolders,omitempty"`
+	SemanticTokens   *SemanticTokensWorkspaceClientCapabilities `json:"semanticTokens,omitempty"`
+	CodeLens         *struct {
 		RefreshSupport bool `json:"refreshSupport,omitempty"`
 	} `json:"codeLens,omitempty"`
 	FileOperations *struct {
@@ -223,10 +223,10 @@ type WorkspaceClientCapabilities struct {
 
 // WorkspaceEditClientCapabilities defines client capabilities for workspace edits
 type WorkspaceEditClientCapabilities struct {
-	DocumentChanges    bool     `json:"documentChanges,omitempty"`
-	ResourceOperations []string `json:"resourceOperations,omitempty"`
-	FailureHandling    string   `json:"failureHandling,omitempty"`
-	NormalizesLineEndings bool  `json:"normalizesLineEndings,omitempty"`
+	DocumentChanges       bool     `json:"documentChanges,omitempty"`
+	ResourceOperations    []string `json:"resourceOperations,omitempty"`
+	FailureHandling       string   `json:"failureHandling,omitempty"`
+	NormalizesLineEndings bool     `json:"normalizesLineEndings,omitempty"`
 }
 
 // SemanticTokensWorkspaceClientCapabilities defines semantic tokens workspace capabilities
@@ -236,32 +236,32 @@ type SemanticTokensWorkspaceClientCapabilities struct {
 
 // TextDocumentClientCapabilities defines text document-specific client capabilities
 type TextDocumentClientCapabilities struct {
-	Synchronization *TextDocumentSyncClientCapabilities    `json:"synchronization,omitempty"`
-	Completion      *CompletionClientCapabilities          `json:"completion,omitempty"`
-	Hover           *HoverClientCapabilities               `json:"hover,omitempty"`
-	SignatureHelp   *SignatureHelpClientCapabilities       `json:"signatureHelp,omitempty"`
-	Declaration     *DeclarationClientCapabilities         `json:"declaration,omitempty"`
-	Definition      *DefinitionClientCapabilities          `json:"definition,omitempty"`
-	TypeDefinition  *TypeDefinitionClientCapabilities      `json:"typeDefinition,omitempty"`
-	Implementation  *ImplementationClientCapabilities      `json:"implementation,omitempty"`
-	References      *ReferencesClientCapabilities          `json:"references,omitempty"`
-	DocumentHighlight *DocumentHighlightClientCapabilities `json:"documentHighlight,omitempty"`
-	DocumentSymbol  *DocumentSymbolClientCapabilities      `json:"documentSymbol,omitempty"`
-	CodeAction      *CodeActionClientCapabilities          `json:"codeAction,omitempty"`
-	CodeLens        *CodeLensClientCapabilities            `json:"codeLens,omitempty"`
-	DocumentLink    *DocumentLinkClientCapabilities        `json:"documentLink,omitempty"`
-	ColorProvider   *DocumentColorClientCapabilities       `json:"colorProvider,omitempty"`
-	Formatting      *DocumentFormattingClientCapabilities  `json:"formatting,omitempty"`
-	RangeFormatting *DocumentRangeFormattingClientCapabilities `json:"rangeFormatting,omitempty"`
-	OnTypeFormatting *DocumentOnTypeFormattingClientCapabilities `json:"onTypeFormatting,omitempty"`
-	Rename          *RenameClientCapabilities              `json:"rename,omitempty"`
-	PublishDiagnostics *PublishDiagnosticsClientCapabilities `json:"publishDiagnostics,omitempty"`
-	FoldingRange    *FoldingRangeClientCapabilities        `json:"foldingRange,omitempty"`
-	SelectionRange  *SelectionRangeClientCapabilities      `json:"selectionRange,omitempty"`
-	LinkedEditingRange *LinkedEditingRangeClientCapabilities `json:"linkedEditingRange,omitempty"`
-	CallHierarchy   *CallHierarchyClientCapabilities       `json:"callHierarchy,omitempty"`
-	SemanticTokens  *SemanticTokensClientCapabilities      `json:"semanticTokens,omitempty"`
-	Moniker         *MonikerClientCapabilities             `json:"moniker,omitempty"`
+	Synchronization    *TextDocumentSyncClientCapabilities         `json:"synchronization,omitempty"`
+	Completion         *CompletionClientCapabilities               `json:"completion,omitempty"`
+	Hover              *HoverClientCapabilities                    `json:"hover,omitempty"`
+	SignatureHelp      *SignatureHelpClientCapabilities            `json:"signatureHelp,omitempty"`
+	Declaration        *DeclarationClientCapabilities              `json:"declaration,omitempty"`
+	Definition         *DefinitionClientCapabilities               `json:"definition,omitempty"`
+	TypeDefinition     *TypeDefinitionClientCapabilities           `json:"typeDefinition,omitempty"`
+	Implementation     *ImplementationClientCapabilities           `json:"implementation,omitempty"`
+	References         *ReferencesClientCapabilities               `json:"references,omitempty"`
+	DocumentHighlight  *DocumentHighlightClientCapabilities        `json:"documentHighlight,omitempty"`
+	DocumentSymbol     *DocumentSymbolClientCapabilities           `json:"documentSymbol,omitempty"`
+	CodeAction         *CodeActionClientCapabilities               `json:"codeAction,omitempty"`
+	CodeLens           *CodeLensClientCapabilities                 `json:"codeLens,omitempty"`
+	DocumentLink       *DocumentLinkClientCapabilities             `json:"documentLink,omitempty"`
+	ColorProvider      *DocumentColorClientCapabilities            `json:"colorProvider,omitempty"`
+	Formatting         *DocumentFormattingClientCapabilities       `json:"formatting,omitempty"`
+	RangeFormatting    *DocumentRangeFormattingClientCapabilities  `json:"rangeFormatting,omitempty"`
+	OnTypeFormatting   *DocumentOnTypeFormattingClientCapabilities `json:"onTypeFormatting,omitempty"`
+	Rename             *RenameClientCapabilities                   `json:"rename,omitempty"`
+	PublishDiagnostics *PublishDiagnosticsClientCapabilities       `json:"publishDiagnostics,omitempty"`
+	FoldingRange       *FoldingRangeClientCapabilities             `json:"foldingRange,omitempty"`
+	SelectionRange     *SelectionRangeClientCapabilities           `json:"selectionRange,omitempty"`
+	LinkedEditingRange *LinkedEditingRangeClientCapabilities       `json:"linkedEditingRange,omitempty"`
+	CallHierarchy      *CallHierarchyClientCapabilities            `json:"callHierarchy,omitempty"`
+	SemanticTokens     *SemanticTokensClientCapabilities           `json:"semanticTokens,omitempty"`
+	Moniker            *MonikerClientCapabilities                  `json:"moniker,omitempty"`
 }
 
 // Stub types for client capabilities - these allow for extensibility
@@ -290,7 +290,7 @@ type HoverClientCapabilities struct {
 }
 
 type SignatureHelpClientCapabilities struct {
-	DynamicRegistration bool `json:"dynamicRegistration,omitempty"`
+	DynamicRegistration  bool `json:"dynamicRegistration,omitempty"`
 	SignatureInformation *struct {
 		DocumentationFormat  []string `json:"documentationFormat,omitempty"`
 		ParameterInformation *struct {
@@ -329,15 +329,15 @@ type DocumentHighlightClientCapabilities struct {
 }
 
 type DocumentSymbolClientCapabilities struct {
-	DynamicRegistration               bool `json:"dynamicRegistration,omitempty"`
-	SymbolKind                        *struct {
+	DynamicRegistration bool `json:"dynamicRegistration,omitempty"`
+	SymbolKind          *struct {
 		ValueSet []SymbolKind `json:"valueSet,omitempty"`
 	} `json:"symbolKind,omitempty"`
 	HierarchicalDocumentSymbolSupport bool `json:"hierarchicalDocumentSymbolSupport,omitempty"`
 }
 
 type CodeActionClientCapabilities struct {
-	DynamicRegistration bool `json:"dynamicRegistration,omitempty"`
+	DynamicRegistration      bool `json:"dynamicRegistration,omitempty"`
 	CodeActionLiteralSupport *struct {
 		CodeActionKind struct {
 			ValueSet []string `json:"valueSet,omitempty"`
@@ -377,8 +377,8 @@ type RenameClientCapabilities struct {
 }
 
 type PublishDiagnosticsClientCapabilities struct {
-	RelatedInformation     bool `json:"relatedInformation,omitempty"`
-	TagSupport             *struct {
+	RelatedInformation bool `json:"relatedInformation,omitempty"`
+	TagSupport         *struct {
 		ValueSet []DiagnosticTag `json:"valueSet,omitempty"`
 	} `json:"tagSupport,omitempty"`
 	VersionSupport         bool `json:"versionSupport,omitempty"`
@@ -405,16 +405,16 @@ type CallHierarchyClientCapabilities struct {
 }
 
 type SemanticTokensClientCapabilities struct {
-	DynamicRegistration     bool `json:"dynamicRegistration,omitempty"`
-	Requests                *struct {
+	DynamicRegistration bool `json:"dynamicRegistration,omitempty"`
+	Requests            *struct {
 		Range interface{} `json:"range,omitempty"`
 		Full  interface{} `json:"full,omitempty"`
 	} `json:"requests,omitempty"`
-	TokenTypes     []string `json:"tokenTypes,omitempty"`
-	TokenModifiers []string `json:"tokenModifiers,omitempty"`
-	Formats        []string `json:"formats,omitempty"`
-	OverlappingTokenSupport bool `json:"overlappingTokenSupport,omitempty"`
-	MultilineTokenSupport   bool `json:"multilineTokenSupport,omitempty"`
+	TokenTypes              []string `json:"tokenTypes,omitempty"`
+	TokenModifiers          []string `json:"tokenModifiers,omitempty"`
+	Formats                 []string `json:"formats,omitempty"`
+	OverlappingTokenSupport bool     `json:"overlappingTokenSupport,omitempty"`
+	MultilineTokenSupport   bool     `json:"multilineTokenSupport,omitempty"`
 }
 
 type MonikerClientCapabilities struct {
@@ -437,16 +437,16 @@ type WindowClientCapabilities struct {
 // GeneralClientCapabilities defines general client capabilities
 type GeneralClientCapabilities struct {
 	StaleRequestSupport *struct {
-		Cancel                   bool     `json:"cancel,omitempty"`
-		RetryOnContentModified   []string `json:"retryOnContentModified,omitempty"`
+		Cancel                 bool     `json:"cancel,omitempty"`
+		RetryOnContentModified []string `json:"retryOnContentModified,omitempty"`
 	} `json:"staleRequestSupport,omitempty"`
 	RegularExpressions *struct {
 		Engine  string `json:"engine,omitempty"`
 		Version string `json:"version,omitempty"`
 	} `json:"regularExpressions,omitempty"`
 	Markdown *struct {
-		Parser  string   `json:"parser,omitempty"`
-		Version string   `json:"version,omitempty"`
+		Parser      string   `json:"parser,omitempty"`
+		Version     string   `json:"version,omitempty"`
 		AllowedTags []string `json:"allowedTags,omitempty"`
 	} `json:"markdown,omitempty"`
 }
@@ -465,44 +465,44 @@ type ServerInfo struct {
 
 // ServerCapabilities defines the server capabilities
 type ServerCapabilities struct {
-	TextDocumentSync           *TextDocumentSyncOptions       `json:"textDocumentSync,omitempty"`
-	CompletionProvider         *CompletionOptions             `json:"completionProvider,omitempty"`
-	HoverProvider              interface{}                    `json:"hoverProvider,omitempty"`
-	SignatureHelpProvider      *SignatureHelpOptions          `json:"signatureHelpProvider,omitempty"`
-	DeclarationProvider        interface{}                    `json:"declarationProvider,omitempty"`
-	DefinitionProvider         interface{}                    `json:"definitionProvider,omitempty"`
-	TypeDefinitionProvider     interface{}                    `json:"typeDefinitionProvider,omitempty"`
-	ImplementationProvider     interface{}                    `json:"implementationProvider,omitempty"`
-	ReferencesProvider         interface{}                    `json:"referencesProvider,omitempty"`
-	DocumentHighlightProvider  interface{}                    `json:"documentHighlightProvider,omitempty"`
-	DocumentSymbolProvider     interface{}                    `json:"documentSymbolProvider,omitempty"`
-	CodeActionProvider         interface{}                    `json:"codeActionProvider,omitempty"`
-	CodeLensProvider           *CodeLensOptions               `json:"codeLensProvider,omitempty"`
-	DocumentLinkProvider       *DocumentLinkOptions           `json:"documentLinkProvider,omitempty"`
-	ColorProvider              interface{}                    `json:"colorProvider,omitempty"`
-	DocumentFormattingProvider interface{}                    `json:"documentFormattingProvider,omitempty"`
-	DocumentRangeFormattingProvider interface{}               `json:"documentRangeFormattingProvider,omitempty"`
+	TextDocumentSync                 *TextDocumentSyncOptions         `json:"textDocumentSync,omitempty"`
+	CompletionProvider               *CompletionOptions               `json:"completionProvider,omitempty"`
+	HoverProvider                    interface{}                      `json:"hoverProvider,omitempty"`
+	SignatureHelpProvider            *SignatureHelpOptions            `json:"signatureHelpProvider,omitempty"`
+	DeclarationProvider              interface{}                      `json:"declarationProvider,omitempty"`
+	DefinitionProvider               interface{}                      `json:"definitionProvider,omitempty"`
+	TypeDefinitionProvider           interface{}                      `json:"typeDefinitionProvider,omitempty"`
+	ImplementationProvider           interface{}                      `json:"implementationProvider,omitempty"`
+	ReferencesProvider               interface{}                      `json:"referencesProvider,omitempty"`
+	DocumentHighlightProvider        interface{}                      `json:"documentHighlightProvider,omitempty"`
+	DocumentSymbolProvider           interface{}                      `json:"documentSymbolProvider,omitempty"`
+	CodeActionProvider               interface{}                      `json:"codeActionProvider,omitempty"`
+	CodeLensProvider                 *CodeLensOptions                 `json:"codeLensProvider,omitempty"`
+	DocumentLinkProvider             *DocumentLinkOptions             `json:"documentLinkProvider,omitempty"`
+	ColorProvider                    interface{}                      `json:"colorProvider,omitempty"`
+	DocumentFormattingProvider       interface{}                      `json:"documentFormattingProvider,omitempty"`
+	DocumentRangeFormattingProvider  interface{}                      `json:"documentRangeFormattingProvider,omitempty"`
 	DocumentOnTypeFormattingProvider *DocumentOnTypeFormattingOptions `json:"documentOnTypeFormattingProvider,omitempty"`
-	RenameProvider             interface{}                    `json:"renameProvider,omitempty"`
-	FoldingRangeProvider       interface{}                    `json:"foldingRangeProvider,omitempty"`
-	ExecuteCommandProvider     *ExecuteCommandOptions         `json:"executeCommandProvider,omitempty"`
-	SelectionRangeProvider     interface{}                    `json:"selectionRangeProvider,omitempty"`
-	LinkedEditingRangeProvider interface{}                    `json:"linkedEditingRangeProvider,omitempty"`
-	CallHierarchyProvider      interface{}                    `json:"callHierarchyProvider,omitempty"`
-	SemanticTokensProvider     interface{}                    `json:"semanticTokensProvider,omitempty"`
-	MonikerProvider            interface{}                    `json:"monikerProvider,omitempty"`
-	WorkspaceSymbolProvider    interface{}                    `json:"workspaceSymbolProvider,omitempty"`
-	Workspace                  *ServerWorkspaceCapabilities   `json:"workspace,omitempty"`
-	Experimental               interface{}                    `json:"experimental,omitempty"`
+	RenameProvider                   interface{}                      `json:"renameProvider,omitempty"`
+	FoldingRangeProvider             interface{}                      `json:"foldingRangeProvider,omitempty"`
+	ExecuteCommandProvider           *ExecuteCommandOptions           `json:"executeCommandProvider,omitempty"`
+	SelectionRangeProvider           interface{}                      `json:"selectionRangeProvider,omitempty"`
+	LinkedEditingRangeProvider       interface{}                      `json:"linkedEditingRangeProvider,omitempty"`
+	CallHierarchyProvider            interface{}                      `json:"callHierarchyProvider,omitempty"`
+	SemanticTokensProvider           interface{}                      `json:"semanticTokensProvider,omitempty"`
+	MonikerProvider                  interface{}                      `json:"monikerProvider,omitempty"`
+	WorkspaceSymbolProvider          interface{}                      `json:"workspaceSymbolProvider,omitempty"`
+	Workspace                        *ServerWorkspaceCapabilities     `json:"workspace,omitempty"`
+	Experimental                     interface{}                      `json:"experimental,omitempty"`
 }
 
 // TextDocumentSyncOptions defines options for text document sync
 type TextDocumentSyncOptions struct {
-	OpenClose bool                 `json:"openClose,omitempty"`
-	Change    TextDocumentSyncKind `json:"change,omitempty"`
-	WillSave  bool                 `json:"willSave,omitempty"`
-	WillSaveWaitUntil bool         `json:"willSaveWaitUntil,omitempty"`
-	Save      *SaveOptions         `json:"save,omitempty"`
+	OpenClose         bool                 `json:"openClose,omitempty"`
+	Change            TextDocumentSyncKind `json:"change,omitempty"`
+	WillSave          bool                 `json:"willSave,omitempty"`
+	WillSaveWaitUntil bool                 `json:"willSaveWaitUntil,omitempty"`
+	Save              *SaveOptions         `json:"save,omitempty"`
 }
 
 // TextDocumentSyncKind defines the kind of text document sync

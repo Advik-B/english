@@ -96,11 +96,24 @@ func (e *Encoder) Encode(program *ast.Program) ([]byte, error) {
 	return e.buf.Bytes(), nil
 }
 
+// filterComments returns stmts with all CommentStatement nodes removed.
+// Comments are stripped from the bytecode; they carry no runtime meaning.
+func filterComments(stmts []ast.Statement) []ast.Statement {
+	filtered := make([]ast.Statement, 0, len(stmts))
+	for _, s := range stmts {
+		if _, ok := s.(*ast.CommentStatement); !ok {
+			filtered = append(filtered, s)
+		}
+	}
+	return filtered
+}
+
 func (e *Encoder) encodeProgram(p *ast.Program) error {
 	e.buf.WriteByte(NodeProgram)
-	e.writeUint32(uint32(len(p.Statements)))
+	stmts := filterComments(p.Statements)
+	e.writeUint32(uint32(len(stmts)))
 
-	for _, stmt := range p.Statements {
+	for _, stmt := range stmts {
 		if err := e.encodeStatement(stmt); err != nil {
 			return err
 		}
@@ -167,8 +180,9 @@ func (e *Encoder) encodeStatement(stmt ast.Statement) error {
 		for _, param := range s.Parameters {
 			e.writeString(param)
 		}
-		e.writeUint32(uint32(len(s.Body)))
-		for _, bodyStmt := range s.Body {
+		body := filterComments(s.Body)
+		e.writeUint32(uint32(len(body)))
+		for _, bodyStmt := range body {
 			if err := e.encodeStatement(bodyStmt); err != nil {
 				return err
 			}
@@ -184,8 +198,9 @@ func (e *Encoder) encodeStatement(stmt ast.Statement) error {
 		if err := e.encodeExpression(s.Condition); err != nil {
 			return err
 		}
-		e.writeUint32(uint32(len(s.Then)))
-		for _, thenStmt := range s.Then {
+		then := filterComments(s.Then)
+		e.writeUint32(uint32(len(then)))
+		for _, thenStmt := range then {
 			if err := e.encodeStatement(thenStmt); err != nil {
 				return err
 			}
@@ -196,8 +211,9 @@ func (e *Encoder) encodeStatement(stmt ast.Statement) error {
 				return err
 			}
 		}
-		e.writeUint32(uint32(len(s.Else)))
-		for _, elseStmt := range s.Else {
+		els := filterComments(s.Else)
+		e.writeUint32(uint32(len(els)))
+		for _, elseStmt := range els {
 			if err := e.encodeStatement(elseStmt); err != nil {
 				return err
 			}
@@ -209,8 +225,9 @@ func (e *Encoder) encodeStatement(stmt ast.Statement) error {
 		if err := e.encodeExpression(s.Condition); err != nil {
 			return err
 		}
-		e.writeUint32(uint32(len(s.Body)))
-		for _, bodyStmt := range s.Body {
+		body := filterComments(s.Body)
+		e.writeUint32(uint32(len(body)))
+		for _, bodyStmt := range body {
 			if err := e.encodeStatement(bodyStmt); err != nil {
 				return err
 			}
@@ -222,8 +239,9 @@ func (e *Encoder) encodeStatement(stmt ast.Statement) error {
 		if err := e.encodeExpression(s.Count); err != nil {
 			return err
 		}
-		e.writeUint32(uint32(len(s.Body)))
-		for _, bodyStmt := range s.Body {
+		body := filterComments(s.Body)
+		e.writeUint32(uint32(len(body)))
+		for _, bodyStmt := range body {
 			if err := e.encodeStatement(bodyStmt); err != nil {
 				return err
 			}
@@ -236,8 +254,9 @@ func (e *Encoder) encodeStatement(stmt ast.Statement) error {
 		if err := e.encodeExpression(s.List); err != nil {
 			return err
 		}
-		e.writeUint32(uint32(len(s.Body)))
-		for _, bodyStmt := range s.Body {
+		body := filterComments(s.Body)
+		e.writeUint32(uint32(len(body)))
+		for _, bodyStmt := range body {
 			if err := e.encodeStatement(bodyStmt); err != nil {
 				return err
 			}
@@ -294,6 +313,10 @@ func (e *Encoder) encodeStatement(stmt ast.Statement) error {
 		e.writeBool(s.IsSafe)
 		return nil
 
+	case *ast.CommentStatement:
+		// Comments are stripped from the bytecode; they carry no runtime meaning.
+		return nil
+
 	default:
 		return fmt.Errorf("unknown statement type: %T", stmt)
 	}
@@ -304,8 +327,9 @@ func (e *Encoder) encodeElseIfPart(part *ast.ElseIfPart) error {
 	if err := e.encodeExpression(part.Condition); err != nil {
 		return err
 	}
-	e.writeUint32(uint32(len(part.Body)))
-	for _, stmt := range part.Body {
+	body := filterComments(part.Body)
+	e.writeUint32(uint32(len(body)))
+	for _, stmt := range body {
 		if err := e.encodeStatement(stmt); err != nil {
 			return err
 		}
@@ -991,16 +1015,16 @@ func GetCachePath(sourcePath string) string {
 	// Using fixed keys for deterministic hashing across runs (required for cache persistence)
 	key0 := uint64(0x0706050403020100)
 	key1 := uint64(0x0f0e0d0c0b0a0908)
-	
+
 	// Compute SipHash of the source path
 	hash := siphash.Hash(key0, key1, []byte(sourcePath))
-	
+
 	// Convert hash to hex string directly (more efficient than byte array conversion)
 	hashStr := fmt.Sprintf("%016x", hash)
-	
+
 	// Get the base name for readability
 	baseName := filepath.Base(sourcePath)
-	
+
 	// Create cache filename: <hash>_<basename>.101
 	cacheFileName := fmt.Sprintf("%s_%s.101", hashStr, baseName)
 	return filepath.Join(CacheDir, cacheFileName)
@@ -1013,12 +1037,12 @@ func IsCacheValid(sourcePath, cachePath string) bool {
 	if err != nil {
 		return false
 	}
-	
+
 	cacheInfo, err := os.Stat(cachePath)
 	if err != nil {
 		return false
 	}
-	
+
 	// Cache is valid if it's newer than or equal to the source
 	return !cacheInfo.ModTime().Before(sourceInfo.ModTime())
 }
@@ -1031,12 +1055,12 @@ func WriteBytecodeCache(cachePath string, data []byte) error {
 	if err := os.MkdirAll(cacheDir, 0755); err != nil {
 		return fmt.Errorf("failed to create cache directory: %w", err)
 	}
-	
+
 	// Write bytecode to cache file
 	if err := os.WriteFile(cachePath, data, 0644); err != nil {
 		return fmt.Errorf("failed to write cache file: %w", err)
 	}
-	
+
 	return nil
 }
 
@@ -1054,7 +1078,7 @@ func ReadBytecodeCache(cachePath string) ([]byte, error) {
 // Returns the parsed Program AST and a boolean indicating whether cache was used.
 func LoadCachedOrParse(sourcePath string, parseFunc func(string) (*ast.Program, error)) (*ast.Program, bool, error) {
 	cachePath := GetCachePath(sourcePath)
-	
+
 	// Check if cache is valid
 	if IsCacheValid(sourcePath, cachePath) {
 		// Try to load from cache
@@ -1069,13 +1093,13 @@ func LoadCachedOrParse(sourcePath string, parseFunc func(string) (*ast.Program, 
 			// Cache is corrupted, will re-parse and cache
 		}
 	}
-	
+
 	// Cache miss or invalid - parse the source file
 	program, err := parseFunc(sourcePath)
 	if err != nil {
 		return nil, false, err
 	}
-	
+
 	// Encode and cache the bytecode
 	encoder := NewEncoder()
 	data, err := encoder.Encode(program)
@@ -1084,6 +1108,6 @@ func LoadCachedOrParse(sourcePath string, parseFunc func(string) (*ast.Program, 
 		// Failures might occur due to permissions, disk space, etc., but shouldn't block execution
 		_ = WriteBytecodeCache(cachePath, data)
 	}
-	
+
 	return program, false, nil
 }

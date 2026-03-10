@@ -131,6 +131,9 @@ func (ev *Evaluator) Eval(node interface{}) (Value, error) {
 		return ev.evalRaiseStatement(node)
 	case *ast.SwapStatement:
 		return ev.evalSwapStatement(node)
+	case *ast.CommentStatement:
+		// Comments are no-ops at runtime.
+		return nil, nil
 	case *ast.TypeExpression:
 		return ev.evalTypeExpression(node)
 	case *ast.CastExpression:
@@ -163,20 +166,20 @@ func (ev *Evaluator) evalImport(is *ast.ImportStatement) (Value, error) {
 	// Import evaluates another English file and executes it in the current environment.
 	// Supports selective imports, import all, and safe imports.
 	// Uses bytecode caching (__engcache__) for faster loading.
-	
+
 	// Try to load from cache or parse the source file
 	parseFunc := func(path string) (*ast.Program, error) {
 		content, err := os.ReadFile(path)
 		if err != nil {
 			return nil, fmt.Errorf("failed to read file: %w", err)
 		}
-		
+
 		lexer := parser.NewLexer(string(content))
 		tokens := lexer.TokenizeAll()
 		p := parser.NewParser(tokens)
 		return p.Parse()
 	}
-	
+
 	program, _, err := bytecode.LoadCachedOrParse(is.Path, parseFunc)
 	if err != nil {
 		return nil, ev.runtimeError(fmt.Sprintf("failed to import '%s': %v", is.Path, err))
@@ -216,7 +219,7 @@ func (ev *Evaluator) evalSafeImport(program *ast.Program, is *ast.ImportStatemen
 			if err != nil {
 				return nil, err
 			}
-		// Skip all other statement types (Print, Call, etc.)
+			// Skip all other statement types (Print, Call, etc.)
 		}
 	}
 	return nil, nil
@@ -227,7 +230,7 @@ func (ev *Evaluator) evalSelectiveImport(program *ast.Program, is *ast.ImportSta
 	// Create a temporary environment for the imported file
 	tempEnv := NewEnvironment()
 	tempEval := NewEvaluator(tempEnv, ev.builtinFn)
-	
+
 	// Execute in temporary environment
 	_, err := tempEval.evalProgram(program)
 	if err != nil {
@@ -497,8 +500,8 @@ func (ev *Evaluator) evalIfStatement(is *ast.IfStatement) (Value, error) {
 			return nil, err
 		}
 		if condBool, condErr := ToBool(cond); condErr != nil {
-		return nil, condErr
-	} else if condBool {
+			return nil, condErr
+		} else if condBool {
 			// Create scoped environment for else-if block
 			ev.env = oldEnv.NewChild()
 			result, err := ev.evalStatements(eif.Body)
@@ -789,7 +792,7 @@ func (ev *Evaluator) evalBinaryExpression(be *ast.BinaryExpression) (Value, erro
 		return rightBool, nil
 	}
 
-left, err := ev.Eval(be.Left)
+	left, err := ev.Eval(be.Left)
 	if err != nil {
 		return nil, err
 	}
@@ -833,10 +836,10 @@ func (ev *Evaluator) evalUnaryExpression(ue *ast.UnaryExpression) (Value, error)
 		return -num, nil
 	case "not":
 		rightBool, rightErr := ToBool(right)
-if rightErr != nil {
-return nil, rightErr
-}
-return !rightBool, nil
+		if rightErr != nil {
+			return nil, rightErr
+		}
+		return !rightBool, nil
 	default:
 		return nil, fmt.Errorf("unknown unary operator: %s", ue.Operator)
 	}
@@ -990,131 +993,131 @@ func (ev *Evaluator) findSimilarFunction(name string) string {
 // ─── Array ────────────────────────────────────────────────────────────────────
 
 func (ev *Evaluator) evalArrayLiteral(al *ast.ArrayLiteral) (Value, error) {
-elements := make([]interface{}, 0, len(al.Elements))
+	elements := make([]interface{}, 0, len(al.Elements))
 
-// Determine element type: from explicit hint or infer from first element
-elemType := types.TypeUnknown
-if al.ElementType != "" {
-elemType = types.Parse(al.ElementType)
-}
+	// Determine element type: from explicit hint or infer from first element
+	elemType := types.TypeUnknown
+	if al.ElementType != "" {
+		elemType = types.Parse(al.ElementType)
+	}
 
-for _, expr := range al.Elements {
-val, err := ev.Eval(expr)
-if err != nil {
-return nil, err
-}
-valType := types.Canonical(inferTypeKind(val))
+	for _, expr := range al.Elements {
+		val, err := ev.Eval(expr)
+		if err != nil {
+			return nil, err
+		}
+		valType := types.Canonical(inferTypeKind(val))
 
-// Infer element type from first element if not explicitly given
-if elemType == types.TypeUnknown && val != nil {
-elemType = valType
-}
+		// Infer element type from first element if not explicitly given
+		if elemType == types.TypeUnknown && val != nil {
+			elemType = valType
+		}
 
-// Enforce homogeneity
-if elemType != types.TypeUnknown && val != nil && types.Canonical(valType) != types.Canonical(elemType) {
-return nil, fmt.Errorf(
-"TypeError: array element has wrong type: expected %s, got %s",
-typeKindName(elemType), typeKindName(valType),
-)
-}
-elements = append(elements, val)
-}
+		// Enforce homogeneity
+		if elemType != types.TypeUnknown && val != nil && types.Canonical(valType) != types.Canonical(elemType) {
+			return nil, fmt.Errorf(
+				"TypeError: array element has wrong type: expected %s, got %s",
+				typeKindName(elemType), typeKindName(valType),
+			)
+		}
+		elements = append(elements, val)
+	}
 
-return &ArrayValue{ElementType: elemType, Elements: elements}, nil
+	return &ArrayValue{ElementType: elemType, Elements: elements}, nil
 }
 
 // ─── Lookup table ─────────────────────────────────────────────────────────────
 
 func (ev *Evaluator) evalLookupKeyAccess(la *ast.LookupKeyAccess) (Value, error) {
-tableVal, err := ev.Eval(la.Table)
-if err != nil {
-return nil, err
-}
-lt, ok := tableVal.(*LookupTableValue)
-if !ok {
-return nil, fmt.Errorf("TypeError: cannot index %s with a key; expected lookup table",
-typeKindName(inferTypeKind(tableVal)))
-}
+	tableVal, err := ev.Eval(la.Table)
+	if err != nil {
+		return nil, err
+	}
+	lt, ok := tableVal.(*LookupTableValue)
+	if !ok {
+		return nil, fmt.Errorf("TypeError: cannot index %s with a key; expected lookup table",
+			typeKindName(inferTypeKind(tableVal)))
+	}
 
-keyVal, err := ev.Eval(la.Key)
-if err != nil {
-return nil, err
-}
-serialKey, err := types.SerializeKey(keyVal)
-if err != nil {
-return nil, err
-}
+	keyVal, err := ev.Eval(la.Key)
+	if err != nil {
+		return nil, err
+	}
+	serialKey, err := types.SerializeKey(keyVal)
+	if err != nil {
+		return nil, err
+	}
 
-val, exists := lt.Entries[serialKey]
-if !exists {
-return nil, fmt.Errorf("KeyError: key %s not found in lookup table", ToString(keyVal))
-}
-return val, nil
+	val, exists := lt.Entries[serialKey]
+	if !exists {
+		return nil, fmt.Errorf("KeyError: key %s not found in lookup table", ToString(keyVal))
+	}
+	return val, nil
 }
 
 func (ev *Evaluator) evalLookupKeyAssignment(la *ast.LookupKeyAssignment) (Value, error) {
-tableVal, ok := ev.env.Get(la.TableName)
-if !ok {
-return nil, fmt.Errorf("undefined variable '%s'", la.TableName)
-}
-lt, ok := tableVal.(*LookupTableValue)
-if !ok {
-return nil, fmt.Errorf("TypeError: '%s' is not a lookup table (got %s)",
-la.TableName, typeKindName(inferTypeKind(tableVal)))
-}
+	tableVal, ok := ev.env.Get(la.TableName)
+	if !ok {
+		return nil, fmt.Errorf("undefined variable '%s'", la.TableName)
+	}
+	lt, ok := tableVal.(*LookupTableValue)
+	if !ok {
+		return nil, fmt.Errorf("TypeError: '%s' is not a lookup table (got %s)",
+			la.TableName, typeKindName(inferTypeKind(tableVal)))
+	}
 
-keyVal, err := ev.Eval(la.Key)
-if err != nil {
-return nil, err
-}
-serialKey, err := types.SerializeKey(keyVal)
-if err != nil {
-return nil, err
-}
+	keyVal, err := ev.Eval(la.Key)
+	if err != nil {
+		return nil, err
+	}
+	serialKey, err := types.SerializeKey(keyVal)
+	if err != nil {
+		return nil, err
+	}
 
-value, err := ev.Eval(la.Value)
-if err != nil {
-return nil, err
-}
+	value, err := ev.Eval(la.Value)
+	if err != nil {
+		return nil, err
+	}
 
-lt.Set(serialKey, value)
-return nil, nil
+	lt.Set(serialKey, value)
+	return nil, nil
 }
 
 func (ev *Evaluator) evalHasExpression(he *ast.HasExpression) (Value, error) {
-tableVal, err := ev.Eval(he.Table)
-if err != nil {
-return nil, err
-}
-lt, ok := tableVal.(*LookupTableValue)
-if !ok {
-return nil, fmt.Errorf("TypeError: 'has' requires a lookup table, got %s",
-typeKindName(inferTypeKind(tableVal)))
-}
+	tableVal, err := ev.Eval(he.Table)
+	if err != nil {
+		return nil, err
+	}
+	lt, ok := tableVal.(*LookupTableValue)
+	if !ok {
+		return nil, fmt.Errorf("TypeError: 'has' requires a lookup table, got %s",
+			typeKindName(inferTypeKind(tableVal)))
+	}
 
-keyVal, err := ev.Eval(he.Key)
-if err != nil {
-return nil, err
-}
-serialKey, err := types.SerializeKey(keyVal)
-if err != nil {
-return nil, err
-}
+	keyVal, err := ev.Eval(he.Key)
+	if err != nil {
+		return nil, err
+	}
+	serialKey, err := types.SerializeKey(keyVal)
+	if err != nil {
+		return nil, err
+	}
 
-_, exists := lt.Entries[serialKey]
-return exists, nil
+	_, exists := lt.Entries[serialKey]
+	return exists, nil
 }
 
 // evalNilCheckExpression evaluates "x is something" / "x has a value" (IsSomethingCheck=true)
 // and "x is nothing" / "x has no value" (IsSomethingCheck=false).
 // Both always return a boolean — compatible with strict boolean conditions.
 func (ev *Evaluator) evalNilCheckExpression(nc *ast.NilCheckExpression) (Value, error) {
-val, err := ev.Eval(nc.Value)
-if err != nil {
-return nil, err
-}
-if nc.IsSomethingCheck {
-return val != nil, nil // true when the variable holds a non-nothing value
-}
-return val == nil, nil // true when the variable is nothing
+	val, err := ev.Eval(nc.Value)
+	if err != nil {
+		return nil, err
+	}
+	if nc.IsSomethingCheck {
+		return val != nil, nil // true when the variable holds a non-nothing value
+	}
+	return val == nil, nil // true when the variable is nothing
 }

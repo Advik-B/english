@@ -158,9 +158,9 @@ type SignatureHelpContext struct {
 type SignatureHelpTriggerKind int
 
 const (
-	SignatureHelpTriggerKindInvoked         SignatureHelpTriggerKind = 1
+	SignatureHelpTriggerKindInvoked          SignatureHelpTriggerKind = 1
 	SignatureHelpTriggerKindTriggerCharacter SignatureHelpTriggerKind = 2
-	SignatureHelpTriggerKindContentChange   SignatureHelpTriggerKind = 3
+	SignatureHelpTriggerKindContentChange    SignatureHelpTriggerKind = 3
 )
 
 // SignatureHelp represents the signature of something callable
@@ -205,12 +205,12 @@ type DocumentSymbol struct {
 
 // SymbolInformation represents information about a symbol
 type SymbolInformation struct {
-	Name          string     `json:"name"`
-	Kind          SymbolKind `json:"kind"`
+	Name          string      `json:"name"`
+	Kind          SymbolKind  `json:"kind"`
 	Tags          []SymbolTag `json:"tags,omitempty"`
-	Deprecated    bool       `json:"deprecated,omitempty"`
-	Location      Location   `json:"location"`
-	ContainerName string     `json:"containerName,omitempty"`
+	Deprecated    bool        `json:"deprecated,omitempty"`
+	Location      Location    `json:"location"`
+	ContainerName string      `json:"containerName,omitempty"`
 }
 
 // SymbolKind represents the kind of a symbol
@@ -329,10 +329,10 @@ type CodeActionContext struct {
 
 // CodeAction represents a code action
 type CodeAction struct {
-	Title       string         `json:"title"`
-	Kind        string         `json:"kind,omitempty"`
-	Diagnostics []Diagnostic   `json:"diagnostics,omitempty"`
-	IsPreferred bool           `json:"isPreferred,omitempty"`
+	Title       string       `json:"title"`
+	Kind        string       `json:"kind,omitempty"`
+	Diagnostics []Diagnostic `json:"diagnostics,omitempty"`
+	IsPreferred bool         `json:"isPreferred,omitempty"`
 	Disabled    *struct {
 		Reason string `json:"reason"`
 	} `json:"disabled,omitempty"`
@@ -456,28 +456,28 @@ type SemanticTokensOptions struct {
 
 // Well-known semantic token types
 const (
-	SemanticTokenTypeNamespace        = "namespace"
-	SemanticTokenTypeType             = "type"
-	SemanticTokenTypeClass            = "class"
-	SemanticTokenTypeEnum             = "enum"
-	SemanticTokenTypeInterface        = "interface"
-	SemanticTokenTypeStruct           = "struct"
-	SemanticTokenTypeTypeParameter    = "typeParameter"
-	SemanticTokenTypeParameter        = "parameter"
-	SemanticTokenTypeVariable         = "variable"
-	SemanticTokenTypeProperty         = "property"
-	SemanticTokenTypeEnumMember       = "enumMember"
-	SemanticTokenTypeEvent            = "event"
-	SemanticTokenTypeFunction         = "function"
-	SemanticTokenTypeMethod           = "method"
-	SemanticTokenTypeMacro            = "macro"
-	SemanticTokenTypeKeyword          = "keyword"
-	SemanticTokenTypeModifier         = "modifier"
-	SemanticTokenTypeComment          = "comment"
-	SemanticTokenTypeString           = "string"
-	SemanticTokenTypeNumber           = "number"
-	SemanticTokenTypeRegexp           = "regexp"
-	SemanticTokenTypeOperator         = "operator"
+	SemanticTokenTypeNamespace     = "namespace"
+	SemanticTokenTypeType          = "type"
+	SemanticTokenTypeClass         = "class"
+	SemanticTokenTypeEnum          = "enum"
+	SemanticTokenTypeInterface     = "interface"
+	SemanticTokenTypeStruct        = "struct"
+	SemanticTokenTypeTypeParameter = "typeParameter"
+	SemanticTokenTypeParameter     = "parameter"
+	SemanticTokenTypeVariable      = "variable"
+	SemanticTokenTypeProperty      = "property"
+	SemanticTokenTypeEnumMember    = "enumMember"
+	SemanticTokenTypeEvent         = "event"
+	SemanticTokenTypeFunction      = "function"
+	SemanticTokenTypeMethod        = "method"
+	SemanticTokenTypeMacro         = "macro"
+	SemanticTokenTypeKeyword       = "keyword"
+	SemanticTokenTypeModifier      = "modifier"
+	SemanticTokenTypeComment       = "comment"
+	SemanticTokenTypeString        = "string"
+	SemanticTokenTypeNumber        = "number"
+	SemanticTokenTypeRegexp        = "regexp"
+	SemanticTokenTypeOperator      = "operator"
 )
 
 // Well-known semantic token modifiers

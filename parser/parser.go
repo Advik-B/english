@@ -96,6 +96,10 @@ func (p *Parser) Parse() (*ast.Program, error) {
 
 func (p *Parser) parseStatement() (ast.Statement, error) {
 	switch p.curToken.Type {
+	case token.COMMENT:
+		stmt := &ast.CommentStatement{Text: p.curToken.Value}
+		p.nextToken()
+		return stmt, nil
 	case token.IMPORT:
 		return p.parseImport()
 	case token.DECLARE:
@@ -689,7 +693,7 @@ func (p *Parser) parseCall() (ast.Statement, error) {
 	// 1. Function name: "call greet with args."
 	// 2. Method name: "call talk from p2." or "call talk on p2."
 	// 3. Object name with possessive: "call p2's talk." (p2's is a single token)
-	
+
 	firstIdent := p.curToken.Value
 	if p.curToken.Type != token.IDENTIFIER {
 		return nil, fmt.Errorf("expected identifier after 'Call'")
@@ -701,25 +705,25 @@ func (p *Parser) parseCall() (ast.Statement, error) {
 	if len(firstIdent) > 2 && firstIdent[len(firstIdent)-2:] == "'s" {
 		// This is possessive: extract object name (remove 's)
 		objectName := firstIdent[:len(firstIdent)-2]
-		
+
 		if p.curToken.Type != token.IDENTIFIER {
 			return nil, fmt.Errorf("expected method name after possessive")
 		}
 		methodName := p.curToken.Value
 		p.nextToken()
-		
+
 		// Parse optional arguments
 		var args []ast.Expression
 		if p.curToken.Type == token.WITH {
 			p.nextToken()
 			args = p.parseCallArguments()
 		}
-		
+
 		if err := p.expectToken(token.PERIOD); err != nil {
 			return nil, err
 		}
 		p.nextToken()
-		
+
 		// Return as method call
 		return &ast.CallStatement{
 			MethodCall: &ast.MethodCall{
@@ -734,26 +738,26 @@ func (p *Parser) parseCall() (ast.Statement, error) {
 	if p.curToken.Type == token.FROM || p.curToken.Type == token.ON {
 		methodName := firstIdent
 		p.nextToken() // skip FROM/ON
-		
+
 		// Get object
 		if p.curToken.Type != token.IDENTIFIER {
 			return nil, fmt.Errorf("expected object name after 'from'/'on'")
 		}
 		objectName := p.curToken.Value
 		p.nextToken()
-		
+
 		// Parse optional arguments
 		var args []ast.Expression
 		if p.curToken.Type == token.WITH {
 			p.nextToken()
 			args = p.parseCallArguments()
 		}
-		
+
 		if err := p.expectToken(token.PERIOD); err != nil {
 			return nil, err
 		}
 		p.nextToken()
-		
+
 		// Return as method call
 		return &ast.CallStatement{
 			MethodCall: &ast.MethodCall{
@@ -767,7 +771,7 @@ func (p *Parser) parseCall() (ast.Statement, error) {
 	// Regular function call: "call greet with args."
 	funcName := firstIdent
 	var args []ast.Expression
-	
+
 	if p.curToken.Type == token.WITH {
 		p.nextToken()
 		args = p.parseCallArguments()
@@ -789,20 +793,20 @@ func (p *Parser) parseCall() (ast.Statement, error) {
 // parseCallArguments parses comma-separated call arguments
 func (p *Parser) parseCallArguments() []ast.Expression {
 	var args []ast.Expression
-	
+
 	for {
 		arg, err := p.parseExpression()
 		if err != nil {
 			break
 		}
 		args = append(args, arg)
-		
+
 		if p.curToken.Type != token.AND && p.curToken.Type != token.COMMA {
 			break
 		}
 		p.nextToken()
 	}
-	
+
 	return args
 }
 
@@ -1278,10 +1282,10 @@ func (p *Parser) parseAskStatement() (ast.Statement, error) {
 func (p *Parser) parseBlock() ([]ast.Statement, error) {
 	var statements []ast.Statement
 
-	for p.curToken.Type != token.THATS && 
-		p.curToken.Type != token.OTHERWISE && 
-		p.curToken.Type != token.ON && 
-		p.curToken.Type != token.BUT && 
+	for p.curToken.Type != token.THATS &&
+		p.curToken.Type != token.OTHERWISE &&
+		p.curToken.Type != token.ON &&
+		p.curToken.Type != token.BUT &&
 		p.curToken.Type != token.EOF {
 		stmt, err := p.parseStatement()
 		if err != nil {
@@ -1655,7 +1659,7 @@ func (p *Parser) parsePrimary() (ast.Expression, error) {
 
 	case token.IDENTIFIER:
 		name := p.curToken.Value
-		
+
 		// Check for special identifier phrases
 		if name == "a" || name == "an" {
 			p.nextToken()
@@ -1686,7 +1690,7 @@ func (p *Parser) parsePrimary() (ast.Expression, error) {
 			// Not a special phrase, treat "a"/"an" as identifier
 			return &ast.Identifier{Name: name}, nil
 		}
-		
+
 		p.nextToken()
 
 		// Possessive expression: "x's method" → MethodCall{Object: x, MethodName: method}
@@ -2106,18 +2110,18 @@ func (p *Parser) parseFunctionCallArgs() ([]ast.Expression, error) {
 // parseArrayLiteral parses "an array of [TYPE] [elements]"
 // Cursor is on ARRAY token when called.
 func (p *Parser) parseArrayLiteral() (ast.Expression, error) {
-p.nextToken() // consume ARRAY
+	p.nextToken() // consume ARRAY
 
-if p.curToken.Type != token.OF {
-return nil, fmt.Errorf("expected 'of' after 'array' at line %d", p.curToken.Line)
-}
-p.nextToken() // consume OF
+	if p.curToken.Type != token.OF {
+		return nil, fmt.Errorf("expected 'of' after 'array' at line %d", p.curToken.Line)
+	}
+	p.nextToken() // consume OF
 
-// Optional element type hint before the bracket
-elementType := ""
-if p.curToken.Type != token.LBRACKET {
-elementType = p.parseTypeName()
-}
+	// Optional element type hint before the bracket
+	elementType := ""
+	if p.curToken.Type != token.LBRACKET {
+		elementType = p.parseTypeName()
+	}
 
 	if p.curToken.Type != token.LBRACKET {
 		typeSuffix := ""
@@ -2126,88 +2130,88 @@ elementType = p.parseTypeName()
 		}
 		return nil, fmt.Errorf("expected '[' after 'array of%s' at line %d", typeSuffix, p.curToken.Line)
 	}
-p.nextToken() // consume [
+	p.nextToken() // consume [
 
-var elements []ast.Expression
-for p.curToken.Type != token.RBRACKET && p.curToken.Type != token.EOF {
-elem, err := p.parseExpression()
-if err != nil {
-return nil, err
-}
-elements = append(elements, elem)
-if p.curToken.Type == token.COMMA {
-p.nextToken()
-}
-}
-if p.curToken.Type != token.RBRACKET {
-return nil, fmt.Errorf("expected ']' to close array literal at line %d", p.curToken.Line)
-}
-p.nextToken() // consume ]
+	var elements []ast.Expression
+	for p.curToken.Type != token.RBRACKET && p.curToken.Type != token.EOF {
+		elem, err := p.parseExpression()
+		if err != nil {
+			return nil, err
+		}
+		elements = append(elements, elem)
+		if p.curToken.Type == token.COMMA {
+			p.nextToken()
+		}
+	}
+	if p.curToken.Type != token.RBRACKET {
+		return nil, fmt.Errorf("expected ']' to close array literal at line %d", p.curToken.Line)
+	}
+	p.nextToken() // consume ]
 
-return &ast.ArrayLiteral{ElementType: elementType, Elements: elements}, nil
+	return &ast.ArrayLiteral{ElementType: elementType, Elements: elements}, nil
 }
 
 // parseLookupKeyAccess parses "the entry KEY in TABLE".
 // Cursor is on ENTRY when called.
 func (p *Parser) parseLookupKeyAccess() (ast.Expression, error) {
-p.nextToken() // consume ENTRY
+	p.nextToken() // consume ENTRY
 
-key, err := p.parseExpression()
-if err != nil {
-return nil, err
-}
+	key, err := p.parseExpression()
+	if err != nil {
+		return nil, err
+	}
 
-if p.curToken.Type != token.IN {
-return nil, fmt.Errorf("expected 'in' after lookup key at line %d", p.curToken.Line)
-}
-p.nextToken() // consume IN
+	if p.curToken.Type != token.IN {
+		return nil, fmt.Errorf("expected 'in' after lookup key at line %d", p.curToken.Line)
+	}
+	p.nextToken() // consume IN
 
-table, err := p.parseExpression()
-if err != nil {
-return nil, err
-}
+	table, err := p.parseExpression()
+	if err != nil {
+		return nil, err
+	}
 
-return &ast.LookupKeyAccess{Table: table, Key: key}, nil
+	return &ast.LookupKeyAccess{Table: table, Key: key}, nil
 }
 
 // parseLookupKeyAssignment parses "the entry KEY in TABLE to be VALUE."
 // Cursor is on ENTRY when called (parseAssignment has already consumed "Set the").
 func (p *Parser) parseLookupKeyAssignment() (ast.Statement, error) {
-p.nextToken() // consume ENTRY
+	p.nextToken() // consume ENTRY
 
-key, err := p.parseExpression()
-if err != nil {
-return nil, err
-}
+	key, err := p.parseExpression()
+	if err != nil {
+		return nil, err
+	}
 
-if p.curToken.Type != token.IN {
-return nil, fmt.Errorf("expected 'in' after entry key at line %d", p.curToken.Line)
-}
-p.nextToken() // consume IN
+	if p.curToken.Type != token.IN {
+		return nil, fmt.Errorf("expected 'in' after entry key at line %d", p.curToken.Line)
+	}
+	p.nextToken() // consume IN
 
-if p.curToken.Type != token.IDENTIFIER {
-return nil, fmt.Errorf("expected table name after 'in' at line %d", p.curToken.Line)
-}
-tableName := p.curToken.Value
-p.nextToken()
+	if p.curToken.Type != token.IDENTIFIER {
+		return nil, fmt.Errorf("expected table name after 'in' at line %d", p.curToken.Line)
+	}
+	tableName := p.curToken.Value
+	p.nextToken()
 
-if p.curToken.Type != token.TO {
-return nil, fmt.Errorf("expected 'to' after table name at line %d", p.curToken.Line)
-}
-p.nextToken()
-if p.curToken.Type == token.BE {
-p.nextToken()
-}
+	if p.curToken.Type != token.TO {
+		return nil, fmt.Errorf("expected 'to' after table name at line %d", p.curToken.Line)
+	}
+	p.nextToken()
+	if p.curToken.Type == token.BE {
+		p.nextToken()
+	}
 
-value, err := p.parseExpression()
-if err != nil {
-return nil, err
-}
+	value, err := p.parseExpression()
+	if err != nil {
+		return nil, err
+	}
 
-if err := p.expectToken(token.PERIOD); err != nil {
-return nil, err
-}
-p.nextToken()
+	if err := p.expectToken(token.PERIOD); err != nil {
+		return nil, err
+	}
+	p.nextToken()
 
-return &ast.LookupKeyAssignment{TableName: tableName, Key: key, Value: value}, nil
+	return &ast.LookupKeyAssignment{TableName: tableName, Key: key, Value: value}, nil
 }

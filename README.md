@@ -12,6 +12,7 @@ A programming language interpreter with natural English syntax, built using Go w
 - **Flexible Syntax**: Multiple ways to express the same thing (e.g., `to be always` or `to always be`)
 - **Bytecode Compilation**: Compile source files to binary format for faster loading
 - **Automatic Bytecode Caching**: Imported files are automatically cached in `__engcache__/` for faster loading
+- **Python Transpiler**: Convert English programs to human-readable Python with the `transpile` command
 
 ## 🚀 Quick Start
 
@@ -40,6 +41,10 @@ go build -o english .
 # Run bytecode directly (no parsing needed)
 ./english run program.101
 
+# Transpile to Python (validates the program first)
+./english transpile program.abc         # Creates program.abc.py
+./english transpile program.101         # Creates program.101.py (from bytecode)
+
 # Show version
 ./english version
 
@@ -67,6 +72,43 @@ The bytecode format uses a protobuf-like binary serialization of the AST, with:
 - Magic bytes (`0x10, 0x1E, 0x4E, 0x47`) for file identification
 - Version byte for format compatibility
 - Binary-encoded AST nodes with type tags
+
+## 🐍 Python Transpiler
+
+The `transpile` command converts an English program to human-readable Python source code.
+The program is validated (parsed and type-checked) before any output is written.
+
+```bash
+# Transpile a source file
+./english transpile myprogram.abc       # Creates myprogram.abc.py
+
+# Transpile a compiled bytecode file
+./english transpile myprogram.101       # Creates myprogram.101.py
+```
+
+**What gets translated:**
+
+| English                                      | Python                          |
+|----------------------------------------------|---------------------------------|
+| `Declare x to be 5.`                         | `x = 5`                         |
+| `Declare pi to always be 3.14.`              | `pi = 3.14  # constant`         |
+| `Print "hello".`                             | `print("hello")`                |
+| `Write "hello".`                             | `print("hello", end="")`        |
+| `If x is greater than 5, then ...`           | `if x > 5:`                     |
+| `repeat the following while x < 10:`         | `while x < 10:`                 |
+| `repeat the following 5 times:`              | `for _ in range(5):`            |
+| `for each item in list:`                     | `for item in list:`             |
+| `repeat forever:`                            | `while True:`                   |
+| `Declare function foo that takes a ...`      | `def foo(a):`                   |
+| `Return x.`                                  | `return x`                      |
+| `Try doing the following: ... on error: ...` | `try: ... except Exception: ...`|
+| `Raise "msg" as NetworkError.`               | `raise NetworkError("msg")`     |
+| `Declare NetworkError as an error type.`     | `class NetworkError(Exception): pass` |
+| `Declare ages to be a lookup table.`         | `ages = {}`                     |
+| `Toggle flag.`                               | `flag = not flag`               |
+| `Swap x and y.`                              | `x, y = y, x`                   |
+
+Stdlib function calls are translated to their Python equivalents (e.g. `sqrt(x)` → `math.sqrt(x)`, `keys(table)` → `list(table.keys())`). A small set of helper functions is injected at the top of the file for operations without a direct single-expression Python equivalent.
 
 ## 📖 Language Guide
 
@@ -340,6 +382,8 @@ The interactive REPL (Read-Eval-Print Loop) features:
 ├── bytecode/
 │   ├── bytecode.go      # Binary serialization of AST
 │   └── bytecode_test.go # Bytecode tests
+├── transpiler/
+│   └── transpiler.go    # AST → Python transpiler
 ├── examples/            # Example programs
 │   ├── hello_world.abc  # Simple hello world
 │   ├── fibonacci.abc    # Fibonacci sequence

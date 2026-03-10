@@ -212,12 +212,19 @@ func TestLexerComments(t *testing.T) {
 	lexer := NewLexer(input)
 	tokens := lexer.TokenizeAll()
 
-	// Should have DECLARE and EOF (comment is skipped)
-	if len(tokens) != 2 {
-		t.Errorf("Expected 2 tokens, got %d", len(tokens))
+	// Comments now produce a COMMENT token rather than being silently discarded.
+	// Expected: COMMENT, DECLARE, EOF.
+	if len(tokens) != 3 {
+		t.Errorf("Expected 3 tokens (COMMENT, DECLARE, EOF), got %d", len(tokens))
 	}
-	if tokens[0].Type != token.DECLARE {
-		t.Errorf("First token should be DECLARE, got %v", tokens[0].Type)
+	if tokens[0].Type != token.COMMENT {
+		t.Errorf("First token should be COMMENT, got %v", tokens[0].Type)
+	}
+	if tokens[0].Value != "This is a comment" {
+		t.Errorf("COMMENT value should be %q, got %q", "This is a comment", tokens[0].Value)
+	}
+	if tokens[1].Type != token.DECLARE {
+		t.Errorf("Second token should be DECLARE, got %v", tokens[1].Type)
 	}
 }
 
@@ -678,11 +685,11 @@ func TestParserCallStatement(t *testing.T) {
 
 func TestParserImportStatement(t *testing.T) {
 	tests := []struct {
-		input       string
-		expectedPath string
+		input         string
+		expectedPath  string
 		expectedItems []string
-		expectedAll  bool
-		expectedSafe bool
+		expectedAll   bool
+		expectedSafe  bool
 	}{
 		{`Import "library.abc".`, "library.abc", nil, false, false},
 		{`Import from "utils.abc".`, "utils.abc", nil, false, false},

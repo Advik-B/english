@@ -44,22 +44,22 @@ var builtinArgTypes = map[string][]types.TypeKind{
 	"clamp":      {types.TypeF64},
 	"sign":       {types.TypeF64},
 	// list-only functions
-	"average":    {types.TypeList},
-	"min_value":  {types.TypeList},
-	"max_value":  {types.TypeList},
-	"any_true":   {types.TypeList},
-	"all_true":   {types.TypeList},
-	"product":    {types.TypeList},
+	"average":     {types.TypeList},
+	"min_value":   {types.TypeList},
+	"max_value":   {types.TypeList},
+	"any_true":    {types.TypeList},
+	"all_true":    {types.TypeList},
+	"product":     {types.TypeList},
 	"sorted_desc": {types.TypeList},
-	"zip_with":   {types.TypeList},
-	"sort":       {types.TypeList},
-	"reverse":    {types.TypeList},
-	"sum":        {types.TypeList},
-	"unique":     {types.TypeList},
-	"first":      {types.TypeList},
-	"last":       {types.TypeList},
-	"flatten":    {types.TypeList},
-	"slice":      {types.TypeList},
+	"zip_with":    {types.TypeList},
+	"sort":        {types.TypeList},
+	"reverse":     {types.TypeList},
+	"sum":         {types.TypeList},
+	"unique":      {types.TypeList},
+	"first":       {types.TypeList},
+	"last":        {types.TypeList},
+	"flatten":     {types.TypeList},
+	"slice":       {types.TypeList},
 	// lookup-table-only functions
 	"keys":           {types.TypeLookup},
 	"values":         {types.TypeLookup},
@@ -84,13 +84,24 @@ func (te *TypeError) Error() string {
 
 // TypeChecker performs static type analysis on an AST before execution.
 type TypeChecker struct {
-	varTypes map[string]types.TypeKind
-	errors   []*TypeError
+	varTypes      map[string]types.TypeKind
+	userFunctions map[string]bool // names of user-defined functions (skip stdlib type check)
+	errors        []*TypeError
 }
 
 // Check runs the type checker on a program and returns all type errors found.
 func Check(program *ast.Program) []*TypeError {
-	tc := &TypeChecker{varTypes: make(map[string]types.TypeKind)}
+	tc := &TypeChecker{
+		varTypes:      make(map[string]types.TypeKind),
+		userFunctions: make(map[string]bool),
+	}
+	// Pre-scan top-level function declarations so that user-defined functions
+	// sharing a name with a stdlib function are not falsely type-checked.
+	for _, stmt := range program.Statements {
+		if fn, ok := stmt.(*ast.FunctionDecl); ok {
+			tc.userFunctions[fn.Name] = true
+		}
+	}
 	tc.checkStatements(program.Statements)
 	return tc.errors
 }
@@ -227,6 +238,10 @@ func (tc *TypeChecker) checkExpression(expr ast.Expression) {
 }
 
 func (tc *TypeChecker) checkFunctionCallArgs(name string, args []ast.Expression) {
+	// User-defined functions shadow stdlib functions; skip the stdlib type check.
+	if tc.userFunctions[name] {
+		return
+	}
 	expected, ok := builtinArgTypes[name]
 	if !ok {
 		return

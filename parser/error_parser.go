@@ -66,7 +66,10 @@ func (p *Parser) parseTryStatement() (ast.Statement, error) {
 
 		// Accept any identifier: "error" (catch-all) or a specific type name
 		if p.curToken.Type != token.IDENTIFIER {
-			return nil, fmt.Errorf("expected error type or 'error' after 'on', got %v", p.curToken.Type)
+			return nil, p.syntaxErr(
+				"I expected an error type name or 'error' after 'on'.",
+				"For example: 'on error:' to catch all errors, or 'on NetworkError:' to catch a specific type.",
+			)
 		}
 		handlerName := p.curToken.Value
 		p.nextToken()
@@ -159,7 +162,10 @@ func (p *Parser) parseRaiseStatement() (ast.Statement, error) {
 		p.nextToken()
 
 		if p.curToken.Type != token.IDENTIFIER {
-			return nil, fmt.Errorf("expected error type after 'as', got %v", p.curToken.Type)
+			return nil, p.syntaxErr(
+				"I expected an error type name after 'as'.",
+				"For example: 'raise \"Something went wrong\" as NetworkError.'",
+			)
 		}
 
 		errorType = p.curToken.Value
@@ -187,7 +193,10 @@ func (p *Parser) parseSwapStatement() (ast.Statement, error) {
 	p.nextToken()
 
 	if p.curToken.Type != token.IDENTIFIER {
-		return nil, fmt.Errorf("expected variable name after 'swap', got %v", p.curToken.Type)
+		return nil, p.syntaxErr(
+			"I expected the first variable name after 'swap'.",
+			"For example: 'swap a and b.' swaps the values of a and b.",
+		)
 	}
 	name1 := p.curToken.Value
 	p.nextToken()
@@ -199,7 +208,10 @@ func (p *Parser) parseSwapStatement() (ast.Statement, error) {
 	p.nextToken()
 
 	if p.curToken.Type != token.IDENTIFIER {
-		return nil, fmt.Errorf("expected variable name after 'and', got %v", p.curToken.Type)
+		return nil, p.syntaxErr(
+			"I expected the second variable name after 'and'.",
+			"For example: 'swap a and b.' swaps the values of a and b.",
+		)
 	}
 	name2 := p.curToken.Value
 	p.nextToken()
@@ -223,7 +235,10 @@ func (p *Parser) parseSwapStatement() (ast.Statement, error) {
 func (p *Parser) parseErrorTypeDecl() (ast.Statement, error) {
 	nameToken := p.curToken
 	if nameToken.Type != token.IDENTIFIER {
-		return nil, fmt.Errorf("expected error type name, got %v at line %d", nameToken.Type, nameToken.Line)
+		return nil, p.syntaxErr(
+			"I expected the name of the new error type.",
+			"For example: 'Declare NetworkError as an error type.'",
+		)
 	}
 	p.nextToken() // consume name
 
@@ -235,13 +250,19 @@ func (p *Parser) parseErrorTypeDecl() (ast.Statement, error) {
 
 	// Consume "an" or "a"
 	if p.curToken.Type != token.IDENTIFIER || (strings.ToLower(p.curToken.Value) != "a" && strings.ToLower(p.curToken.Value) != "an") {
-		return nil, fmt.Errorf("expected 'a' or 'an' after 'as', got %v", p.curToken.Value)
+		return nil, p.syntaxErr(
+			fmt.Sprintf("I expected 'a' or 'an' after 'as', but found '%s'.", p.curToken.Value),
+			"For example: 'Declare NetworkError as an error type.'",
+		)
 	}
 	p.nextToken()
 
 	// Consume "error"
 	if p.curToken.Type != token.IDENTIFIER || strings.ToLower(p.curToken.Value) != "error" {
-		return nil, fmt.Errorf("expected 'error' after article, got %v", p.curToken.Value)
+		return nil, p.syntaxErr(
+			fmt.Sprintf("I expected the word 'error' here, but found '%s'.", p.curToken.Value),
+			"For example: 'Declare NetworkError as an error type.'",
+		)
 	}
 	p.nextToken()
 
@@ -268,7 +289,10 @@ func (p *Parser) parseErrorTypeDecl() (ast.Statement, error) {
 func (p *Parser) parseErrorSubtypeDecl() (ast.Statement, error) {
 	nameToken := p.curToken
 	if nameToken.Type != token.IDENTIFIER {
-		return nil, fmt.Errorf("expected error type name, got %v at line %d", nameToken.Type, nameToken.Line)
+		return nil, p.syntaxErr(
+			"I expected the name of the error subtype.",
+			"For example: 'Declare TimeoutError as a type of NetworkError.'",
+		)
 	}
 	p.nextToken() // consume name
 
@@ -280,7 +304,10 @@ func (p *Parser) parseErrorSubtypeDecl() (ast.Statement, error) {
 
 	// Consume "a" or "an"
 	if p.curToken.Type != token.IDENTIFIER || (strings.ToLower(p.curToken.Value) != "a" && strings.ToLower(p.curToken.Value) != "an") {
-		return nil, fmt.Errorf("expected 'a' or 'an' after 'as', got %v", p.curToken.Value)
+		return nil, p.syntaxErr(
+			fmt.Sprintf("I expected 'a' or 'an' after 'as', but found '%s'.", p.curToken.Value),
+			"For example: 'Declare TimeoutError as a type of NetworkError.'",
+		)
 	}
 	p.nextToken()
 
@@ -298,7 +325,10 @@ func (p *Parser) parseErrorSubtypeDecl() (ast.Statement, error) {
 
 	// Consume parent type name
 	if p.curToken.Type != token.IDENTIFIER {
-		return nil, fmt.Errorf("expected parent error type name after 'of', got %v at line %d", p.curToken.Type, p.curToken.Line)
+		return nil, p.syntaxErr(
+			"I expected the parent error type name after 'of'.",
+			"For example: 'Declare TimeoutError as a type of NetworkError.'",
+		)
 	}
 	parentName := p.curToken.Value
 	p.nextToken()

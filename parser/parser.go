@@ -47,34 +47,44 @@ func (p *Parser) expectToken(tokenType token.Type) error {
 }
 
 func (p *Parser) makeExpectError(expected token.Type) error {
-	var suggestion string
+	var hint string
 
-	// Provide helpful suggestions based on context
+	// Provide helpful hints based on context
 	switch expected {
 	case token.PERIOD:
-		suggestion = "\n  Perhaps you forgot to end the statement with a period (.)"
+		hint = "Every statement must end with a period (.). Try adding a period at the end of the line."
 	case token.TO:
 		if p.curToken.Type == token.BE {
-			suggestion = "\n  Perhaps you meant: 'to be' instead of just 'be'"
+			hint = "Did you mean 'to be'? For example: 'Declare x to be 5.'"
+		} else {
+			hint = "The word 'to' is missing here. For example: 'Declare x to be 5.' or 'Set x to be 10.'"
 		}
 	case token.BE:
 		if p.curToken.Type == token.TO {
-			suggestion = "\n  Perhaps you meant: 'to be' (you have 'to' but missing 'be')"
+			hint = "The word 'be' is missing after 'to'. For example: 'Declare x to be 5.'"
+		} else {
+			hint = "The word 'be' is expected here. For example: 'Declare x to be 5.'"
 		}
 	case token.THATS:
-		suggestion = "\n  Perhaps you forgot to end the block with 'thats it.'"
+		hint = "Every block must end with 'thats it.' — did you forget to close the block?"
 	case token.IT:
 		if p.curToken.Type == token.PERIOD {
-			suggestion = "\n  Perhaps you meant: 'thats it.' (missing 'it' before the period)"
+			hint = "The word 'it' is missing before the period. Write 'thats it.' to close the block."
 		}
 	case token.IDENTIFIER:
 		if p.curToken.Type == token.NUMBER || p.curToken.Type == token.STRING {
-			suggestion = "\n  A variable name (identifier) is expected here, not a literal value"
+			hint = "A name (like a variable name or function name) is expected here, not a number or text value."
 		}
 	}
 
-	return fmt.Errorf("expected %v, got %v at line %d, column %d%s",
-		expected, p.curToken.Type, p.curToken.Line, p.curToken.Col, suggestion)
+	msg := fmt.Sprintf("I expected %s here but found %s instead.",
+		tokenFriendlyName(expected), tokenFriendlyValue(p.curToken.Type, p.curToken.Value))
+	return &SyntaxError{
+		Msg:  msg,
+		Line: p.curToken.Line,
+		Col:  p.curToken.Col,
+		Hint: hint,
+	}
 }
 
 // Parse parses the tokens and returns the AST
@@ -137,17 +147,45 @@ func (p *Parser) parseStatement() (ast.Statement, error) {
 	case token.SWAP:
 		return p.parseSwapStatement()
 	default:
-		suggestion := ""
 		switch p.curToken.Type {
 		case token.IDENTIFIER:
-			suggestion = "\n  Hint: To use a variable, you need 'Set', 'Print', or another statement keyword"
-		case token.NUMBER, token.STRING:
-			suggestion = "\n  Hint: Literal values must be part of a statement (e.g., 'Print \"text\".' or 'Declare x to be 5.')"
+			name := p.curToken.Value
+			return nil, &SyntaxError{
+				Msg:  fmt.Sprintf("'%s' cannot start a statement here.", name),
+				Line: p.curToken.Line,
+				Col:  p.curToken.Col,
+				Hint: fmt.Sprintf("To change a variable, use 'Set %s to be <value>.' To show it, use 'Print %s.'", name, name),
+			}
+		case token.NUMBER:
+			num := p.curToken.Value
+			return nil, &SyntaxError{
+				Msg:  fmt.Sprintf("The number %s cannot appear here on its own.", num),
+				Line: p.curToken.Line,
+				Col:  p.curToken.Col,
+				Hint: "Numbers must be part of a statement. For example: 'Declare x to be 5.' or 'Print 42.'",
+			}
+		case token.STRING:
+			return nil, &SyntaxError{
+				Msg:  fmt.Sprintf("The text %q cannot appear here on its own.", p.curToken.Value),
+				Line: p.curToken.Line,
+				Col:  p.curToken.Col,
+				Hint: "Text must be part of a statement. For example: 'Print \"Hello, world!\".' or 'Declare greeting to be \"Hello\".'",
+			}
 		case token.EOF:
-			suggestion = "\n  Hint: Unexpected end of file - check if you have unclosed blocks"
+			return nil, &SyntaxError{
+				Msg:  "The program ended unexpectedly.",
+				Line: p.curToken.Line,
+				Col:  p.curToken.Col,
+				Hint: "Check that every block (like an 'If' or 'Repeat') is closed with 'thats it.'",
+			}
+		default:
+			return nil, &SyntaxError{
+				Msg:  fmt.Sprintf("I do not know what to do with '%s' here.", p.curToken.Value),
+				Line: p.curToken.Line,
+				Col:  p.curToken.Col,
+				Hint: "Check the spelling of the keyword. Every statement must start with a word like 'Declare', 'Set', 'Print', 'If', 'Repeat', or 'Call'.",
+			}
 		}
-		return nil, fmt.Errorf("unexpected token: %v (value: '%s') at line %d, column %d%s",
-			p.curToken.Type, p.curToken.Value, p.curToken.Line, p.curToken.Col, suggestion)
 	}
 }
 
@@ -167,7 +205,10 @@ func (p *Parser) parseLetDeclaration() (ast.Statement, error) {
 	// Get variable name
 	nameToken := p.curToken
 	if p.curToken.Type != token.IDENTIFIER {
-		return nil, fmt.Errorf("expected identifier after 'let', got %v at line %d", p.curToken.Type, p.curToken.Line)
+		return nil, p.syntaxErr(
+			"I expected a variable name here.",
+			"Variable names must start with a letter. For example: 'let count be 10.' or 'let name be \"Alice\".'",
+		)
 	}
 	p.nextToken()
 
@@ -204,7 +245,10 @@ func (p *Parser) parseLetDeclaration() (ast.Statement, error) {
 			p.nextToken()
 		}
 	default:
-		return nil, fmt.Errorf("expected 'be', '=', 'equal', or 'always' after variable name, got %v at line %d", p.curToken.Type, p.curToken.Line)
+		return nil, p.syntaxErr(
+			fmt.Sprintf("I expected 'be', '=', or 'always' after the variable name '%s', but found '%s' instead.", nameToken.Value, p.curToken.Value),
+			"To declare a variable write: 'let "+nameToken.Value+" be <value>.' For a constant: 'let "+nameToken.Value+" always be <value>.'",
+		)
 	}
 
 	value, err := p.parseExpression()
@@ -286,7 +330,10 @@ func (p *Parser) parseImport() (ast.Statement, error) {
 
 	// Expect a string with the file path
 	if p.curToken.Type != token.STRING {
-		return nil, fmt.Errorf("expected file path (string) after 'Import', got %v at line %d", p.curToken.Type, p.curToken.Line)
+		return nil, p.syntaxErr(
+			"The file path after 'Import' must be in quotes.",
+			"For example: 'Import \"myfile.abc\".' or 'Import everything from \"utils.abc\".'",
+		)
 	}
 
 	filePath := p.curToken.Value
@@ -332,7 +379,10 @@ func (p *Parser) parseDeclaration() (ast.Statement, error) {
 	// Variable or constant declaration
 	nameToken := p.curToken
 	if p.curToken.Type != token.IDENTIFIER {
-		return nil, fmt.Errorf("expected identifier after 'Declare', got %v at line %d", p.curToken.Type, p.curToken.Line)
+		return nil, p.syntaxErr(
+			"I expected a variable name after 'Declare'.",
+			"Variable names must start with a letter. For example: 'Declare score to be 0.' or 'Declare name to always be \"Alice\".'",
+		)
 	}
 	p.nextToken()
 
@@ -432,7 +482,10 @@ func (p *Parser) parseFunctionDeclaration() (ast.Statement, error) {
 
 	nameToken := p.curToken
 	if p.curToken.Type != token.IDENTIFIER {
-		return nil, fmt.Errorf("expected function name, got %v", p.curToken.Type)
+		return nil, p.syntaxErr(
+			"I expected a function name here.",
+			"Function names must start with a letter. For example: 'Declare function greet that does the following:'",
+		)
 	}
 	p.nextToken()
 
@@ -448,7 +501,10 @@ func (p *Parser) parseFunctionDeclaration() (ast.Statement, error) {
 		for {
 			paramToken := p.curToken
 			if p.curToken.Type != token.IDENTIFIER {
-				return nil, fmt.Errorf("expected parameter name")
+				return nil, p.syntaxErr(
+					"I expected a parameter name here.",
+					"Parameter names must start with a letter. For example: 'Declare function add that takes x and y and does the following:'",
+				)
 			}
 			parameters = append(parameters, paramToken.Value)
 			p.nextToken()
@@ -530,12 +586,18 @@ func (p *Parser) parseAssignment() (ast.Statement, error) {
 		if p.curToken.Type == token.ENTRY {
 			return p.parseLookupKeyAssignment(setLine)
 		}
-		return nil, fmt.Errorf("unexpected token after 'Set the': %v", p.curToken.Type)
+		return nil, p.syntaxErr(
+			fmt.Sprintf("I do not understand 'Set the %s' here.", p.curToken.Value),
+			"After 'Set the' you can write 'item at position N in myList to be VALUE' or 'entry KEY in myTable to be VALUE'.",
+		)
 	}
 
 	nameToken := p.curToken
 	if p.curToken.Type != token.IDENTIFIER {
-		return nil, fmt.Errorf("expected identifier after 'Set'")
+		return nil, p.syntaxErr(
+			"I expected a variable name after 'Set'.",
+			"For example: 'Set score to be 10.' or 'Set name to be \"Alice\".'",
+		)
 	}
 	p.nextToken()
 
@@ -547,7 +609,10 @@ func (p *Parser) parseAssignment() (ast.Statement, error) {
 			return nil, err
 		}
 		if p.curToken.Type != token.TO {
-			return nil, fmt.Errorf("expected 'to' after lookup key at line %d", p.curToken.Line)
+			return nil, p.syntaxErr(
+				fmt.Sprintf("I expected 'to' after the key in 'Set %s at ...', but found '%s'.", nameToken.Value, p.curToken.Value),
+				"The full form is: 'Set tableName at key to be value.'",
+			)
 		}
 		p.nextToken()
 		if p.curToken.Type == token.BE {
@@ -584,7 +649,10 @@ func (p *Parser) parseAssignment() (ast.Statement, error) {
 				p.nextToken()
 				funcName := p.curToken.Value
 				if p.curToken.Type != token.IDENTIFIER {
-					return nil, fmt.Errorf("expected function name")
+					return nil, p.syntaxErr(
+						"I expected the name of a function to call here.",
+						"For example: 'Set result to be the result of calling square of x.'",
+					)
 				}
 				p.nextToken()
 
@@ -657,7 +725,10 @@ func (p *Parser) parseIndexAssignment(setLine int) (ast.Statement, error) {
 
 	listName := p.curToken.Value
 	if p.curToken.Type != token.IDENTIFIER {
-		return nil, fmt.Errorf("expected list name")
+		return nil, p.syntaxErr(
+			"I expected the name of the list here.",
+			"For example: 'Set the item at position 1 in myList to be 99.'",
+		)
 	}
 	p.nextToken()
 
@@ -703,7 +774,10 @@ func (p *Parser) parseCall() (ast.Statement, error) {
 
 	firstIdent := p.curToken.Value
 	if p.curToken.Type != token.IDENTIFIER {
-		return nil, fmt.Errorf("expected identifier after 'Call'")
+		return nil, p.syntaxErr(
+			"I expected a function or method name after 'Call'.",
+			"For example: 'Call greet.' or 'Call add with 3 and 5.'",
+		)
 	}
 	p.nextToken()
 
@@ -714,7 +788,10 @@ func (p *Parser) parseCall() (ast.Statement, error) {
 		objectName := firstIdent[:len(firstIdent)-2]
 
 		if p.curToken.Type != token.IDENTIFIER {
-			return nil, fmt.Errorf("expected method name after possessive")
+			return nil, p.syntaxErr(
+				fmt.Sprintf("I expected a method name after '%s's'.", objectName),
+				"For example: 'Call person's greet.' or 'Call person's setName with \"Alice\".'",
+			)
 		}
 		methodName := p.curToken.Value
 		p.nextToken()
@@ -749,7 +826,10 @@ func (p *Parser) parseCall() (ast.Statement, error) {
 
 		// Get object
 		if p.curToken.Type != token.IDENTIFIER {
-			return nil, fmt.Errorf("expected object name after 'from'/'on'")
+			return nil, p.syntaxErr(
+				fmt.Sprintf("I expected the object name after 'Call %s from/on'.", methodName),
+				"For example: 'Call talk from person.' or 'Call greet on employee.'",
+			)
 		}
 		objectName := p.curToken.Value
 		p.nextToken()
@@ -1045,7 +1125,10 @@ func (p *Parser) parseForEach() (ast.Statement, error) {
 	itemToken := p.curToken
 	// Allow both IDENTIFIER and ITEM keyword as the loop variable name
 	if p.curToken.Type != token.IDENTIFIER && p.curToken.Type != token.ITEM {
-		return nil, fmt.Errorf("expected item identifier in for-each")
+		return nil, p.syntaxErr(
+			"I expected a loop variable name here.",
+			"For example: 'For each item in myList:' or 'For each number in scores:'",
+		)
 	}
 	// Get the value, treating token.ITEM as "item" string
 	itemName := itemToken.Value
@@ -1117,7 +1200,10 @@ func (p *Parser) parseForEach() (ast.Statement, error) {
 func (p *Parser) parseOutput(newline bool) (ast.Statement, error) {
 	// Accept either PRINT or WRITE token
 	if p.curToken.Type != token.PRINT && p.curToken.Type != token.WRITE {
-		return nil, fmt.Errorf("expected %v or %v, got %v", token.PRINT, token.WRITE, p.curToken.Type)
+		return nil, p.syntaxErr(
+			"I expected 'Print' or 'Write' here.",
+			"To show output, use 'Print \"Hello\".' or 'Write \"No newline\".'",
+		)
 	}
 	startLine := p.curToken.Line
 	p.nextToken()
@@ -1198,8 +1284,10 @@ func (p *Parser) parseBreak() (ast.Statement, error) {
 	} else if p.curToken.Type == token.IDENTIFIER && strings.EqualFold(p.curToken.Value, "this") {
 		p.nextToken()
 	} else {
-		return nil, fmt.Errorf("expected 'the' or 'this', got %v at line %d, column %d",
-			p.curToken.Type, p.curToken.Line, p.curToken.Col)
+		return nil, p.syntaxErr(
+			fmt.Sprintf("I expected 'the' or 'this' here, but found '%s'.", p.curToken.Value),
+			"For example: 'Break out of the loop.' or 'Break out of this loop.'",
+		)
 	}
 
 	if err := p.expectToken(token.LOOP); err != nil {
@@ -1256,7 +1344,10 @@ func (p *Parser) parseAskStatement() (ast.Statement, error) {
 		// "Ask "prompt" as varname."
 		p.nextToken() // consume AS
 		if p.curToken.Type != token.IDENTIFIER {
-			return nil, fmt.Errorf("expected variable name after 'as', got %v at line %d", p.curToken.Type, p.curToken.Line)
+			return nil, p.syntaxErr(
+				"I expected a variable name after 'as' to store the answer.",
+				"For example: 'Ask \"What is your name?\" as userName.'",
+			)
 		}
 		varName = p.curToken.Value
 		p.nextToken()
@@ -1279,12 +1370,18 @@ func (p *Parser) parseAskStatement() (ast.Statement, error) {
 			p.nextToken() // consume IN
 		}
 		if p.curToken.Type != token.IDENTIFIER {
-			return nil, fmt.Errorf("expected variable name, got %v at line %d", p.curToken.Type, p.curToken.Line)
+			return nil, p.syntaxErr(
+				"I expected a variable name to store the answer in.",
+				"For example: 'Ask \"What is your age?\" and store it in userAge.'",
+			)
 		}
 		varName = p.curToken.Value
 		p.nextToken()
 	} else {
-		return nil, fmt.Errorf("expected 'as' or 'and' after ask prompt, got %v at line %d", p.curToken.Type, p.curToken.Line)
+		return nil, p.syntaxErr(
+			fmt.Sprintf("I expected 'as' or 'and' after the question text, but found '%s'.", p.curToken.Value),
+			"For example: 'Ask \"What is your name?\" as myName.' or 'Ask \"Enter a number:\" and store it in num.'",
+		)
 	}
 
 	if err := p.expectToken(token.PERIOD); err != nil {
@@ -1387,7 +1484,10 @@ func (p *Parser) parseRelational() (ast.Expression, error) {
 		// "error is TypeName" — error type check (exact or inherited match)
 		p.nextToken()
 		if p.curToken.Type != token.IDENTIFIER {
-			return nil, fmt.Errorf("expected error type name after 'is', got %v at line %d", p.curToken.Type, p.curToken.Line)
+			return nil, p.syntaxErr(
+				"I expected an error type name after 'is'.",
+				"For example: 'error is NetworkError' or 'error is RuntimeError'.",
+			)
 		}
 		typeName := p.curToken.Value
 		p.nextToken()
@@ -1418,7 +1518,10 @@ func (p *Parser) parseCast() (ast.Expression, error) {
 		}
 		typeName := p.parseTypeName()
 		if typeName == "" {
-			return nil, fmt.Errorf("expected type name after 'cast to' at line %d", p.curToken.Line)
+			return nil, p.syntaxErr(
+				fmt.Sprintf("I expected a type name after 'cast to', but found '%s'.", p.curToken.Value),
+				"Valid type names are: number, text, boolean, integer. For example: 'x cast to number'.",
+			)
 		}
 		return &ast.CastExpression{Value: expr, TypeName: typeName}, nil
 	}
@@ -1452,7 +1555,10 @@ func (p *Parser) parseCast() (ast.Expression, error) {
 	if p.curToken.Type == token.POSSESSIVE {
 		p.nextToken() // consume 's
 		if p.curToken.Type != token.IDENTIFIER {
-			return nil, fmt.Errorf("expected method name after 's, got %v at line %d", p.curToken.Type, p.curToken.Line)
+			return nil, p.syntaxErr(
+				"I expected a method name after the possessive ('s).",
+				"For example: 'myText's length' or 'myText's upper'.",
+			)
 		}
 		methodName := p.curToken.Value
 		p.nextToken()
@@ -1671,7 +1777,10 @@ func (p *Parser) parsePrimary() (ast.Expression, error) {
 			}
 			return p.parseExpression()
 		}
-		return nil, fmt.Errorf("unexpected token after 'the': %v at line %d", p.curToken.Type, p.curToken.Line)
+		return nil, p.syntaxErr(
+			fmt.Sprintf("I do not understand 'the %s' here.", p.curToken.Value),
+			"After 'the' you can use: 'the value of x', 'the length of myList', 'the remainder of a divided by b', 'the result of calling myFunction', or a field name like 'the age of person'.",
+		)
 
 	case token.ITEM:
 		// "item" used as a variable name (not "the item at position")
@@ -1816,7 +1925,10 @@ func (p *Parser) parsePrimary() (ast.Expression, error) {
 		return p.parseStructInstantiation()
 
 	default:
-		return nil, fmt.Errorf("unexpected token in expression: %v at line %d", p.curToken.Type, p.curToken.Line)
+		return nil, p.syntaxErr(
+			fmt.Sprintf("I do not know how to use '%s' as a value here.", p.curToken.Value),
+			"Values can be numbers (like 42), text (like \"hello\"), variables (like myScore), function calls, or expressions in parentheses.",
+		)
 	}
 }
 
@@ -1845,7 +1957,10 @@ func (p *Parser) parseIndexExpression() (ast.Expression, error) {
 
 	// Accept both "in" and "of": "the item at position 0 in list" / "of list"
 	if p.curToken.Type != token.IN && p.curToken.Type != token.OF {
-		return nil, fmt.Errorf("expected 'in' or 'of' after index, got %v at line %d", p.curToken.Type, p.curToken.Line)
+		return nil, p.syntaxErr(
+			fmt.Sprintf("I expected 'in' or 'of' after the index number, but found '%s'.", p.curToken.Value),
+			"For example: 'the item at position 1 in myList' or 'the item at position 1 of myList'.",
+		)
 	}
 	p.nextToken()
 
@@ -1912,7 +2027,10 @@ func (p *Parser) parseRemainderExpression() (ast.Expression, error) {
 	} else if p.curToken.Type == token.SLASH {
 		p.nextToken()
 	} else {
-		return nil, fmt.Errorf("expected 'divided by' or '/' after remainder operand, got %v", p.curToken.Type)
+		return nil, p.syntaxErr(
+			fmt.Sprintf("I expected 'divided by' after the first number, but found '%s'.", p.curToken.Value),
+			"For example: 'the remainder of 10 divided by 3' or 'the remainder of a divided by b'.",
+		)
 	}
 
 	// Parse the divisor (right operand)
@@ -1943,7 +2061,10 @@ func (p *Parser) parseLocationExpression() (ast.Expression, error) {
 
 	// Get the variable name
 	if p.curToken.Type != token.IDENTIFIER {
-		return nil, fmt.Errorf("expected variable name after 'the location of', got %v", p.curToken.Type)
+		return nil, p.syntaxErr(
+			"I expected a variable name after 'the location of'.",
+			"For example: 'the location of myVariable'.",
+		)
 	}
 	name := p.curToken.Value
 	p.nextToken()
@@ -1989,7 +2110,10 @@ func (p *Parser) parseReferenceExpression() (ast.Expression, error) {
 	p.nextToken()
 
 	if p.curToken.Type != token.IDENTIFIER {
-		return nil, fmt.Errorf("expected variable name after 'reference to', got %v", p.curToken.Type)
+		return nil, p.syntaxErr(
+			"I expected a variable name after 'reference to'.",
+			"For example: 'a reference to myVariable'.",
+		)
 	}
 	name := p.curToken.Value
 	p.nextToken()
@@ -2040,7 +2164,10 @@ func (p *Parser) parseToggle() (ast.Statement, error) {
 
 	// Get the variable name
 	if p.curToken.Type != token.IDENTIFIER {
-		return nil, fmt.Errorf("expected variable name after 'Toggle', got %v", p.curToken.Type)
+		return nil, p.syntaxErr(
+			"I expected a variable name after 'Toggle'.",
+			"For example: 'Toggle isRunning.' or 'Toggle the value of isActive.'",
+		)
 	}
 	name := p.curToken.Value
 	p.nextToken()
@@ -2136,7 +2263,10 @@ func (p *Parser) parseArrayLiteral() (ast.Expression, error) {
 	p.nextToken() // consume ARRAY
 
 	if p.curToken.Type != token.OF {
-		return nil, fmt.Errorf("expected 'of' after 'array' at line %d", p.curToken.Line)
+		return nil, p.syntaxErr(
+			"I expected 'of' after 'array'.",
+			"For example: 'an array of [1, 2, 3]' or 'an array of number [1, 2, 3]'.",
+		)
 	}
 	p.nextToken() // consume OF
 
@@ -2147,11 +2277,14 @@ func (p *Parser) parseArrayLiteral() (ast.Expression, error) {
 	}
 
 	if p.curToken.Type != token.LBRACKET {
-		typeSuffix := ""
+		hint := "For example: 'an array of [1, 2, 3]' or 'an array of number [1, 2, 3]'."
 		if elementType != "" {
-			typeSuffix = " " + elementType
+			hint = fmt.Sprintf("After 'array of %s' I expected '[' to open the list of values.", elementType)
 		}
-		return nil, fmt.Errorf("expected '[' after 'array of%s' at line %d", typeSuffix, p.curToken.Line)
+		return nil, p.syntaxErr(
+			fmt.Sprintf("I expected '[' to open the array, but found '%s'.", p.curToken.Value),
+			hint,
+		)
 	}
 	p.nextToken() // consume [
 
@@ -2167,7 +2300,10 @@ func (p *Parser) parseArrayLiteral() (ast.Expression, error) {
 		}
 	}
 	if p.curToken.Type != token.RBRACKET {
-		return nil, fmt.Errorf("expected ']' to close array literal at line %d", p.curToken.Line)
+		return nil, p.syntaxErr(
+			"I expected ']' to close the array, but reached the end of the file.",
+			"Make sure every '[' is matched by a closing ']'. For example: 'an array of [1, 2, 3]'.",
+		)
 	}
 	p.nextToken() // consume ]
 
@@ -2185,7 +2321,10 @@ func (p *Parser) parseLookupKeyAccess() (ast.Expression, error) {
 	}
 
 	if p.curToken.Type != token.IN {
-		return nil, fmt.Errorf("expected 'in' after lookup key at line %d", p.curToken.Line)
+		return nil, p.syntaxErr(
+			fmt.Sprintf("I expected 'in' after the key, but found '%s'.", p.curToken.Value),
+			"For example: 'the entry \"name\" in myTable'.",
+		)
 	}
 	p.nextToken() // consume IN
 
@@ -2208,18 +2347,27 @@ func (p *Parser) parseLookupKeyAssignment(setLine int) (ast.Statement, error) {
 	}
 
 	if p.curToken.Type != token.IN {
-		return nil, fmt.Errorf("expected 'in' after entry key at line %d", p.curToken.Line)
+		return nil, p.syntaxErr(
+			fmt.Sprintf("I expected 'in' after the key, but found '%s'.", p.curToken.Value),
+			"For example: 'Set the entry \"name\" in myTable to be \"Alice\".'",
+		)
 	}
 	p.nextToken() // consume IN
 
 	if p.curToken.Type != token.IDENTIFIER {
-		return nil, fmt.Errorf("expected table name after 'in' at line %d", p.curToken.Line)
+		return nil, p.syntaxErr(
+			"I expected the table name after 'in'.",
+			"For example: 'Set the entry \"name\" in myTable to be \"Alice\".'",
+		)
 	}
 	tableName := p.curToken.Value
 	p.nextToken()
 
 	if p.curToken.Type != token.TO {
-		return nil, fmt.Errorf("expected 'to' after table name at line %d", p.curToken.Line)
+		return nil, p.syntaxErr(
+			fmt.Sprintf("I expected 'to' after the table name '%s', but found '%s'.", tableName, p.curToken.Value),
+			"For example: 'Set the entry \"name\" in myTable to be \"Alice\".'",
+		)
 	}
 	p.nextToken()
 	if p.curToken.Type == token.BE {

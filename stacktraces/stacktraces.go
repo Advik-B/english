@@ -58,6 +58,13 @@ var (
 				Background(lipgloss.Color("#3D2E00")).
 				Padding(0, 1)
 
+	// Header bar for syntax errors (cyan on dark cyan).
+	syntaxHeaderStyle = colorRenderer.NewStyle().
+				Bold(true).
+				Foreground(lipgloss.Color("#8BE9FD")).
+				Background(lipgloss.Color("#003740")).
+				Padding(0, 1)
+
 	// Error type label (e.g. "RuntimeError", "ParseError").
 	labelStyle = colorRenderer.NewStyle().
 			Bold(true).
@@ -68,6 +75,11 @@ var (
 				Bold(true).
 				Foreground(lipgloss.Color("#FFD700"))
 
+	// Syntax error label colour (cyan).
+	syntaxLabelStyle = colorRenderer.NewStyle().
+				Bold(true).
+				Foreground(lipgloss.Color("#8BE9FD"))
+
 	// Primary error message.
 	messageStyle = colorRenderer.NewStyle().
 			Foreground(lipgloss.Color("#FFB8B8"))
@@ -75,6 +87,15 @@ var (
 	// Compile-time message colour (light amber).
 	compileMessageStyle = colorRenderer.NewStyle().
 				Foreground(lipgloss.Color("#FFE9A0"))
+
+	// Syntax error message colour (light cyan).
+	syntaxMessageStyle = colorRenderer.NewStyle().
+				Foreground(lipgloss.Color("#B8F0FF"))
+
+	// Hint text (lighter, italicised).
+	hintStyle = colorRenderer.NewStyle().
+			Foreground(lipgloss.Color("#6272A4")).
+			Italic(true)
 
 	// "Call Stack" section header.
 	stackHeaderStyle = colorRenderer.NewStyle().
@@ -112,6 +133,17 @@ type CompileError interface {
 	error
 	CompileMessage() string
 	CompileLine() int
+}
+
+// SyntaxError is the interface satisfied by parser.SyntaxError.
+// It carries a user-friendly message, the source line/column, and an optional
+// hint to guide the programmer towards a fix.
+type SyntaxError interface {
+	error
+	SyntaxMessage() string
+	SyntaxLine() int
+	SyntaxCol() int
+	SyntaxHint() string
 }
 
 // ─── Public API ──────────────────────────────────────────────────────────────
@@ -166,6 +198,20 @@ func renderPlain(err error) string {
 		return sb.String()
 	}
 
+	if se, ok := err.(SyntaxError); ok {
+		if line := se.SyntaxLine(); line > 0 {
+			sb.WriteString(fmt.Sprintf("Syntax Error at line %d, column %d: %s\n", line, se.SyntaxCol(), se.SyntaxMessage()))
+		} else {
+			sb.WriteString("Syntax Error: ")
+			sb.WriteString(se.SyntaxMessage())
+			sb.WriteString("\n")
+		}
+		if hint := se.SyntaxHint(); hint != "" {
+			sb.WriteString(fmt.Sprintf("Hint: %s\n", hint))
+		}
+		return sb.String()
+	}
+
 	if ce, ok := err.(CompileError); ok {
 		if line := ce.CompileLine(); line > 0 {
 			sb.WriteString(fmt.Sprintf("Compile Error at line %d: %s\n", line, ce.CompileMessage()))
@@ -191,6 +237,11 @@ func renderColored(err error) string {
 
 	if re, ok := err.(RuntimeError); ok {
 		renderRuntimeError(&sb, re)
+		return sb.String()
+	}
+
+	if se, ok := err.(SyntaxError); ok {
+		renderSyntaxError(&sb, se)
 		return sb.String()
 	}
 
@@ -263,6 +314,35 @@ func renderCompileError(sb *strings.Builder, ce CompileError) {
 		sb.WriteString(compileMessageStyle.Render(ce.CompileMessage()))
 	}
 	sb.WriteString("\n")
+
+	sb.WriteString(sep)
+	sb.WriteString("\n\n")
+}
+
+func renderSyntaxError(sb *strings.Builder, se SyntaxError) {
+	sep := separatorStyle.Render(strings.Repeat("-", 50))
+
+	sb.WriteString("\n")
+	sb.WriteString(syntaxHeaderStyle.Render(" Syntax Error "))
+	sb.WriteString("\n")
+	sb.WriteString(sep)
+	sb.WriteString("\n\n")
+
+	if line := se.SyntaxLine(); line > 0 {
+		sb.WriteString("  ")
+		sb.WriteString(syntaxLabelStyle.Render(fmt.Sprintf("Line %d, column %d: ", line, se.SyntaxCol())))
+		sb.WriteString(syntaxMessageStyle.Render(se.SyntaxMessage()))
+	} else {
+		sb.WriteString("  ")
+		sb.WriteString(syntaxMessageStyle.Render(se.SyntaxMessage()))
+	}
+	sb.WriteString("\n")
+
+	if hint := se.SyntaxHint(); hint != "" {
+		sb.WriteString("\n  ")
+		sb.WriteString(hintStyle.Render("Hint: " + hint))
+		sb.WriteString("\n")
+	}
 
 	sb.WriteString(sep)
 	sb.WriteString("\n\n")

@@ -279,3 +279,112 @@ func TestRenderWithColor_RuntimeError_WithLine(t *testing.T) {
 		}
 	}
 }
+
+// ─── Syntax error rendering ───────────────────────────────────────────────────
+
+// fakeSyntaxError is a test double that satisfies stacktraces.SyntaxError.
+type fakeSyntaxError struct {
+	msg  string
+	line int
+	col  int
+	hint string
+}
+
+func (e *fakeSyntaxError) Error() string       { return "Syntax Error: " + e.msg }
+func (e *fakeSyntaxError) SyntaxMessage() string { return e.msg }
+func (e *fakeSyntaxError) SyntaxLine() int       { return e.line }
+func (e *fakeSyntaxError) SyntaxCol() int        { return e.col }
+func (e *fakeSyntaxError) SyntaxHint() string    { return e.hint }
+
+func TestRender_PlainSyntaxError_WithLine(t *testing.T) {
+	t.Setenv("NO_COLOR", "1")
+
+	se := &fakeSyntaxError{msg: "'y' cannot start a statement here.", line: 2, col: 1, hint: "Use 'Set y to be ...' instead."}
+	got := stacktraces.Render(se)
+
+	if !strings.Contains(got, "Syntax Error") {
+		t.Errorf("expected 'Syntax Error' in output, got:\n%s", got)
+	}
+	if !strings.Contains(got, "line 2") {
+		t.Errorf("expected 'line 2' in output, got:\n%s", got)
+	}
+	if !strings.Contains(got, "column 1") {
+		t.Errorf("expected 'column 1' in output, got:\n%s", got)
+	}
+	if !strings.Contains(got, se.msg) {
+		t.Errorf("expected message in output, got:\n%s", got)
+	}
+	if !strings.Contains(got, se.hint) {
+		t.Errorf("expected hint in output, got:\n%s", got)
+	}
+}
+
+func TestRender_PlainSyntaxError_NoHint(t *testing.T) {
+	t.Setenv("NO_COLOR", "1")
+
+	se := &fakeSyntaxError{msg: "unexpected end of file", line: 10, col: 5, hint: ""}
+	got := stacktraces.Render(se)
+
+	if !strings.Contains(got, "Syntax Error") {
+		t.Errorf("expected 'Syntax Error' in output, got:\n%s", got)
+	}
+	if strings.Contains(got, "Hint:") {
+		t.Errorf("should not show 'Hint:' when hint is empty, got:\n%s", got)
+	}
+}
+
+func TestRender_PlainSyntaxError_NoLine(t *testing.T) {
+	t.Setenv("NO_COLOR", "1")
+
+	se := &fakeSyntaxError{msg: "something is wrong", line: 0, col: 0, hint: ""}
+	got := stacktraces.Render(se)
+
+	if !strings.Contains(got, "Syntax Error") {
+		t.Errorf("expected 'Syntax Error' in output, got:\n%s", got)
+	}
+	if strings.Contains(got, "line 0") {
+		t.Errorf("should not show 'line 0' when line is unknown, got:\n%s", got)
+	}
+}
+
+func TestRenderWithColor_SyntaxError(t *testing.T) {
+	se := &fakeSyntaxError{
+		msg:  "'pi' cannot start a statement here.",
+		line: 5,
+		col:  3,
+		hint: "Use 'Set pi to be ...' instead.",
+	}
+	got := stacktraces.RenderWithColor(se, true)
+
+	for _, want := range []string{"Syntax Error", "'pi' cannot start", "5", "3", "Set pi"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("expected %q in coloured syntax error output, got:\n%s", want, got)
+		}
+	}
+	if !strings.Contains(got, "\x1b[") {
+		t.Errorf("expected ANSI escape codes in coloured output, got:\n%q", got)
+	}
+}
+
+func TestRender_SyntaxVsRuntime_DifferentHeaders(t *testing.T) {
+	t.Setenv("NO_COLOR", "1")
+
+	se := &fakeSyntaxError{msg: "unexpected token", line: 3, col: 1, hint: ""}
+	re := &fakeRuntimeError{msg: "division by zero", stack: []string{}}
+
+	syntaxOut := stacktraces.Render(se)
+	runtimeOut := stacktraces.Render(re)
+
+	if !strings.Contains(syntaxOut, "Syntax Error") {
+		t.Errorf("expected 'Syntax Error' in syntax output, got:\n%s", syntaxOut)
+	}
+	if strings.Contains(syntaxOut, "Runtime Error") {
+		t.Errorf("syntax output should not contain 'Runtime Error', got:\n%s", syntaxOut)
+	}
+	if !strings.Contains(runtimeOut, "Runtime Error") {
+		t.Errorf("expected 'Runtime Error' in runtime output, got:\n%s", runtimeOut)
+	}
+	if strings.Contains(runtimeOut, "Syntax Error") {
+		t.Errorf("runtime output should not contain 'Syntax Error', got:\n%s", runtimeOut)
+	}
+}

@@ -1344,9 +1344,17 @@ func doLookupGet(table, key interface{}) (interface{}, error) {
 func ivmGetTypeName(v interface{}) string {
 	switch val := v.(type) {
 	case float64:
-		return "number"
-	case int32, int64, uint32, uint64, float32:
-		return "number"
+		return "f64"
+	case int32:
+		return "i32"
+	case int64:
+		return "i64"
+	case uint32:
+		return "u32"
+	case uint64:
+		return "u64"
+	case float32:
+		return "f32"
 	case string:
 		return "text"
 	case bool:
@@ -1354,7 +1362,8 @@ func ivmGetTypeName(v interface{}) string {
 	case []interface{}:
 		return "list"
 	case *types.ArrayValue:
-		return fmt.Sprintf("array of %s", types.Name(val.ElementType))
+		elemTypeInfo := &types.TypeInfo{Kind: val.ElementType}
+		return fmt.Sprintf("array of %s", elemTypeInfo.String())
 	case *types.LookupTableValue:
 		return "lookup table"
 	case *types.ErrorValue:

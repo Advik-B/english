@@ -7,13 +7,14 @@ import (
 
 // Compiler walks an AST and emits instructions into a Chunk.
 type Compiler struct {
-	chunk      *Chunk
-	loopStarts []int  // for continue: jump-back targets (before condition test)
-	loopEnds   [][]int // for break: lists of jump positions to patch to loop end
-	loopScopeDepths []int // scope depth at the start of each loop's body
-	scopeDepth int    // current number of active scopes (each PUSH_SCOPE increments)
-	funcName   string // name of the function being compiled (for error messages)
-	counter    int    // for generating unique hidden variable names
+	chunk            *Chunk
+	loopStarts       []int   // jump-back targets for while loops (before condition test)
+	loopContinues    [][]int // like loopEnds: positions of continue JUMPs to patch (for for/for-each)
+	loopEnds         [][]int // positions of break JUMPs to patch to loop end
+	loopScopeDepths  []int   // scope depth at the start of each loop's body
+	scopeDepth       int     // current number of active scopes (each PUSH_SCOPE increments)
+	funcName         string  // name of the function being compiled (for error messages)
+	counter          int     // for generating unique hidden variable names
 }
 
 // Compile compiles an ast.Program to a Chunk.
@@ -198,15 +199,14 @@ func (c *Compiler) compileStatement(stmt ast.Statement) error {
 		if len(c.loopEnds) == 0 {
 			return fmt.Errorf("break outside loop")
 		}
-		// pop scopes down to the loop body scope
+		// pop ALL scopes including the loop body scope (exit the loop entirely)
 		loopBodyDepth := c.loopScopeDepths[len(c.loopScopeDepths)-1]
-		for c.scopeDepth > loopBodyDepth {
+		for c.scopeDepth >= loopBodyDepth {
 			c.chunk.Emit(OP_POP_SCOPE, 0)
 			c.scopeDepth--
 		}
 		pos := c.chunk.CurrentPos()
 		c.chunk.Emit(OP_JUMP, 0) // placeholder
-		// register for patching
 		last := len(c.loopEnds) - 1
 		c.loopEnds[last] = append(c.loopEnds[last], pos)
 
@@ -214,14 +214,24 @@ func (c *Compiler) compileStatement(stmt ast.Statement) error {
 		if len(c.loopStarts) == 0 {
 			return fmt.Errorf("continue outside loop")
 		}
-		// pop scopes down to the loop body scope
+		// pop ALL scopes including the loop body scope, then jump to the continue target.
+		// The loop will re-push a fresh scope for the next iteration.
 		loopBodyDepth := c.loopScopeDepths[len(c.loopScopeDepths)-1]
-		for c.scopeDepth > loopBodyDepth {
+		for c.scopeDepth >= loopBodyDepth {
 			c.chunk.Emit(OP_POP_SCOPE, 0)
 			c.scopeDepth--
 		}
-		start := c.loopStarts[len(c.loopStarts)-1]
-		c.chunk.Emit(OP_JUMP, uint32(start))
+		last := len(c.loopContinues) - 1
+		if last >= 0 && c.loopContinues[last] != nil {
+			// for/for-each loop: emit patchable JUMP (patched to increment/decrement pos after body)
+			pos := c.chunk.CurrentPos()
+			c.chunk.Emit(OP_JUMP, 0) // placeholder
+			c.loopContinues[last] = append(c.loopContinues[last], pos)
+		} else {
+			// while loop: continue target is loopStart (known at compile time)
+			start := c.loopStarts[len(c.loopStarts)-1]
+			c.chunk.Emit(OP_JUMP, uint32(start))
+		}
 
 	case *ast.TryStatement:
 		if err := c.compileTryStatement(s); err != nil {
@@ -645,6 +655,7 @@ func (c *Compiler) compileWhileLoop(s *ast.WhileLoop) error {
 	loopBodyDepth := c.scopeDepth
 
 	c.loopStarts = append(c.loopStarts, loopStart)
+	c.loopContinues = append(c.loopContinues, nil) // nil = while loop: continue uses loopStarts
 	c.loopEnds = append(c.loopEnds, []int{})
 	c.loopScopeDepths = append(c.loopScopeDepths, loopBodyDepth)
 
@@ -668,6 +679,7 @@ func (c *Compiler) compileWhileLoop(s *ast.WhileLoop) error {
 		c.chunk.PatchJump(pos, loopEnd)
 	}
 	c.loopStarts = c.loopStarts[:len(c.loopStarts)-1]
+	c.loopContinues = c.loopContinues[:len(c.loopContinues)-1]
 	c.loopEnds = c.loopEnds[:len(c.loopEnds)-1]
 	c.loopScopeDepths = c.loopScopeDepths[:len(c.loopScopeDepths)-1]
 	return nil
@@ -702,6 +714,7 @@ func (c *Compiler) compileForLoop(s *ast.ForLoop) error {
 	loopBodyDepth := c.scopeDepth
 
 	c.loopStarts = append(c.loopStarts, loopStart)
+	c.loopContinues = append(c.loopContinues, []int{}) // for loop: continue needs patchable JUMP
 	c.loopEnds = append(c.loopEnds, []int{})
 	c.loopScopeDepths = append(c.loopScopeDepths, loopBodyDepth)
 
@@ -713,7 +726,8 @@ func (c *Compiler) compileForLoop(s *ast.ForLoop) error {
 	c.chunk.Emit(OP_POP_SCOPE, 0)
 	c.scopeDepth--
 
-	// decrement counter
+	// decrement counter — continue jumps land here
+	decrementPos := uint32(c.chunk.CurrentPos())
 	c.chunk.Emit(OP_LOAD_VAR, cnIdx)
 	oneIdx := c.chunk.AddConst(float64(1))
 	c.chunk.Emit(OP_LOAD_CONST, oneIdx)
@@ -725,11 +739,17 @@ func (c *Compiler) compileForLoop(s *ast.ForLoop) error {
 	loopEnd := uint32(c.chunk.CurrentPos())
 	c.chunk.PatchJump(exitJump, loopEnd)
 
+	// Patch break and continue jumps
 	breaks := c.loopEnds[len(c.loopEnds)-1]
 	for _, pos := range breaks {
 		c.chunk.PatchJump(pos, loopEnd)
 	}
+	conts := c.loopContinues[len(c.loopContinues)-1]
+	for _, pos := range conts {
+		c.chunk.PatchJump(pos, decrementPos)
+	}
 	c.loopStarts = c.loopStarts[:len(c.loopStarts)-1]
+	c.loopContinues = c.loopContinues[:len(c.loopContinues)-1]
 	c.loopEnds = c.loopEnds[:len(c.loopEnds)-1]
 	c.loopScopeDepths = c.loopScopeDepths[:len(c.loopScopeDepths)-1]
 	return nil
@@ -770,6 +790,7 @@ func (c *Compiler) compileForEachLoop(s *ast.ForEachLoop) error {
 	loopBodyDepth := c.scopeDepth
 
 	c.loopStarts = append(c.loopStarts, loopStart)
+	c.loopContinues = append(c.loopContinues, []int{}) // for-each: continue needs patchable JUMP
 	c.loopEnds = append(c.loopEnds, []int{})
 	c.loopScopeDepths = append(c.loopScopeDepths, loopBodyDepth)
 
@@ -788,7 +809,8 @@ func (c *Compiler) compileForEachLoop(s *ast.ForEachLoop) error {
 	c.chunk.Emit(OP_POP_SCOPE, 0)
 	c.scopeDepth--
 
-	// increment index
+	// increment index — continue jumps land here
+	incrementPos := uint32(c.chunk.CurrentPos())
 	c.chunk.Emit(OP_LOAD_VAR, idxIdx)
 	oneIdx := c.chunk.AddConst(float64(1))
 	c.chunk.Emit(OP_LOAD_CONST, oneIdx)
@@ -800,11 +822,17 @@ func (c *Compiler) compileForEachLoop(s *ast.ForEachLoop) error {
 	loopEnd := uint32(c.chunk.CurrentPos())
 	c.chunk.PatchJump(exitJump, loopEnd)
 
+	// Patch break and continue jumps
 	breaks := c.loopEnds[len(c.loopEnds)-1]
 	for _, pos := range breaks {
 		c.chunk.PatchJump(pos, loopEnd)
 	}
+	conts := c.loopContinues[len(c.loopContinues)-1]
+	for _, pos := range conts {
+		c.chunk.PatchJump(pos, incrementPos)
+	}
 	c.loopStarts = c.loopStarts[:len(c.loopStarts)-1]
+	c.loopContinues = c.loopContinues[:len(c.loopContinues)-1]
 	c.loopEnds = c.loopEnds[:len(c.loopEnds)-1]
 	c.loopScopeDepths = c.loopScopeDepths[:len(c.loopScopeDepths)-1]
 	return nil

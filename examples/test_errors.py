@@ -12,6 +12,8 @@ myFunctoin()
 # This will cause a constant reassignment error
 PI: Final = 3.14
 PI = 3
+
+
 # Error: cannot reassign constant
 # This will cause an argument count mismatch
 def add(a, b):

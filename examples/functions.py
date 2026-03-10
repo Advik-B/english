@@ -2,12 +2,16 @@
 # Functions Example
 # Demonstrates function declaration, parameters, and return values
 print("=== Function Examples ===")
+
+
 # Simple function with no parameters
 def sayHello():
     print("Hello from the function!")
 
 print("Calling sayHello:")
 sayHello()
+
+
 # Function with parameters
 def greet(name):
     print("Hello,", name, "! Nice to meet you.")
@@ -15,6 +19,8 @@ def greet(name):
 print("Calling greet with 'Alice':")
 x = 0
 x = greet("Alice")
+
+
 # Function with return value
 def add(a, b):
     return a + b
@@ -23,6 +29,8 @@ print("Adding 5 and 7:")
 sum = 0
 sum = add(5, 7)
 print("Result:", sum)
+
+
 # Function with multiple parameters
 def multiply(x, y):
     return x * y
@@ -38,6 +46,8 @@ inner = multiply(2, 3)
 outer = 0
 outer = add(inner, 4)
 print("Result:", outer)
+
+
 # Function that uses conditionals
 def max(a, b):
     if a > b:
@@ -49,6 +59,8 @@ print("Max of 10 and 25:")
 maximum = 0
 maximum = max(10, 25)
 print("Result:", maximum)
+
+
 # Function that calculates average
 def average(x, y, z):
     total = (x + y) + z

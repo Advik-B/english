@@ -10,6 +10,8 @@ print(y)
 x = 15
 print("x after assignment:")
 print(x)
+
+
 def add(a, b):
     return a + b
 

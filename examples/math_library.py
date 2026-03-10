@@ -7,9 +7,11 @@ from typing import Final
 def square(x):
     return x * x
 
+
 # Function to calculate the cube of a number
 def cube(x):
     return (x * x) * x
+
 
 # Function to check if a number is even
 def isEven(n):

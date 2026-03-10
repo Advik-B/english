@@ -2,6 +2,8 @@
 # Prime Number Checker Example
 # Checks if numbers are prime and lists first few primes
 print("=== Prime Number Checker ===")
+
+
 # Function to check if a number is prime
 def isPrime(n):
     if n < 2:

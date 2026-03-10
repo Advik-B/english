@@ -2,6 +2,8 @@
 # GCD and LCM Example
 # Calculates Greatest Common Divisor and Least Common Multiple
 print("=== GCD and LCM Calculator ===")
+
+
 # Function to calculate GCD using Euclidean algorithm
 def gcd(a, b):
     temp = 0
@@ -10,6 +12,7 @@ def gcd(a, b):
         b = a % b
         a = temp
     return a
+
 
 # Function to calculate LCM using GCD
 def lcm(a, b):

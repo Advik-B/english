@@ -2,6 +2,8 @@
 # Factorial Example
 # Calculates factorial using a recursive function
 print("=== Factorial Calculator ===")
+
+
 # Define a recursive factorial function
 def factorial(n):
     if n <= 1:

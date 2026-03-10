@@ -386,13 +386,74 @@ func (t *Transpiler) transpileStructDecl(s *ast.StructDecl) {
 }
 
 // transpileBody writes a block of statements.
-// Emits a single "pass" when the body is empty (required by Python syntax).
+//
+// When the body is empty it emits "pass" only when called from inside a
+// function, method, if-branch, loop, or try-block body — i.e. when
+// t.indent > 0. Every such caller increments t.indent before calling
+// transpileBody, so this check is always correct. Top-level programs
+// (t.indent == 0) do not need "pass" for an empty body.
+//
+// At the top level (indent == 0) it also enforces PEP 8 E302 — two blank
+// lines before every function or class definition. The blank lines are placed
+// before any run of indent-0 comments that immediately precedes the
+// definition, so comments stay visually attached to the code they describe.
 func (t *Transpiler) transpileBody(stmts []ast.Statement) {
 	if len(stmts) == 0 {
-		t.writeLine("pass")
+		if t.indent > 0 {
+			t.writeLine("pass")
+		}
 		return
 	}
-	for _, stmt := range stmts {
+	for i, stmt := range stmts {
+		if t.indent == 0 {
+			switch stmt.(type) {
+			case *ast.FunctionDecl, *ast.StructDecl, *ast.ErrorTypeDecl:
+				// Add two blank lines before this definition unless it is
+				// immediately preceded by a comment (in which case the blank
+				// lines were already inserted before that comment block).
+				if i == 0 || !isCommentStmt(stmts[i-1]) {
+					t.ensureBlankLines(2)
+				}
+			case *ast.CommentStatement:
+				// Add two blank lines before the first comment in a
+				// contiguous run that leads directly into a definition.
+				if isFirstCommentBeforeDef(stmts, i) {
+					t.ensureBlankLines(2)
+				}
+			}
+		}
 		t.transpileStatement(stmt)
 	}
+}
+
+// isCommentStmt reports whether s is a *ast.CommentStatement.
+func isCommentStmt(s ast.Statement) bool {
+	_, ok := s.(*ast.CommentStatement)
+	return ok
+}
+
+// isFirstCommentBeforeDef reports whether stmts[i] is the first comment in a
+// contiguous run of CommentStatements that is immediately followed by a
+// top-level FunctionDecl, StructDecl, or ErrorTypeDecl.
+func isFirstCommentBeforeDef(stmts []ast.Statement, i int) bool {
+	// Must not be preceded by another comment.
+	if i > 0 {
+		if _, ok := stmts[i-1].(*ast.CommentStatement); ok {
+			return false
+		}
+	}
+	// Scan forward through any subsequent comments to find the next
+	// non-comment statement.
+	for j := i + 1; j < len(stmts); j++ {
+		if _, ok := stmts[j].(*ast.CommentStatement); ok {
+			continue
+		}
+		switch stmts[j].(type) {
+		case *ast.FunctionDecl, *ast.StructDecl, *ast.ErrorTypeDecl:
+			return true
+		default:
+			return false
+		}
+	}
+	return false
 }

@@ -21,7 +21,7 @@ sum = 0
 idx = 0
 current = 0
 while idx < 5:
-    current = numbers[int(idx)]
+    current = numbers[idx]
     sum = sum + current
     idx = idx + 1
 print("Sum of all elements:", sum)

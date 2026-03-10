@@ -17,7 +17,7 @@ print(tape[4])
 current_symbol = 0
 # Main Turing machine loop
 while True:
-    current_symbol = tape[int(head)]
+    current_symbol = tape[head]
     steps = steps + 1
     # State 1: find_right - move to the rightmost digit
     if state == 1:
@@ -29,13 +29,13 @@ while True:
         # State 2: increment - add 1 with carry
     elif state == 2:
         if current_symbol == 0:
-            tape[int(head)] = 1
+            tape[head] = 1
             state = 3
         elif current_symbol == 1:
-            tape[int(head)] = 0
+            tape[head] = 0
             head = head - 1
         else:
-            tape[int(head)] = 1
+            tape[head] = 1
             state = 3
         # State 3: done - halt
     elif state == 3:

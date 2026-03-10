@@ -7,6 +7,8 @@ x = 5
 y: Final = 10
 # For constant declaration (can also use: to always be)
 z: Final = "hello"
+
+
 # Alternative constant syntax
 # For function declaration
 def say_hello():
@@ -15,6 +17,8 @@ def say_hello():
 x = 15
 # For assignment
 say_hello()
+
+
 # For function call
 # For "return" statements inside functions
 def add(a, b):

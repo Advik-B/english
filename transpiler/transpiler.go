@@ -136,9 +136,7 @@ func (t *Transpiler) Transpile(program *ast.Program) string {
 	var bodyBuf strings.Builder
 	savedBuf := t.buf
 	t.buf = bodyBuf
-	for _, stmt := range program.Statements {
-		t.transpileStatement(stmt)
-	}
+	t.transpileBody(program.Statements) // blank-line formatting applied here
 	body := t.buf.String()
 	t.buf = savedBuf
 
@@ -377,7 +375,24 @@ func (t *Transpiler) scanFuncCall(name string) {
 	}
 }
 
-// ─── Low-level output helpers ─────────────────────────────────────────────────
+// ensureBlankLines writes newlines to the current buffer until there are at
+// least n blank lines (i.e. n+1 trailing newline characters) before the next
+// write position. It is a no-op when the buffer is empty (start of file).
+func (t *Transpiler) ensureBlankLines(n int) {
+	s := t.buf.String()
+	if s == "" {
+		return
+	}
+	// Count how many '\n' characters trail the current buffer content.
+	trailing := 0
+	for i := len(s) - 1; i >= 0 && s[i] == '\n'; i-- {
+		trailing++
+	}
+	// n blank lines require n+1 total trailing newlines.
+	for need := (n + 1) - trailing; need > 0; need-- {
+		t.buf.WriteByte('\n')
+	}
+}
 
 func (t *Transpiler) write(s string) {
 	t.buf.WriteString(s)

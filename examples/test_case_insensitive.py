@@ -10,6 +10,8 @@ print(y)
 x = 20
 print("x is now:")
 print(x)
+
+
 # Mixed case function
 def greet(name):
     print("Hello, ")

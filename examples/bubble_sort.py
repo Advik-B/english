@@ -17,13 +17,13 @@ nextval = 0
 while i < (n - 1):
     j = 0
     while j < ((n - i) - 1):
-        current = arr[int(j)]
+        current = arr[j]
         next_pos = j + 1
-        nextval = arr[int(next_pos)]
+        nextval = arr[next_pos]
         if current > nextval:
             # Swap elements
-            arr[int(j)] = nextval
-            arr[int(next_pos)] = current
+            arr[j] = nextval
+            arr[next_pos] = current
         j = j + 1
     i = i + 1
 print("Sorted array:")

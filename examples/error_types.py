@@ -2,10 +2,14 @@
 # error_types.abc — demonstrates custom error types and static type annotations.
 print("=== Custom Error Types ===")
 print("")
+
+
 # Declare custom error types
 class NetworkError(Exception): pass
 
+
 class ValidationError(Exception): pass
+
 
 class DatabaseError(Exception): pass
 

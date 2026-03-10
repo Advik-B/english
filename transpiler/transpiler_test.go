@@ -1023,3 +1023,82 @@ if strings.Contains(out, ".index(") {
 t.Errorf("index_of should emit .find(), not .index()")
 }
 }
+
+// ─── PEP 8 formatting (during code generation) ───────────────────────────────
+
+func TestTwoBlankLinesBeforeDef(t *testing.T) {
+// A top-level function that follows regular code must be separated by
+// exactly two blank lines.
+out := transpile(t, `Print "hello".
+Declare function foo that takes x and does the following:
+    Return x.
+thats it.`)
+// Two blank lines = three consecutive newlines between the print and def.
+assertContains(t, out, "print(\"hello\")\n\n\ndef foo(x)")
+}
+
+func TestTwoBlankLinesBetweenDefs(t *testing.T) {
+// Two top-level functions must be separated by exactly two blank lines.
+out := transpile(t, `Declare function foo that takes x and does the following:
+    Return x.
+thats it.
+
+Declare function bar that takes y and does the following:
+    Return y.
+thats it.`)
+assertContains(t, out, "return x\n\n\ndef bar(y)")
+}
+
+func TestCommentAttachedToDef(t *testing.T) {
+// A comment immediately before a top-level function should stay adjacent
+// to the def — the two blank lines go before the comment, not between it
+// and the def.
+out := transpile(t, `Print "hi".
+# My function
+Declare function foo that takes x and does the following:
+    Return x.
+thats it.`)
+// Blank lines must appear before the comment, not between comment and def.
+assertContains(t, out, "print(\"hi\")\n\n\n# My function\ndef foo(x)")
+}
+
+func TestNoIntWrapOnIndexExpressions(t *testing.T) {
+// Index expressions should not be wrapped in int().
+out := transpile(t, `Declare arr to be [1, 2, 3].
+Declare i to be 0.
+Print the item at position i in arr.`)
+assertContains(t, out, "arr[i]")
+// Specifically guard against [int(...)] wrapping inside index brackets.
+if strings.Contains(out, "[int(") {
+t.Errorf("index expression must not be wrapped in int(); got:\n%s", out)
+}
+}
+
+func TestNoIntWrapOnSliceExpressions(t *testing.T) {
+// Slice/substring arguments should not be wrapped in int() either.
+out := transpile(t, `Declare s to be "hello world".
+Print substring(s, 0, 5).`)
+// Guard against int() inside slice notation, not inside print().
+if strings.Contains(out, "[int(") || strings.Contains(out, ":int(") {
+t.Errorf("substring arguments must not be wrapped in int(); got:\n%s", out)
+}
+}
+
+func TestNoBlankLinesAtStartOfFile(t *testing.T) {
+// A def at the very start of the file must not be preceded by blank lines.
+// Use raw (non-trimmed) output so that leading newlines are visible.
+prog := parse(t, `Declare function foo that does the following:
+    Print "hi".
+thats it.`)
+raw := transpiler.NewTranspiler().Transpile(prog)
+// Skip any banner/comment lines, then expect no blank line before the def.
+for _, line := range strings.Split(raw, "\n") {
+if strings.HasPrefix(strings.TrimSpace(line), "#") {
+continue // banner and source comments are fine
+}
+if line == "" {
+t.Errorf("unexpected blank line before first def:\n%s", raw)
+}
+break // first non-comment line reached
+}
+}

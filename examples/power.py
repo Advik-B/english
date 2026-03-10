@@ -2,6 +2,8 @@
 # Power Function Example
 # Calculates x^n using iteration
 print("=== Power Calculator ===")
+
+
 # Function to calculate power
 def power(base, exponent):
     result = 1

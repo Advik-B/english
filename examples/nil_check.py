@@ -35,6 +35,8 @@ else:
 print("")
 print("=== Guard Pattern ===")
 user = None
+
+
 def greet(username):
     if username is not None:
         print("Hello, ")

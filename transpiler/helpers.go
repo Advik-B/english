@@ -144,13 +144,10 @@ func isIntegerLiteral(s string) bool {
 	return len(s) > 0 && (s[0] >= '0' && s[0] <= '9' || s[0] == '-')
 }
 
-// maybeInt wraps expr in int() only when it is not already an integer literal.
-// This keeps the generated code readable: range(5) instead of range(int(5)).
+// maybeInt returns expr unchanged. Python list/string indices do not require
+// explicit int() wrapping; using a non-integer index raises a clear TypeError.
 func maybeInt(expr string) string {
-	if isIntegerLiteral(expr) {
-		return expr
-	}
-	return fmt.Sprintf("int(%s)", expr)
+	return expr
 }
 
 // ─── Operator / type name mapping ────────────────────────────────────────────

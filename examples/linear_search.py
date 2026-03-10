@@ -5,12 +5,14 @@ print("=== Linear Search ===")
 # Create array to search
 arr = [10, 25, 30, 45, 50, 65, 70, 85, 90]
 print("Array: 10, 25, 30, 45, 50, 65, 70, 85, 90")
+
+
 # Function to perform linear search
 def linearSearch(arr_size, target):
     idx = 0
     current = 0
     while idx < arr_size:
-        current = arr[int(idx)]
+        current = arr[idx]
         if current == target:
             return idx
         idx = idx + 1

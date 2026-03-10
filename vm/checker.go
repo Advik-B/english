@@ -2,8 +2,12 @@ package vm
 
 import (
 	"english/ast"
+	"english/parser"
 	"english/vm/types"
 	"fmt"
+	"os"
+	"path/filepath"
+	"strings"
 )
 
 // builtinArgTypes maps function name to the expected TypeKind of each positional argument.
@@ -96,7 +100,8 @@ type TypeChecker struct {
 	// scopeStack is a stack of per-scope declared variable sets.
 	// Each entry maps variable name → line of declaration (0 = predefined by stdlib).
 	// Duplicate detection is limited to the innermost matching scope.
-	scopeStack []map[string]int
+	scopeStack  []map[string]int
+	seenImports map[string]bool // guards against duplicate / circular imports
 }
 
 // Check runs the type checker on a program and returns all type errors found.
@@ -111,6 +116,7 @@ func Check(program *ast.Program, predefines ...string) []*TypeError {
 		varTypes:      make(map[string]types.TypeKind),
 		userFunctions: make(map[string]bool),
 		scopeStack:    []map[string]int{globalScope},
+		seenImports:   make(map[string]bool),
 	}
 	// Pre-scan top-level function declarations so that user-defined functions
 	// sharing a name with a stdlib function are not falsely type-checked.
@@ -274,7 +280,69 @@ func (tc *TypeChecker) checkStatement(stmt ast.Statement) {
 		tc.pushScope()
 		tc.checkStatements(s.Body)
 		tc.popScope()
+	case *ast.ImportStatement:
+		if strings.ToLower(filepath.Ext(s.Path)) == ".abc" {
+			tc.checkImportFile(s.Path)
+		}
 	}
+}
+
+// checkImportFile parses and type-checks an imported .abc file, appending any
+// errors found to tc.errors. The current global scope is used as the set of
+// pre-defined names so that shadowing of stdlib constants (and of names already
+// declared in the importing file) is detected at compile time.
+func (tc *TypeChecker) checkImportFile(path string) {
+	// Mark as seen *before* I/O to guard against circular imports (A→B→A).
+	// If reading fails, the entry stays in seenImports, which is fine: the
+	// same file will fail to read on every subsequent attempt, and the
+	// evaluator will surface the missing-file error at runtime.
+	if tc.seenImports[path] {
+		return // already checked or in progress
+	}
+	tc.seenImports[path] = true
+
+	content, err := os.ReadFile(path)
+	if err != nil {
+		// Cannot read the file — let the evaluator surface the error at runtime.
+		return
+	}
+
+	lx := parser.NewLexer(string(content))
+	tokens := lx.TokenizeAll()
+	p := parser.NewParser(tokens)
+	prog, parseErr := p.Parse()
+	if parseErr != nil {
+		// Surface syntax errors in imported files as compile-time errors so
+		// the program never partially executes.
+		tc.errors = append(tc.errors, &TypeError{
+			Line:    0,
+			Message: fmt.Sprintf("syntax error in '%s': %v", path, parseErr),
+		})
+		return
+	}
+
+	// Build the set of already-known names from the current global scope so
+	// that the sub-checker treats them as predefined (line == 0).
+	importGlobalScope := make(map[string]int)
+	if len(tc.scopeStack) > 0 {
+		for name := range tc.scopeStack[0] {
+			importGlobalScope[name] = 0
+		}
+	}
+
+	subChecker := &TypeChecker{
+		varTypes:      make(map[string]types.TypeKind),
+		userFunctions: make(map[string]bool),
+		scopeStack:    []map[string]int{importGlobalScope},
+		seenImports:   tc.seenImports, // shared so nested imports are tracked
+	}
+	for _, stmt := range prog.Statements {
+		if fn, ok := stmt.(*ast.FunctionDecl); ok {
+			subChecker.userFunctions[fn.Name] = true
+		}
+	}
+	subChecker.checkStatements(prog.Statements)
+	tc.errors = append(tc.errors, subChecker.errors...)
 }
 
 func (tc *TypeChecker) checkExpression(expr ast.Expression) {

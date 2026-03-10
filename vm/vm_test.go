@@ -2738,3 +2738,31 @@ func TestEvaluator_TypedRedefinitionIsTypeError(t *testing.T) {
 		t.Errorf("expected *vm.TypeError (Compile Error), got %T: %v", err, err)
 	}
 }
+
+// TestChecker_FollowsImports verifies that the checker reads and validates
+// imported .abc files, catching stdlib-constant shadowing at compile time so
+// that `english run` never partially executes a program with a compile error.
+func TestChecker_FollowsImports(t *testing.T) {
+	// Write a temporary library that redefines the stdlib constant "pi".
+	libFile, err := os.CreateTemp(t.TempDir(), "lib_*.abc")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := libFile.WriteString("Declare pi to always be 3.14159.\n"); err != nil {
+		t.Fatal(err)
+	}
+	libFile.Close()
+
+	// The main program just imports that library.
+	errs := checkCode(`Import "` + libFile.Name() + `".`)
+	if len(errs) == 0 {
+		t.Fatal("expected a compile error for importing a file that shadows 'pi', got none")
+	}
+	msg := errs[0].Error()
+	if !strings.Contains(msg, "pi") {
+		t.Errorf("error should mention 'pi', got: %s", msg)
+	}
+	if !strings.Contains(msg, "shadows") {
+		t.Errorf("error should say 'shadows', got: %s", msg)
+	}
+}

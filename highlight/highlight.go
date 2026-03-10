@@ -273,12 +273,27 @@ func (s *scanner) tryMultiWordComparison() (string, bool) {
 		"is nothing":                  true,
 		"has a value":                 true,
 		"has no value":                true,
+		"is true":                     true,
+		"is false":                    true,
+		"isn't true":                  true,
+		"isn't false":                 true,
+		"is not true":                 true,
+		"is not false":                true,
 	}
 
 	for {
 		sp := s.readSpaces()
 		if !s.done() && unicode.IsLetter(rune(s.peek())) {
 			word := s.readWord()
+
+			// Handle "isn't" contraction: after reading "isn", consume "'t" to form "isn't"
+			if strings.ToLower(word) == "isn" && !s.done() && s.peek() == '\'' &&
+				(s.peekAt(1) == 't' || s.peekAt(1) == 'T') {
+				s.advance() // consume '
+				s.advance() // consume t
+				word = "isn't"
+			}
+
 			rawBuf.WriteString(sp)
 			rawBuf.WriteString(word)
 			if phraseBuf.Len() > 0 {
@@ -374,11 +389,11 @@ func tokenize(source string) []chunk {
 			continue
 		}
 
-		// ── Multi-word comparisons starting with 'is' or 'has' ───────
-		// Only attempt this when the peeked word is exactly "is" or "has".
+		// ── Multi-word comparisons starting with 'is', 'isn't', or 'has' ──
+		// Attempt when the peeked word is exactly "is", "isn" (for "isn't"), or "has".
 		if ch == 'i' || ch == 'I' || ch == 'h' || ch == 'H' {
 			word := s.peekWordAt(s.pos)
-			if word == "is" || word == "has" {
+			if word == "is" || word == "isn" || word == "has" {
 				if raw, ok := s.tryMultiWordComparison(); ok {
 					chunks = append(chunks, chunk{kindComparison, raw})
 					s.lastWasValue = false

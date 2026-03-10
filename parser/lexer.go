@@ -404,6 +404,14 @@ func (l *Lexer) tryMultiWordComparison() token.Token {
 			break
 		}
 		word := l.readIdentifier()
+
+		// Handle "isn't" contraction: after reading "isn", consume "'t" to form "isn't"
+		if strings.ToLower(word) == "isn" && l.ch == '\'' && (l.peekChar() == 't' || l.peekChar() == 'T') {
+			l.readChar() // consume '
+			l.readChar() // consume t
+			word = "isn't"
+		}
+
 		words = append(words, strings.ToLower(word))
 
 		phrase := strings.Join(words, " ")
@@ -427,6 +435,14 @@ func (l *Lexer) tryMultiWordComparison() token.Token {
 			tokenType = token.IS_SOMETHING
 		case "is nothing", "has no value":
 			tokenType = token.IS_NOTHING_OP
+		case "is true":
+			tokenType = token.IS_TRUE
+		case "is false":
+			tokenType = token.IS_FALSE
+		case "isn't true", "is not true":
+			tokenType = token.ISNT_TRUE
+		case "isn't false", "is not false":
+			tokenType = token.ISNT_FALSE
 		default:
 			tokenType = token.ERROR
 		}

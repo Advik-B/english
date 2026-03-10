@@ -132,6 +132,10 @@ const (
 	IS_NOT_EQUAL
 	IS_SOMETHING  // "is something" / "has a value" — not-nil check
 	IS_NOTHING_OP // "is nothing" / "has no value" — nil check
+	IS_TRUE       // "is true"  — boolean true check
+	IS_FALSE      // "is false" — boolean false check
+	ISNT_TRUE     // "isn't true"  — boolean not-true check
+	ISNT_FALSE    // "isn't false" — boolean not-false check
 	POSSESSIVE    // standalone 's — postfix possessive operator (e.g. "hello"'s title)
 	COMMENT       // # … — source comment; Value holds the text after '#' (trimmed)
 )
@@ -377,6 +381,14 @@ func (t Type) String() string {
 		return "IS_SOMETHING"
 	case IS_NOTHING_OP:
 		return "IS_NOTHING_OP"
+	case IS_TRUE:
+		return "IS_TRUE"
+	case IS_FALSE:
+		return "IS_FALSE"
+	case ISNT_TRUE:
+		return "ISNT_TRUE"
+	case ISNT_FALSE:
+		return "ISNT_FALSE"
 	case POSSESSIVE:
 		return "POSSESSIVE"
 	case COMMENT:

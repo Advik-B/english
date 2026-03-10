@@ -67,8 +67,8 @@ func (p *Parser) parseTryStatement() (ast.Statement, error) {
 		// Accept any identifier: "error" (catch-all) or a specific type name
 		if p.curToken.Type != token.IDENTIFIER {
 			return nil, p.syntaxErr(
-				"I expected an error type name or 'error' after 'on'.",
-				"For example: 'on error:' to catch all errors, or 'on NetworkError:' to catch a specific type.",
+				msgErrorTypeOnName,
+				hintOnError,
 			)
 		}
 		handlerName := p.curToken.Value
@@ -163,8 +163,8 @@ func (p *Parser) parseRaiseStatement() (ast.Statement, error) {
 
 		if p.curToken.Type != token.IDENTIFIER {
 			return nil, p.syntaxErr(
-				"I expected an error type name after 'as'.",
-				"For example: 'raise \"Something went wrong\" as NetworkError.'",
+				msgRaiseErrorType,
+				hintRaiseAs,
 			)
 		}
 
@@ -194,8 +194,8 @@ func (p *Parser) parseSwapStatement() (ast.Statement, error) {
 
 	if p.curToken.Type != token.IDENTIFIER {
 		return nil, p.syntaxErr(
-			"I expected the first variable name after 'swap'.",
-			"For example: 'swap a and b.' swaps the values of a and b.",
+			msgSwapFirstVar,
+			hintSwapVars,
 		)
 	}
 	name1 := p.curToken.Value
@@ -209,8 +209,8 @@ func (p *Parser) parseSwapStatement() (ast.Statement, error) {
 
 	if p.curToken.Type != token.IDENTIFIER {
 		return nil, p.syntaxErr(
-			"I expected the second variable name after 'and'.",
-			"For example: 'swap a and b.' swaps the values of a and b.",
+			msgSwapSecondVar,
+			hintSwapVars,
 		)
 	}
 	name2 := p.curToken.Value
@@ -236,8 +236,8 @@ func (p *Parser) parseErrorTypeDecl() (ast.Statement, error) {
 	nameToken := p.curToken
 	if nameToken.Type != token.IDENTIFIER {
 		return nil, p.syntaxErr(
-			"I expected the name of the new error type.",
-			"For example: 'Declare NetworkError as an error type.'",
+			msgErrorTypeName,
+			hintErrorTypeDecl,
 		)
 	}
 	p.nextToken() // consume name
@@ -251,8 +251,8 @@ func (p *Parser) parseErrorTypeDecl() (ast.Statement, error) {
 	// Consume "an" or "a"
 	if p.curToken.Type != token.IDENTIFIER || (strings.ToLower(p.curToken.Value) != "a" && strings.ToLower(p.curToken.Value) != "an") {
 		return nil, p.syntaxErr(
-			fmt.Sprintf("I expected 'a' or 'an' after 'as', but found '%s'.", p.curToken.Value),
-			"For example: 'Declare NetworkError as an error type.'",
+			fmt.Sprintf(msgFmtArticleAfterAs, p.curToken.Value),
+			hintErrorTypeDecl,
 		)
 	}
 	p.nextToken()
@@ -260,8 +260,8 @@ func (p *Parser) parseErrorTypeDecl() (ast.Statement, error) {
 	// Consume "error"
 	if p.curToken.Type != token.IDENTIFIER || strings.ToLower(p.curToken.Value) != "error" {
 		return nil, p.syntaxErr(
-			fmt.Sprintf("I expected the word 'error' here, but found '%s'.", p.curToken.Value),
-			"For example: 'Declare NetworkError as an error type.'",
+			fmt.Sprintf(msgFmtExpectedErrorWord, p.curToken.Value),
+			hintErrorTypeDecl,
 		)
 	}
 	p.nextToken()
@@ -290,8 +290,8 @@ func (p *Parser) parseErrorSubtypeDecl() (ast.Statement, error) {
 	nameToken := p.curToken
 	if nameToken.Type != token.IDENTIFIER {
 		return nil, p.syntaxErr(
-			"I expected the name of the error subtype.",
-			"For example: 'Declare TimeoutError as a type of NetworkError.'",
+			msgErrorSubtypeName,
+			hintErrorSubtypeDecl,
 		)
 	}
 	p.nextToken() // consume name
@@ -305,8 +305,8 @@ func (p *Parser) parseErrorSubtypeDecl() (ast.Statement, error) {
 	// Consume "a" or "an"
 	if p.curToken.Type != token.IDENTIFIER || (strings.ToLower(p.curToken.Value) != "a" && strings.ToLower(p.curToken.Value) != "an") {
 		return nil, p.syntaxErr(
-			fmt.Sprintf("I expected 'a' or 'an' after 'as', but found '%s'.", p.curToken.Value),
-			"For example: 'Declare TimeoutError as a type of NetworkError.'",
+			fmt.Sprintf(msgFmtArticleAfterAs, p.curToken.Value),
+			hintErrorSubtypeDecl,
 		)
 	}
 	p.nextToken()
@@ -326,8 +326,8 @@ func (p *Parser) parseErrorSubtypeDecl() (ast.Statement, error) {
 	// Consume parent type name
 	if p.curToken.Type != token.IDENTIFIER {
 		return nil, p.syntaxErr(
-			"I expected the parent error type name after 'of'.",
-			"For example: 'Declare TimeoutError as a type of NetworkError.'",
+			msgErrorParentType,
+			hintErrorSubtypeDecl,
 		)
 	}
 	parentName := p.curToken.Value

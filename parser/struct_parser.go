@@ -19,8 +19,8 @@ func (p *Parser) parseStructDeclaration() (ast.Statement, error) {
 	nameToken := p.curToken
 	if p.curToken.Type != token.IDENTIFIER {
 		return nil, p.syntaxErr(
-			"I expected the name of the structure after 'Declare'.",
-			"For example: 'Declare Person as a structure with the following fields:'",
+			msgStructName,
+			hintStructName,
 		)
 	}
 	p.nextToken()
@@ -39,8 +39,8 @@ func (p *Parser) parseStructDeclaration() (ast.Statement, error) {
 	// Expect "structure" or "struct"
 	if p.curToken.Type != token.STRUCTURE && p.curToken.Type != token.STRUCT {
 		return nil, p.syntaxErr(
-			fmt.Sprintf("I expected 'structure' or 'struct' after 'as', but found '%s'.", p.curToken.Value),
-			"For example: 'Declare Person as a structure with the following fields:'",
+			fmt.Sprintf(msgFmtStructOrStruct, p.curToken.Value),
+			hintStructName,
 		)
 	}
 	p.nextToken()
@@ -65,8 +65,8 @@ func (p *Parser) parseStructDeclaration() (ast.Statement, error) {
 	// Expect "fields" or "field"
 	if p.curToken.Type != token.FIELDS && p.curToken.Type != token.FIELD {
 		return nil, p.syntaxErr(
-			fmt.Sprintf("I expected 'fields' after 'following', but found '%s'.", p.curToken.Value),
-			"For example: 'Declare Person as a structure with the following fields:'",
+			fmt.Sprintf(msgFmtFieldsAfter, p.curToken.Value),
+			hintStructName,
 		)
 	}
 	p.nextToken()
@@ -144,8 +144,8 @@ func (p *Parser) parseStructField() (*ast.StructField, error) {
 	nameToken := p.curToken
 	if p.curToken.Type != token.IDENTIFIER {
 		return nil, p.syntaxErr(
-			"I expected the name of the field.",
-			"Field names must start with a letter. For example: 'name is a text.'",
+			msgFieldName,
+			hintFieldName,
 		)
 	}
 	p.nextToken()
@@ -172,8 +172,8 @@ func (p *Parser) parseStructField() (*ast.StructField, error) {
 	typeToken := p.curToken
 	if p.curToken.Type != token.IDENTIFIER && p.curToken.Type != token.INTEGER {
 		return nil, p.syntaxErr(
-			fmt.Sprintf("I expected a type name for field '%s', but found '%s'.", nameToken.Value, p.curToken.Value),
-			"Valid types are: text, number, boolean, integer. For example: 'name is a text.' or 'age is an integer.'",
+			fmt.Sprintf(msgFmtFieldTypeName, nameToken.Value, p.curToken.Value),
+			hintFieldType,
 		)
 	}
 	typeName := typeToken.Value
@@ -234,8 +234,8 @@ func (p *Parser) parseStructMethod() (*ast.FunctionDecl, error) {
 	nameToken := p.curToken
 	if p.curToken.Type != token.IDENTIFIER {
 		return nil, p.syntaxErr(
-			"I expected the method name.",
-			"Method names must start with a letter. For example: 'let greet be a function that does the following:'",
+			msgMethodName,
+			hintMethodName,
 		)
 	}
 	p.nextToken()
@@ -272,8 +272,8 @@ func (p *Parser) parseStructMethod() (*ast.FunctionDecl, error) {
 				paramToken := p.curToken
 				if p.curToken.Type != token.IDENTIFIER {
 					return nil, p.syntaxErr(
-						"I expected a parameter name.",
-						"Parameter names must start with a letter. For example: 'let add be a function that takes x and y and does the following:'",
+						msgStructMethodParam,
+						hintMethodParam,
 					)
 				}
 				parameters = append(parameters, paramToken.Value)
@@ -376,8 +376,8 @@ func (p *Parser) parseStructInstantiation() (ast.Expression, error) {
 	// Get struct name
 	if p.curToken.Type != token.IDENTIFIER {
 		return nil, p.syntaxErr(
-			"I expected the structure name after 'of'.",
-			"For example: 'a new instance of Person' or 'new instance of Car'.",
+			msgNewInstanceName,
+			hintNewInstanceOf,
 		)
 	}
 	structName := p.curToken.Value
@@ -404,8 +404,8 @@ func (p *Parser) parseStructInstantiation() (ast.Expression, error) {
 		// Expect "fields" or "field"
 		if p.curToken.Type != token.FIELDS && p.curToken.Type != token.FIELD {
 			return nil, p.syntaxErr(
-				fmt.Sprintf("I expected 'fields' after 'following', but found '%s'.", p.curToken.Value),
-				"For example: 'a new instance of Person with the following fields:'",
+				fmt.Sprintf(msgFmtFieldsAfter, p.curToken.Value),
+				hintNewInstanceFields,
 			)
 		}
 		p.nextToken()
@@ -435,8 +435,8 @@ func (p *Parser) parseStructInstantiation() (ast.Expression, error) {
 			// Parse field assignment: name is "John".
 			if p.curToken.Type != token.IDENTIFIER {
 				return nil, p.syntaxErr(
-					"I expected a field name here.",
-					"Each field must be set like: 'name is \"Alice\".' or 'age is 30.'",
+					msgNewInstanceField,
+					hintFieldAssignment,
 				)
 			}
 			fieldName := p.curToken.Value
@@ -492,8 +492,8 @@ func (p *Parser) parseTypedVariableDecl() (ast.Statement, error) {
 	nameToken := p.curToken
 	if nameToken.Type != token.IDENTIFIER {
 		return nil, p.syntaxErr(
-			"I expected a variable name after 'Declare'.",
-			"For example: 'Declare score as number to be 0.' or 'Declare name as text.'",
+			msgTypedVarName,
+			hintTypedVarName,
 		)
 	}
 	p.nextToken() // consume name
@@ -507,8 +507,8 @@ func (p *Parser) parseTypedVariableDecl() (ast.Statement, error) {
 	// Read the type name (e.g. "number", "text", "boolean")
 	if p.curToken.Type != token.IDENTIFIER {
 		return nil, p.syntaxErr(
-			fmt.Sprintf("I expected a type name after 'as', but found '%s'.", p.curToken.Value),
-			"Valid types are: number, text, boolean, integer. For example: 'Declare score as number to be 0.'",
+			fmt.Sprintf(msgFmtTypedVarType, p.curToken.Value),
+			hintTypedVarType,
 		)
 	}
 	typeName := p.curToken.Value

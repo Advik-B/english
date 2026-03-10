@@ -109,6 +109,12 @@ const (
 	HAS
 	ENTRY
 
+	// WHITESPACE is emitted by TokenizeForHighlight to represent horizontal
+	// whitespace (spaces / tabs) that was skipped by the lexer between tokens.
+	// It is never produced by NextToken or TokenizeAll; it exists solely for
+	// reconstructing the original source text during syntax highlighting.
+	WHITESPACE
+
 	// Operators and Punctuation
 	PERIOD
 	COMMA
@@ -146,6 +152,7 @@ type Token struct {
 	Value string
 	Line  int
 	Col   int
+	Pos   int // byte offset of the token's first character in the source string
 }
 
 // String representation of token type
@@ -341,6 +348,8 @@ func (t Type) String() string {
 		return "HAS"
 	case ENTRY:
 		return "ENTRY"
+	case WHITESPACE:
+		return "WHITESPACE"
 	case PERIOD:
 		return "PERIOD"
 	case COMMA:

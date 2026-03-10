@@ -1015,16 +1015,16 @@ func GetCachePath(sourcePath string) string {
 	// Using fixed keys for deterministic hashing across runs (required for cache persistence)
 	key0 := uint64(0x0706050403020100)
 	key1 := uint64(0x0f0e0d0c0b0a0908)
-	
+
 	// Compute SipHash of the source path
 	hash := siphash.Hash(key0, key1, []byte(sourcePath))
-	
+
 	// Convert hash to hex string directly (more efficient than byte array conversion)
 	hashStr := fmt.Sprintf("%016x", hash)
-	
+
 	// Get the base name for readability
 	baseName := filepath.Base(sourcePath)
-	
+
 	// Create cache filename: <hash>_<basename>.101
 	cacheFileName := fmt.Sprintf("%s_%s.101", hashStr, baseName)
 	return filepath.Join(CacheDir, cacheFileName)
@@ -1037,12 +1037,12 @@ func IsCacheValid(sourcePath, cachePath string) bool {
 	if err != nil {
 		return false
 	}
-	
+
 	cacheInfo, err := os.Stat(cachePath)
 	if err != nil {
 		return false
 	}
-	
+
 	// Cache is valid if it's newer than or equal to the source
 	return !cacheInfo.ModTime().Before(sourceInfo.ModTime())
 }
@@ -1055,12 +1055,12 @@ func WriteBytecodeCache(cachePath string, data []byte) error {
 	if err := os.MkdirAll(cacheDir, 0755); err != nil {
 		return fmt.Errorf("failed to create cache directory: %w", err)
 	}
-	
+
 	// Write bytecode to cache file
 	if err := os.WriteFile(cachePath, data, 0644); err != nil {
 		return fmt.Errorf("failed to write cache file: %w", err)
 	}
-	
+
 	return nil
 }
 
@@ -1078,7 +1078,7 @@ func ReadBytecodeCache(cachePath string) ([]byte, error) {
 // Returns the parsed Program AST and a boolean indicating whether cache was used.
 func LoadCachedOrParse(sourcePath string, parseFunc func(string) (*ast.Program, error)) (*ast.Program, bool, error) {
 	cachePath := GetCachePath(sourcePath)
-	
+
 	// Check if cache is valid
 	if IsCacheValid(sourcePath, cachePath) {
 		// Try to load from cache
@@ -1093,13 +1093,13 @@ func LoadCachedOrParse(sourcePath string, parseFunc func(string) (*ast.Program, 
 			// Cache is corrupted, will re-parse and cache
 		}
 	}
-	
+
 	// Cache miss or invalid - parse the source file
 	program, err := parseFunc(sourcePath)
 	if err != nil {
 		return nil, false, err
 	}
-	
+
 	// Encode and cache the bytecode
 	encoder := NewEncoder()
 	data, err := encoder.Encode(program)
@@ -1108,6 +1108,6 @@ func LoadCachedOrParse(sourcePath string, parseFunc func(string) (*ast.Program, 
 		// Failures might occur due to permissions, disk space, etc., but shouldn't block execution
 		_ = WriteBytecodeCache(cachePath, data)
 	}
-	
+
 	return program, false, nil
 }

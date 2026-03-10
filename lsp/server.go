@@ -14,25 +14,25 @@ import (
 
 // Language-specific formatting constants
 const (
-	blockEndKeyword     = "thats it"
-	elseKeyword         = "otherwise"
-	blockStartSuffix    = ":"
-	thenSuffix          = ", then"
+	blockEndKeyword  = "thats it"
+	elseKeyword      = "otherwise"
+	blockStartSuffix = ":"
+	thenSuffix       = ", then"
 )
 
 // Server represents the LSP server
 type Server struct {
-	reader   *bufio.Reader
-	writer   io.Writer
-	logger   *log.Logger
-	mu       sync.Mutex
+	reader *bufio.Reader
+	writer io.Writer
+	logger *log.Logger
+	mu     sync.Mutex
 
 	initialized bool
 	shutdown    bool
 
-	documents *DocumentManager
-	analyzer  *Analyzer
-	analyses  map[string]*AnalysisResult
+	documents  *DocumentManager
+	analyzer   *Analyzer
+	analyses   map[string]*AnalysisResult
 	analysisMu sync.RWMutex
 
 	// Callbacks for extensibility
@@ -380,13 +380,13 @@ func (s *Server) handleInitialize(params json.RawMessage) (*InitializeResult, er
 				TriggerCharacters:   []string{"(", ",", " "},
 				RetriggerCharacters: []string{",", " "},
 			},
-			DefinitionProvider:        true,
-			ReferencesProvider:        true,
-			DocumentHighlightProvider: true,
-			DocumentSymbolProvider:    true,
-			CodeActionProvider:        true,
+			DefinitionProvider:         true,
+			ReferencesProvider:         true,
+			DocumentHighlightProvider:  true,
+			DocumentSymbolProvider:     true,
+			CodeActionProvider:         true,
 			DocumentFormattingProvider: true,
-			FoldingRangeProvider:      true,
+			FoldingRangeProvider:       true,
 		},
 		ServerInfo: &ServerInfo{
 			Name:    "English Language Server",
@@ -728,8 +728,8 @@ func (s *Server) handleCodeAction(params json.RawMessage) (interface{}, error) {
 
 				if suggestion != "" {
 					actions = append(actions, CodeAction{
-						Title: "Did you mean: " + suggestion,
-						Kind:  CodeActionKindQuickFix,
+						Title:       "Did you mean: " + suggestion,
+						Kind:        CodeActionKindQuickFix,
 						Diagnostics: []Diagnostic{diag},
 						Edit: &WorkspaceEdit{
 							Changes: map[string][]TextEdit{
@@ -749,8 +749,8 @@ func (s *Server) handleCodeAction(params json.RawMessage) (interface{}, error) {
 		// Suggest adding a period if missing
 		if strings.Contains(diag.Message, "period") {
 			actions = append(actions, CodeAction{
-				Title: "Add period at end of statement",
-				Kind:  CodeActionKindQuickFix,
+				Title:       "Add period at end of statement",
+				Kind:        CodeActionKindQuickFix,
 				Diagnostics: []Diagnostic{diag},
 				Edit: &WorkspaceEdit{
 					Changes: map[string][]TextEdit{

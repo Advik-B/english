@@ -28,10 +28,10 @@ func (p *Program) node() {}
 
 // ImportStatement represents an import statement
 type ImportStatement struct {
-	Path       string   // The file path to import
-	Items      []string // Specific items to import (empty means import all)
-	ImportAll  bool     // True for "import everything/all"
-	IsSafe     bool     // True for safe imports (don't run top-level code)
+	Path      string   // The file path to import
+	Items     []string // Specific items to import (empty means import all)
+	ImportAll bool     // True for "import everything/all"
+	IsSafe    bool     // True for safe imports (don't run top-level code)
 }
 
 func (is *ImportStatement) node()          {}
@@ -256,9 +256,9 @@ func (le *LocationExpression) expressionNode() {}
 
 // StructDecl represents a struct type declaration
 type StructDecl struct {
-	Name         string
-	Fields       []*StructField
-	Methods      []*FunctionDecl
+	Name    string
+	Fields  []*StructField
+	Methods []*FunctionDecl
 }
 
 func (sd *StructDecl) node()          {}
@@ -274,9 +274,9 @@ type StructField struct {
 
 // StructInstantiation creates a new instance of a struct
 type StructInstantiation struct {
-	StructName   string
-	FieldValues  map[string]Expression
-	FieldOrder   []string // Maintain field order
+	StructName  string
+	FieldValues map[string]Expression
+	FieldOrder  []string // Maintain field order
 }
 
 func (si *StructInstantiation) node()           {}
@@ -399,7 +399,7 @@ func (ae *AskExpression) expressionNode() {}
 
 // ArrayLiteral is a typed homogeneous array literal: "an array of number [1, 2, 3]"
 type ArrayLiteral struct {
-	ElementType string       // "number", "text", "boolean" — empty = infer from elements
+	ElementType string // "number", "text", "boolean" — empty = infer from elements
 	Elements    []Expression
 }
 
@@ -444,7 +444,7 @@ func (he *HasExpression) expressionNode() {}
 //   - IsSomethingCheck == true  → "x is something" / "x has a value"  (returns true when x != nil)
 //   - IsSomethingCheck == false → "x is nothing"   / "x has no value" (returns true when x == nil)
 type NilCheckExpression struct {
-	Value           Expression
+	Value            Expression
 	IsSomethingCheck bool // true = "is something"; false = "is nothing"
 }
 
@@ -486,7 +486,7 @@ func (etc *ErrorTypeCheckExpression) expressionNode() {}
 // CommentStatement carries a source comment through to the output.
 // Text holds the comment body (everything after the leading '#', trimmed).
 type CommentStatement struct {
-Text string
+	Text string
 }
 
 func (cs *CommentStatement) node()          {}

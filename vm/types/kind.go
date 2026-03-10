@@ -113,5 +113,5 @@ func Parse(s string) TypeKind {
 // UserTypeNames returns the canonical user-facing type names that are valid
 // for explicit type annotations.  Used in error messages.
 func UserTypeNames() []string {
-return []string{"number", "text", "boolean", "list", "array", "lookup table"}
+	return []string{"number", "text", "boolean", "list", "array", "lookup table"}
 }

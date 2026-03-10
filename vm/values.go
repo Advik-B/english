@@ -1,9 +1,9 @@
 package vm
 
 import (
-"english/ast"
-"english/vm/types"
-"fmt"
+	"english/ast"
+	"english/vm/types"
+	"fmt"
 )
 
 // Value is the universal runtime value interface for the English language.
@@ -17,14 +17,14 @@ type BuiltinFunc func(name string, args []Value) (Value, error)
 // FunctionValue represents a user-defined function.
 // It lives in vm/ (not vm/types/) because it holds a *Environment closure.
 type FunctionValue struct {
-Name       string
-Parameters []string
-Body       []ast.Statement
-Closure    *Environment
+	Name       string
+	Parameters []string
+	Body       []ast.Statement
+	Closure    *Environment
 }
 
 func (f *FunctionValue) String() string {
-return fmt.Sprintf("<function %s>", f.Name)
+	return fmt.Sprintf("<function %s>", f.Name)
 }
 
 // ─── Control-flow sentinels ───────────────────────────────────────────────────
@@ -42,24 +42,24 @@ type ContinueValue struct{}
 
 // RuntimeError is a non-catchable interpreter error with an optional call stack.
 type RuntimeError struct {
-Message   string
-CallStack []string
+	Message   string
+	CallStack []string
 }
 
 func (e *RuntimeError) Error() string {
-result := fmt.Sprintf("Runtime Error: %s\n", e.Message)
-if len(e.CallStack) > 0 {
-result += "\nCall Stack (most recent first):\n"
-for i, frame := range e.CallStack {
-result += fmt.Sprintf("  %d. %s\n", i+1, frame)
-}
-}
-return result
+	result := fmt.Sprintf("Runtime Error: %s\n", e.Message)
+	if len(e.CallStack) > 0 {
+		result += "\nCall Stack (most recent first):\n"
+		for i, frame := range e.CallStack {
+			result += fmt.Sprintf("  %d. %s\n", i+1, frame)
+		}
+	}
+	return result
 }
 
 // NewRuntimeError creates a RuntimeError with a default stdlib call-stack frame.
 func NewRuntimeError(message string) error {
-return &RuntimeError{Message: message, CallStack: []string{"<stdlib>"}}
+	return &RuntimeError{Message: message, CallStack: []string{"<stdlib>"}}
 }
 
 // ─── Reference value ─────────────────────────────────────────────────────────
@@ -67,8 +67,8 @@ return &RuntimeError{Message: message, CallStack: []string{"<stdlib>"}}
 // ReferenceValue holds a reference to a named variable in a specific environment.
 // Lives in vm/ because it references *Environment.
 type ReferenceValue struct {
-Name string
-Env  *Environment
+	Name string
+	Env  *Environment
 }
 
 // ─── Type aliases for vm/types composite types ───────────────────────────────

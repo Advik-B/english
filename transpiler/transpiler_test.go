@@ -778,41 +778,41 @@ Set the item at position 0 in nums to be 9.`, "nums[0] = 9"},
 // transpileStripped parses English source and transpiles using NewTranspilerStripped
 // (the mode used for .101 bytecode files — no comments in output).
 func transpileStripped(t *testing.T, src string) string {
-t.Helper()
-lexer := parser.NewLexer(src)
-tokens := lexer.TokenizeAll()
-p := parser.NewParser(tokens)
-prog, err := p.Parse()
-if err != nil {
-t.Fatalf("parse error: %v", err)
-}
-result := transpiler.NewTranspilerStripped().Transpile(prog)
-return strings.TrimSpace(result)
+	t.Helper()
+	lexer := parser.NewLexer(src)
+	tokens := lexer.TokenizeAll()
+	p := parser.NewParser(tokens)
+	prog, err := p.Parse()
+	if err != nil {
+		t.Fatalf("parse error: %v", err)
+	}
+	result := transpiler.NewTranspilerStripped().Transpile(prog)
+	return strings.TrimSpace(result)
 }
 
 func TestCommentCarriedOver(t *testing.T) {
-out := transpile(t, `# This is a comment
+	out := transpile(t, `# This is a comment
 Print "hello".`)
-// The banner should be present.
-assertContains(t, out, "# Transpiled from English language source")
-// The source comment should appear.
-assertContains(t, out, "# This is a comment")
+	// The banner should be present.
+	assertContains(t, out, "# Transpiled from English language source")
+	// The source comment should appear.
+	assertContains(t, out, "# This is a comment")
 }
 
 func TestEmptyCommentCarriedOver(t *testing.T) {
-// A bare '#' with no text should produce a Python '#' line.
-out := transpile(t, `#
+	// A bare '#' with no text should produce a Python '#' line.
+	out := transpile(t, `#
 Print "hello".`)
-assertContains(t, out, "# Transpiled from English language source")
-assertContainsLine(t, out, "#")
+	assertContains(t, out, "# Transpiled from English language source")
+	assertContainsLine(t, out, "#")
 }
 
 func TestCommentInsideFunction(t *testing.T) {
-out := transpile(t, `Declare function greet that takes name and does the following:
+	out := transpile(t, `Declare function greet that takes name and does the following:
     # say hello
     Print "Hello", the value of name.
 thats it.`)
-assertContains(t, out, "# say hello")
+	assertContains(t, out, "# say hello")
 }
 
 func TestImportCommentCarriedOver(t *testing.T) {
@@ -824,63 +824,63 @@ Print "x".`)
 }
 
 func TestMultipleComments(t *testing.T) {
-out := transpile(t, `# First comment
+	out := transpile(t, `# First comment
 # Second comment
 Print "hi".`)
-assertContains(t, out, "# First comment")
-assertContains(t, out, "# Second comment")
+	assertContains(t, out, "# First comment")
+	assertContains(t, out, "# Second comment")
 }
 
 // ─── Comment suppression (.101 / stripped mode) ───────────────────────────────
 
 func TestStrippedModeNoBanner(t *testing.T) {
-out := transpileStripped(t, `Print "hello".`)
-if strings.Contains(out, "#") {
-t.Errorf("stripped mode should produce no '#' lines, got:\n%s", out)
-}
+	out := transpileStripped(t, `Print "hello".`)
+	if strings.Contains(out, "#") {
+		t.Errorf("stripped mode should produce no '#' lines, got:\n%s", out)
+	}
 }
 
 func TestStrippedModeNoSourceComments(t *testing.T) {
-out := transpileStripped(t, `# This is a comment
+	out := transpileStripped(t, `# This is a comment
 Print "hello".`)
-if strings.Contains(out, "#") {
-t.Errorf("stripped mode should produce no '#' lines, got:\n%s", out)
-}
-// The actual code should still be emitted.
-assertContains(t, out, `print("hello")`)
+	if strings.Contains(out, "#") {
+		t.Errorf("stripped mode should produce no '#' lines, got:\n%s", out)
+	}
+	// The actual code should still be emitted.
+	assertContains(t, out, `print("hello")`)
 }
 
 func TestStrippedModeNoImportComments(t *testing.T) {
-out := transpileStripped(t, `Import "math".
+	out := transpileStripped(t, `Import "math".
 Print "hi".`)
-// Stripped mode must not emit any '#' comment lines.
-if strings.Contains(out, "#") {
-t.Errorf("stripped mode should produce no '#' lines at all, got:\n%s", out)
-}
-// The import should still be emitted as Python code.
-assertContains(t, out, "from math import *")
+	// Stripped mode must not emit any '#' comment lines.
+	if strings.Contains(out, "#") {
+		t.Errorf("stripped mode should produce no '#' lines at all, got:\n%s", out)
+	}
+	// The import should still be emitted as Python code.
+	assertContains(t, out, "from math import *")
 }
 
 func TestStrippedModeCodeStillCorrect(t *testing.T) {
-// Stripping comments must not affect the generated code itself.
-out := transpileStripped(t, `# compute something
+	// Stripping comments must not affect the generated code itself.
+	out := transpileStripped(t, `# compute something
 Declare x to be 5 + 3.
 Print the value of x.`)
-assertContains(t, out, "x = 5 + 3")
-assertContains(t, out, "print(x)")
-if strings.Contains(out, "#") {
-t.Errorf("stripped mode should produce no '#' lines, got:\n%s", out)
-}
+	assertContains(t, out, "x = 5 + 3")
+	assertContains(t, out, "print(x)")
+	if strings.Contains(out, "#") {
+		t.Errorf("stripped mode should produce no '#' lines, got:\n%s", out)
+	}
 }
 
 func TestStrippedModeNoConstantComment(t *testing.T) {
-// Constants use typing.Final; the Final annotation itself is not a comment.
-// There should be no '#' lines in stripped output.
-out := transpileStripped(t, `Declare PI to always be 3.14.`)
-assertContains(t, out, "PI: Final = 3.14")
-if strings.Contains(out, "#") {
-t.Errorf("stripped mode should produce no '#' lines, got:\n%s", out)
-}
+	// Constants use typing.Final; the Final annotation itself is not a comment.
+	// There should be no '#' lines in stripped output.
+	out := transpileStripped(t, `Declare PI to always be 3.14.`)
+	assertContains(t, out, "PI: Final = 3.14")
+	if strings.Contains(out, "#") {
+		t.Errorf("stripped mode should produce no '#' lines, got:\n%s", out)
+	}
 }
 
 // ─── Import inlining (--inline mode) ─────────────────────────────────────────
@@ -981,124 +981,124 @@ Print "hi".`)
 }
 
 func TestUserDefinedFunctionOverridesStdlib(t *testing.T) {
-// A user-defined function named "average" taking numbers should not be
-// mis-translated to the stdlib average(list) expression.
-out := transpile(t, `Declare function average that takes x and y and z and does the following:
+	// A user-defined function named "average" taking numbers should not be
+	// mis-translated to the stdlib average(list) expression.
+	out := transpile(t, `Declare function average that takes x and y and z and does the following:
     Return (x + y + z) / 3.
 thats it.
 
 Declare result to be 0.
 Set result to the result of calling average with 10 and 20 and 30.
 Print the value of result.`)
-assertContains(t, out, "def average(x, y, z)")
-assertContains(t, out, "result = average(10, 20, 30)")
+	assertContains(t, out, "def average(x, y, z)")
+	assertContains(t, out, "result = average(10, 20, 30)")
 }
 
 func TestPythonKeywordEscaping(t *testing.T) {
-out := transpile(t, `Declare class to be "A".
+	out := transpile(t, `Declare class to be "A".
 Print the value of class.`)
-assertContains(t, out, `class_ = "A"`)
-assertContains(t, out, "print(class_)")
+	assertContains(t, out, `class_ = "A"`)
+	assertContains(t, out, "print(class_)")
 }
 
 func TestStructZeroValueDefaults(t *testing.T) {
-out := transpile(t, `declare Person as a structure with the following fields:
+	out := transpile(t, `declare Person as a structure with the following fields:
     name is a string.
     age is an integer.
 thats it.
 
 let p be a new instance of Person.
 Print the name of p.`)
-// Both fields should have zero-value defaults so Person() works.
-assertContains(t, out, `name=""`)
-assertContains(t, out, "age=0")
+	// Both fields should have zero-value defaults so Person() works.
+	assertContains(t, out, `name=""`)
+	assertContains(t, out, "age=0")
 }
 
 func TestIndexOfReturnsNegOne(t *testing.T) {
-out := transpile(t, `Declare s to be "hello".
+	out := transpile(t, `Declare s to be "hello".
 Print index_of(s, "xyz").`)
-// Should use .find() which returns -1, not .index() which raises ValueError.
-assertContains(t, out, ".find(")
-if strings.Contains(out, ".index(") {
-t.Errorf("index_of should emit .find(), not .index()")
-}
+	// Should use .find() which returns -1, not .index() which raises ValueError.
+	assertContains(t, out, ".find(")
+	if strings.Contains(out, ".index(") {
+		t.Errorf("index_of should emit .find(), not .index()")
+	}
 }
 
 // ─── PEP 8 formatting (during code generation) ───────────────────────────────
 
 func TestTwoBlankLinesBeforeDef(t *testing.T) {
-// A top-level function that follows regular code must be separated by
-// exactly two blank lines.
-out := transpile(t, `Print "hello".
+	// A top-level function that follows regular code must be separated by
+	// exactly two blank lines.
+	out := transpile(t, `Print "hello".
 Declare function foo that takes x and does the following:
     Return x.
 thats it.`)
-// Two blank lines = three consecutive newlines between the print and def.
-assertContains(t, out, "print(\"hello\")\n\n\ndef foo(x)")
+	// Two blank lines = three consecutive newlines between the print and def.
+	assertContains(t, out, "print(\"hello\")\n\n\ndef foo(x)")
 }
 
 func TestTwoBlankLinesBetweenDefs(t *testing.T) {
-// Two top-level functions must be separated by exactly two blank lines.
-out := transpile(t, `Declare function foo that takes x and does the following:
+	// Two top-level functions must be separated by exactly two blank lines.
+	out := transpile(t, `Declare function foo that takes x and does the following:
     Return x.
 thats it.
 
 Declare function bar that takes y and does the following:
     Return y.
 thats it.`)
-assertContains(t, out, "return x\n\n\ndef bar(y)")
+	assertContains(t, out, "return x\n\n\ndef bar(y)")
 }
 
 func TestCommentAttachedToDef(t *testing.T) {
-// A comment immediately before a top-level function should stay adjacent
-// to the def — the two blank lines go before the comment, not between it
-// and the def.
-out := transpile(t, `Print "hi".
+	// A comment immediately before a top-level function should stay adjacent
+	// to the def — the two blank lines go before the comment, not between it
+	// and the def.
+	out := transpile(t, `Print "hi".
 # My function
 Declare function foo that takes x and does the following:
     Return x.
 thats it.`)
-// Blank lines must appear before the comment, not between comment and def.
-assertContains(t, out, "print(\"hi\")\n\n\n# My function\ndef foo(x)")
+	// Blank lines must appear before the comment, not between comment and def.
+	assertContains(t, out, "print(\"hi\")\n\n\n# My function\ndef foo(x)")
 }
 
 func TestNoIntWrapOnIndexExpressions(t *testing.T) {
-// Index expressions should not be wrapped in int().
-out := transpile(t, `Declare arr to be [1, 2, 3].
+	// Index expressions should not be wrapped in int().
+	out := transpile(t, `Declare arr to be [1, 2, 3].
 Declare i to be 0.
 Print the item at position i in arr.`)
-assertContains(t, out, "arr[i]")
-// Specifically guard against [int(...)] wrapping inside index brackets.
-if strings.Contains(out, "[int(") {
-t.Errorf("index expression must not be wrapped in int(); got:\n%s", out)
-}
+	assertContains(t, out, "arr[i]")
+	// Specifically guard against [int(...)] wrapping inside index brackets.
+	if strings.Contains(out, "[int(") {
+		t.Errorf("index expression must not be wrapped in int(); got:\n%s", out)
+	}
 }
 
 func TestNoIntWrapOnSliceExpressions(t *testing.T) {
-// Slice/substring arguments should not be wrapped in int() either.
-out := transpile(t, `Declare s to be "hello world".
+	// Slice/substring arguments should not be wrapped in int() either.
+	out := transpile(t, `Declare s to be "hello world".
 Print substring(s, 0, 5).`)
-// Guard against int() inside slice notation, not inside print().
-if strings.Contains(out, "[int(") || strings.Contains(out, ":int(") {
-t.Errorf("substring arguments must not be wrapped in int(); got:\n%s", out)
-}
+	// Guard against int() inside slice notation, not inside print().
+	if strings.Contains(out, "[int(") || strings.Contains(out, ":int(") {
+		t.Errorf("substring arguments must not be wrapped in int(); got:\n%s", out)
+	}
 }
 
 func TestNoBlankLinesAtStartOfFile(t *testing.T) {
-// A def at the very start of the file must not be preceded by blank lines.
-// Use raw (non-trimmed) output so that leading newlines are visible.
-prog := parse(t, `Declare function foo that does the following:
+	// A def at the very start of the file must not be preceded by blank lines.
+	// Use raw (non-trimmed) output so that leading newlines are visible.
+	prog := parse(t, `Declare function foo that does the following:
     Print "hi".
 thats it.`)
-raw := transpiler.NewTranspiler().Transpile(prog)
-// Skip any banner/comment lines, then expect no blank line before the def.
-for _, line := range strings.Split(raw, "\n") {
-if strings.HasPrefix(strings.TrimSpace(line), "#") {
-continue // banner and source comments are fine
-}
-if line == "" {
-t.Errorf("unexpected blank line before first def:\n%s", raw)
-}
-break // first non-comment line reached
-}
+	raw := transpiler.NewTranspiler().Transpile(prog)
+	// Skip any banner/comment lines, then expect no blank line before the def.
+	for _, line := range strings.Split(raw, "\n") {
+		if strings.HasPrefix(strings.TrimSpace(line), "#") {
+			continue // banner and source comments are fine
+		}
+		if line == "" {
+			t.Errorf("unexpected blank line before first def:\n%s", raw)
+		}
+		break // first non-comment line reached
+	}
 }

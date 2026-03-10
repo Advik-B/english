@@ -732,4 +732,3 @@ func TestEncodeDecodeImportStatement(t *testing.T) {
 		t.Errorf("Expected path 'library.abc', got %q", importStmt.Path)
 	}
 }
-

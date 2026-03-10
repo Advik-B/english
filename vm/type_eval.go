@@ -153,7 +153,8 @@ func (ev *Evaluator) evalTypedVariableDecl(node *ast.TypedVariableDecl) (Value, 
 
 // evalErrorTypeDecl evaluates a custom error type declaration.
 // Syntax: Declare NetworkError as an error type.
-//         Declare CustomErr1 as a type of NetworkError.
+//
+//	Declare CustomErr1 as a type of NetworkError.
 func (ev *Evaluator) evalErrorTypeDecl(node *ast.ErrorTypeDecl) (Value, error) {
 	ev.env.DefineErrorType(node.Name, node.ParentType)
 	return nil, nil

@@ -270,7 +270,7 @@ func (m *model) handleCommand(cmd string) string {
 		return ""
 
 	default:
-		return errorStyle.Render("✗ Unknown command: " + cmd) + " " + helpStyle.Render("(try :help)")
+		return errorStyle.Render("✗ Unknown command: "+cmd) + " " + helpStyle.Render("(try :help)")
 	}
 }
 

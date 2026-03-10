@@ -685,11 +685,11 @@ func TestParserCallStatement(t *testing.T) {
 
 func TestParserImportStatement(t *testing.T) {
 	tests := []struct {
-		input       string
-		expectedPath string
+		input         string
+		expectedPath  string
 		expectedItems []string
-		expectedAll  bool
-		expectedSafe bool
+		expectedAll   bool
+		expectedSafe  bool
 	}{
 		{`Import "library.abc".`, "library.abc", nil, false, false},
 		{`Import from "utils.abc".`, "utils.abc", nil, false, false},

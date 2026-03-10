@@ -11,6 +11,7 @@ english
 # Transpiled Python output
 *.abc.py
 *.101.py
+*.py
 
 # Bytecode cache directory
 __engcache__/

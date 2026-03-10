@@ -632,3 +632,73 @@ if !strings.Contains(out, "1.0") {
 t.Errorf("expected version '1.0' to be imported; got %q", out)
 }
 }
+
+// ─── Source embedding ─────────────────────────────────────────────────────────
+
+func TestEncodeDecodeFileWithSource(t *testing.T) {
+src := `Declare x to be 42.
+Print the value of x.`
+chunk, err := compileSource(src)
+if err != nil {
+t.Fatalf("compile error: %v", err)
+}
+data, err := ivm.EncodeFileWithSource(chunk, src)
+if err != nil {
+t.Fatalf("encode error: %v", err)
+}
+_, got, err := ivm.DecodeFileAll(data)
+if err != nil {
+t.Fatalf("decode error: %v", err)
+}
+if got != src {
+t.Errorf("embedded source mismatch:\nwant %q\ngot  %q", src, got)
+}
+}
+
+func TestDecodeFileAllNoSource(t *testing.T) {
+src := `Declare x to be 7.`
+chunk, err := compileSource(src)
+if err != nil {
+t.Fatalf("compile error: %v", err)
+}
+data, err := ivm.EncodeFile(chunk) // no source embedded
+if err != nil {
+t.Fatalf("encode error: %v", err)
+}
+_, embeddedSrc, err := ivm.DecodeFileAll(data)
+if err != nil {
+t.Fatalf("decode error: %v", err)
+}
+if embeddedSrc != "" {
+t.Errorf("expected empty embedded source, got %q", embeddedSrc)
+}
+}
+
+func TestDecodeFileBackwardsCompat(t *testing.T) {
+// DecodeFile must still work on files produced without a source trailer
+// (i.e. compiled with EncodeFile which omits the trailer).
+src := `Declare y to be 99.`
+chunk, err := compileSource(src)
+if err != nil {
+t.Fatalf("compile error: %v", err)
+}
+data, err := ivm.EncodeFile(chunk) // no source trailer
+if err != nil {
+t.Fatalf("encode error: %v", err)
+}
+decoded, err := ivm.DecodeFile(data)
+if err != nil {
+t.Fatalf("DecodeFile error: %v", err)
+}
+if decoded == nil {
+t.Fatal("decoded chunk is nil")
+}
+// DecodeFileAll should return empty source for trailer-less files.
+_, embeddedSrc, err := ivm.DecodeFileAll(data)
+if err != nil {
+t.Fatalf("DecodeFileAll error: %v", err)
+}
+if embeddedSrc != "" {
+t.Errorf("expected empty embedded source for trailer-less file, got %q", embeddedSrc)
+}
+}

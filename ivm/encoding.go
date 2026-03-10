@@ -15,6 +15,16 @@ const InstructionFormatVersion uint8 = 2
 
 // EncodeFile serialises chunk with magic header + version byte.
 func EncodeFile(chunk *Chunk) ([]byte, error) {
+	return EncodeFileWithSource(chunk, "")
+}
+
+// EncodeFileWithSource serialises chunk with magic header + version byte and
+// appends the original source code as a trailing section so the file can be
+// transpiled to Python without the original .abc file.
+// The trailer format is: [uint32-LE source_len][source UTF-8 bytes].
+// If source is empty the trailer is omitted and the output is identical to
+// EncodeFile.
+func EncodeFileWithSource(chunk *Chunk, source string) ([]byte, error) {
 	body, err := EncodeChunk(chunk)
 	if err != nil {
 		return nil, err
@@ -23,21 +33,55 @@ func EncodeFile(chunk *Chunk) ([]byte, error) {
 	buf.Write(MagicBytes)
 	buf.WriteByte(InstructionFormatVersion)
 	buf.Write(body)
+	if source != "" {
+		srcBytes := []byte(source)
+		var lenBuf [4]byte
+		binary.LittleEndian.PutUint32(lenBuf[:], uint32(len(srcBytes)))
+		buf.Write(lenBuf[:])
+		buf.Write(srcBytes)
+	}
 	return buf.Bytes(), nil
 }
 
 // DecodeFile verifies magic + version and deserialises the chunk.
+// Any embedded source trailer is silently ignored; use DecodeFileAll to
+// retrieve it.
 func DecodeFile(data []byte) (*Chunk, error) {
+	chunk, _, err := DecodeFileAll(data)
+	return chunk, err
+}
+
+// DecodeFileAll verifies magic + version, deserialises the chunk, and returns
+// any embedded source code. The returned source is empty when the file was
+// produced without a source trailer (e.g. compiled with an older version of
+// the tool).
+func DecodeFileAll(data []byte) (*Chunk, string, error) {
 	if len(data) < 5 {
-		return nil, fmt.Errorf("ivm: file too short")
+		return nil, "", fmt.Errorf("ivm: file too short")
 	}
 	if !bytes.Equal(data[:4], MagicBytes) {
-		return nil, fmt.Errorf("ivm: bad magic bytes")
+		return nil, "", fmt.Errorf("ivm: bad magic bytes")
 	}
 	if data[4] != InstructionFormatVersion {
-		return nil, fmt.Errorf("ivm: unsupported format version %d (expected %d)", data[4], InstructionFormatVersion)
+		return nil, "", fmt.Errorf("ivm: unsupported format version %d (expected %d)", data[4], InstructionFormatVersion)
 	}
-	return DecodeChunk(data[5:])
+	d := &decoder{data: data[5:], pos: 0}
+	chunk, err := d.readChunk()
+	if err != nil {
+		return nil, "", err
+	}
+	// Check for optional source trailer: [uint32-LE len][source bytes]
+	remaining := d.data[d.pos:]
+	var source string
+	if len(remaining) >= 4 {
+		srcLen := binary.LittleEndian.Uint32(remaining[:4])
+		// Guard against malformed files: srcLen must fit in a signed int and not
+		// exceed the available bytes.
+		if uint64(srcLen) <= uint64(len(remaining)-4) {
+			source = string(remaining[4 : 4+srcLen])
+		}
+	}
+	return chunk, source, nil
 }
 
 // EncodeChunk serialises a Chunk to binary (without file header).

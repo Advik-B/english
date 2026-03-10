@@ -85,7 +85,7 @@ func (e *ivmEnv) setVar(name string, value interface{}) error {
 			actualKind := types.Infer(value)
 			if declared != types.TypeNull && declared != types.TypeUnknown &&
 				types.Canonical(actualKind) != types.Canonical(declared) {
-				return fmt.Errorf("TypeError: cannot assign %s to variable '%s' (declared as %s)", actual, name, en.typeName)
+				return fmt.Errorf("TypeError: cannot assign %s to variable '%s' (declared as %s)\n  Hint: use 'cast to' for explicit conversion", actual, name, en.typeName)
 			}
 		}
 		en.value = value
@@ -118,7 +118,7 @@ func (e *ivmEnv) defineTypedVar(name string, typeName string, value interface{},
 	if value != nil {
 		actual := types.Infer(value)
 		if types.Canonical(actual) != types.Canonical(target) {
-			return fmt.Errorf("TypeError: cannot initialize %s variable '%s' with %s value", typeName, name, types.Name(actual))
+			return fmt.Errorf("TypeError: cannot initialize %s variable '%s' with %s value\n  Hint: use 'cast to' for explicit conversion", typeName, name, types.Name(actual))
 		}
 	}
 	e.vars[name] = &envEntry{value: value, typeName: typeName, isConst: isConst}

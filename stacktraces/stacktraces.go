@@ -51,14 +51,30 @@ var (
 			Background(lipgloss.Color("#3D0000")).
 			Padding(0, 1)
 
+	// Header bar for compile-time errors (amber on dark amber).
+	compileHeaderStyle = colorRenderer.NewStyle().
+				Bold(true).
+				Foreground(lipgloss.Color("#FFD700")).
+				Background(lipgloss.Color("#3D2E00")).
+				Padding(0, 1)
+
 	// Error type label (e.g. "RuntimeError", "ParseError").
 	labelStyle = colorRenderer.NewStyle().
 			Bold(true).
 			Foreground(lipgloss.Color("#FF5555"))
 
+	// Compile-time label colour (amber).
+	compileLabelStyle = colorRenderer.NewStyle().
+				Bold(true).
+				Foreground(lipgloss.Color("#FFD700"))
+
 	// Primary error message.
 	messageStyle = colorRenderer.NewStyle().
 			Foreground(lipgloss.Color("#FFB8B8"))
+
+	// Compile-time message colour (light amber).
+	compileMessageStyle = colorRenderer.NewStyle().
+				Foreground(lipgloss.Color("#FFE9A0"))
 
 	// "Call Stack" section header.
 	stackHeaderStyle = colorRenderer.NewStyle().
@@ -86,6 +102,15 @@ type RuntimeError interface {
 	error
 	RuntimeMessage() string
 	RuntimeCallStack() []string
+}
+
+// CompileError is the interface satisfied by vm.TypeError and parse errors
+// that carry source-location information.
+// Using a local interface avoids an import cycle between this package and vm.
+type CompileError interface {
+	error
+	CompileMessage() string
+	CompileLine() int
 }
 
 // ─── Public API ──────────────────────────────────────────────────────────────
@@ -136,7 +161,18 @@ func renderPlain(err error) string {
 		return sb.String()
 	}
 
-	// Generic error (parse error, type error, etc.)
+	if ce, ok := err.(CompileError); ok {
+		if line := ce.CompileLine(); line > 0 {
+			sb.WriteString(fmt.Sprintf("Compile Error at line %d: %s\n", line, ce.CompileMessage()))
+		} else {
+			sb.WriteString("Compile Error: ")
+			sb.WriteString(ce.CompileMessage())
+			sb.WriteString("\n")
+		}
+		return sb.String()
+	}
+
+	// Generic error (parse error, etc.)
 	sb.WriteString("Error: ")
 	sb.WriteString(err.Error())
 	sb.WriteString("\n")
@@ -150,6 +186,11 @@ func renderColored(err error) string {
 
 	if re, ok := err.(RuntimeError); ok {
 		renderRuntimeError(&sb, re)
+		return sb.String()
+	}
+
+	if ce, ok := err.(CompileError); ok {
+		renderCompileError(&sb, ce)
 		return sb.String()
 	}
 
@@ -187,6 +228,29 @@ func renderRuntimeError(sb *strings.Builder, re RuntimeError) {
 			sb.WriteString("\n")
 		}
 	}
+
+	sb.WriteString(sep)
+	sb.WriteString("\n\n")
+}
+
+func renderCompileError(sb *strings.Builder, ce CompileError) {
+	sep := separatorStyle.Render(strings.Repeat("-", 50))
+
+	sb.WriteString("\n")
+	sb.WriteString(compileHeaderStyle.Render(" Compile Error "))
+	sb.WriteString("\n")
+	sb.WriteString(sep)
+	sb.WriteString("\n\n")
+
+	if line := ce.CompileLine(); line > 0 {
+		sb.WriteString("  ")
+		sb.WriteString(compileLabelStyle.Render(fmt.Sprintf("Line %d: ", line)))
+		sb.WriteString(compileMessageStyle.Render(ce.CompileMessage()))
+	} else {
+		sb.WriteString("  ")
+		sb.WriteString(compileMessageStyle.Render(ce.CompileMessage()))
+	}
+	sb.WriteString("\n")
 
 	sb.WriteString(sep)
 	sb.WriteString("\n\n")

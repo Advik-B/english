@@ -23,6 +23,16 @@ func (e *fakeRuntimeError) RuntimeCallStack() []string {
 	return e.stack
 }
 
+// fakeCompileError is a test double that satisfies stacktraces.CompileError.
+type fakeCompileError struct {
+	msg  string
+	line int
+}
+
+func (e *fakeCompileError) Error() string       { return e.msg }
+func (e *fakeCompileError) CompileMessage() string { return e.msg }
+func (e *fakeCompileError) CompileLine() int       { return e.line }
+
 // ─── HasColor ────────────────────────────────────────────────────────────────
 
 func TestHasColor_NoColorEnv(t *testing.T) {
@@ -151,4 +161,74 @@ func TestPrint_DoesNotPanic(t *testing.T) {
 
 	stacktraces.Print(errors.New("test error"))
 	stacktraces.Print(nil)
+}
+
+// ─── Compile error rendering ──────────────────────────────────────────────────
+
+func TestRender_PlainCompileError_WithLine(t *testing.T) {
+	t.Setenv("NO_COLOR", "1")
+
+	ce := &fakeCompileError{msg: "variable 'x' is already declared at line 3", line: 7}
+	got := stacktraces.Render(ce)
+
+	if !strings.Contains(got, "Compile Error") {
+		t.Errorf("expected 'Compile Error' header in plain output, got:\n%s", got)
+	}
+	if !strings.Contains(got, "line 7") {
+		t.Errorf("expected 'line 7' in plain output, got:\n%s", got)
+	}
+	if !strings.Contains(got, ce.msg) {
+		t.Errorf("expected message in plain output, got:\n%s", got)
+	}
+}
+
+func TestRender_PlainCompileError_NoLine(t *testing.T) {
+	t.Setenv("NO_COLOR", "1")
+
+	ce := &fakeCompileError{msg: "unknown type 'foo'", line: 0}
+	got := stacktraces.Render(ce)
+
+	if !strings.Contains(got, "Compile Error") {
+		t.Errorf("expected 'Compile Error' in plain output, got:\n%s", got)
+	}
+	if !strings.Contains(got, "unknown type 'foo'") {
+		t.Errorf("expected message in plain output, got:\n%s", got)
+	}
+}
+
+func TestRenderWithColor_CompileError(t *testing.T) {
+	ce := &fakeCompileError{msg: "variable 'pi' shadows a predefined constant", line: 37}
+	got := stacktraces.RenderWithColor(ce, true)
+
+	for _, want := range []string{"Compile Error", "37", "pi"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("expected %q in coloured compile error output, got:\n%s", want, got)
+		}
+	}
+	if !strings.Contains(got, "\x1b[") {
+		t.Errorf("expected ANSI escape codes in coloured output, got:\n%q", got)
+	}
+}
+
+func TestRender_CompileVsRuntime_DifferentHeaders(t *testing.T) {
+	t.Setenv("NO_COLOR", "1")
+
+	ce := &fakeCompileError{msg: "type mismatch", line: 5}
+	re := &fakeRuntimeError{msg: "division by zero", stack: []string{}}
+
+	compileOut := stacktraces.Render(ce)
+	runtimeOut := stacktraces.Render(re)
+
+	if !strings.Contains(compileOut, "Compile Error") {
+		t.Errorf("expected 'Compile Error' in compile output, got:\n%s", compileOut)
+	}
+	if !strings.Contains(runtimeOut, "Runtime Error") {
+		t.Errorf("expected 'Runtime Error' in runtime output, got:\n%s", runtimeOut)
+	}
+	if strings.Contains(compileOut, "Runtime Error") {
+		t.Errorf("compile output should not contain 'Runtime Error', got:\n%s", compileOut)
+	}
+	if strings.Contains(runtimeOut, "Compile Error") {
+		t.Errorf("runtime output should not contain 'Compile Error', got:\n%s", runtimeOut)
+	}
 }

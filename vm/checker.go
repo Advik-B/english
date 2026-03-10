@@ -82,6 +82,12 @@ func (te *TypeError) Error() string {
 	return fmt.Sprintf("TypeError: %s", te.Message)
 }
 
+// CompileMessage implements stacktraces.CompileError.
+func (te *TypeError) CompileMessage() string { return te.Message }
+
+// CompileLine implements stacktraces.CompileError.
+func (te *TypeError) CompileLine() int { return te.Line }
+
 // TypeChecker performs static type analysis on an AST before execution.
 type TypeChecker struct {
 	varTypes      map[string]types.TypeKind

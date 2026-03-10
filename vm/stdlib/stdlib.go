@@ -1070,6 +1070,16 @@ func PredefinedNames() []string {
 	return []string{"pi", "e", "infinity"}
 }
 
+// PredefinedValues returns all constants registered by the stdlib as a map.
+// Used by ivm.Machine to initialize predefined constants.
+func PredefinedValues() map[string]interface{} {
+	return map[string]interface{}{
+		"pi":       math.Pi,
+		"e":        math.E,
+		"infinity": math.Inf(1),
+	}
+}
+
 func registerMathConstants(env *vm.Environment) {
 	env.Define("pi", math.Pi, true)
 	env.Define("e", math.E, true)

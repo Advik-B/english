@@ -3,6 +3,7 @@ package cmd
 import (
 	"english/ast"
 	"english/bytecode"
+	"english/ivm"
 	"english/parser"
 	"english/stacktraces"
 	"english/transpiler"
@@ -173,10 +174,15 @@ func CompileFile(filename string, output string) {
 		os.Exit(1)
 	}
 
-	encoder := bytecode.NewEncoder()
-	data, err := encoder.Encode(program)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Compile error: %v\n", err)
+	chunk, compileErr := ivm.Compile(program)
+	if compileErr != nil {
+		fmt.Fprintf(os.Stderr, "Compile error: %v\n", compileErr)
+		os.Exit(1)
+	}
+
+	data, encodeErr := ivm.EncodeFile(chunk)
+	if encodeErr != nil {
+		fmt.Fprintf(os.Stderr, "Encode error: %v\n", encodeErr)
 		os.Exit(1)
 	}
 
@@ -311,6 +317,22 @@ func RunBytecode(filename string) {
 		os.Exit(1)
 	}
 
+	// Detect format version: version 2 = instruction-based ivm format
+	if len(data) >= 5 && data[4] == ivm.InstructionFormatVersion {
+		chunk, decodeErr := ivm.DecodeFile(data)
+		if decodeErr != nil {
+			fmt.Fprintf(os.Stderr, "Bytecode error: %v\n", decodeErr)
+			os.Exit(1)
+		}
+		_, execErr := ivm.Execute(chunk, stdlib.Eval, stdlib.PredefinedValues())
+		if execErr != nil {
+			stacktraces.Print(execErr)
+			os.Exit(1)
+		}
+		return
+	}
+
+	// Version 1: AST-based format
 	decoder := bytecode.NewDecoder(data)
 	program, err := decoder.Decode()
 	if err != nil {

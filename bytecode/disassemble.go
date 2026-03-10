@@ -110,7 +110,8 @@ func (d *disassembler) emit(opcodeStyle lipgloss.Style, opcode, operands string)
 	d.counter++
 	indent := strings.Repeat("    ", d.depth)
 	op := d.s(opcodeStyle, fmt.Sprintf("%-18s", opcode))
-	line := indent + idx + "  " + op
+	// Index is always at column 0; indentation comes after the "idx  " prefix.
+	line := idx + "  " + indent + op
 	if operands != "" {
 		line += "  " + operands
 	}
@@ -120,7 +121,9 @@ func (d *disassembler) emit(opcodeStyle lipgloss.Style, opcode, operands string)
 // emitLabel appends a line that is not counted as an instruction (e.g. END_*).
 func (d *disassembler) emitLabel(style lipgloss.Style, label string, extra ...string) {
 	indent := strings.Repeat("    ", d.depth)
-	text := indent + "      " + d.s(style, label) // align past the index column
+	// Six spaces occupy the same width as "NNN  " so the opcode column stays aligned.
+	// Indentation comes after that placeholder, mirroring the emit layout.
+	text := "      " + indent + d.s(style, label)
 	if len(extra) > 0 && extra[0] != "" {
 		text += "  " + extra[0]
 	}

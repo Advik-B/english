@@ -2706,3 +2706,35 @@ if len(errs) != 0 {
 t.Errorf("expected no errors for distinct names, got: %v", errs)
 }
 }
+
+// ============================================
+// EVALUATOR REDEFINITION → COMPILE ERROR
+// ============================================
+
+// TestEvaluator_RedefinitionIsTypeError verifies that when the evaluator
+// encounters a variable redefinition at runtime (e.g. inside an imported
+// file that the checker did not inspect), it returns a *vm.TypeError so that
+// the error is rendered as "Compile Error" rather than a generic "Error".
+func TestEvaluator_RedefinitionIsTypeError(t *testing.T) {
+	// stdlib.Register puts "pi" into the environment; re-declaring it must
+	// produce a TypeError, not a plain/runtime error.
+	_, err := evaluate(`Declare pi to be 3.`)
+	if err == nil {
+		t.Fatal("expected error for redeclaring stdlib constant 'pi', got nil")
+	}
+	if _, ok := err.(*vm.TypeError); !ok {
+		t.Errorf("expected *vm.TypeError (Compile Error), got %T: %v", err, err)
+	}
+}
+
+// TestEvaluator_TypedRedefinitionIsTypeError verifies the same behaviour for
+// typed variable declarations (Declare x as number to be …).
+func TestEvaluator_TypedRedefinitionIsTypeError(t *testing.T) {
+	_, err := evaluate(`Declare pi as number to be 3.`)
+	if err == nil {
+		t.Fatal("expected error for redeclaring stdlib constant 'pi' as typed, got nil")
+	}
+	if _, ok := err.(*vm.TypeError); !ok {
+		t.Errorf("expected *vm.TypeError (Compile Error), got %T: %v", err, err)
+	}
+}

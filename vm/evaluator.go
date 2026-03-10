@@ -309,8 +309,13 @@ func (ev *Evaluator) evalVariableDecl(vd *ast.VariableDecl) (Value, error) {
 		return nil, err
 	}
 
-	err = ev.env.Define(vd.Name, value, vd.IsConstant)
-	return nil, err
+	if err := ev.env.Define(vd.Name, value, vd.IsConstant); err != nil {
+		// Variable redefinition is a compile-time error regardless of when it
+		// is discovered (e.g. inside an imported file that the checker did not
+		// inspect). Return a TypeError so the renderer shows "Compile Error".
+		return nil, &TypeError{Line: vd.Line, Message: err.Error()}
+	}
+	return nil, nil
 }
 
 func (ev *Evaluator) evalAssignment(a *ast.Assignment) (Value, error) {

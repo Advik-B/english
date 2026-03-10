@@ -46,11 +46,16 @@ var runCmd = &cobra.Command{
 	Args:  cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		filename := args[0]
+		vmFlag, _ := cmd.Flags().GetString("vm")
 		ext := strings.ToLower(filepath.Ext(filename))
 		if ext == ".101" {
 			RunBytecode(filename)
 		} else {
-			RunFile(filename)
+			if strings.EqualFold(vmFlag, "ast") {
+				RunFileAST(filename)
+			} else {
+				RunFileIVM(filename)
+			}
 		}
 	},
 }
@@ -110,10 +115,58 @@ func init() {
 
 	compileCmd.Flags().StringP("output", "o", "", "Output file name (default: input file with .101 extension)")
 	transpileCmd.Flags().BoolP("inline", "i", false, "Inline all imported .abc files into a single Python output file")
+	runCmd.Flags().StringP("vm", "V", "ivm", "VM to use for running .abc source files: 'ivm' (default) or 'ast'")
 }
 
-// RunFile executes an English source file
+// RunFile executes an English source file using the instruction VM (ivm) by default.
+// This is a convenience wrapper for RunFileIVM.
 func RunFile(filename string) {
+	RunFileIVM(filename)
+}
+
+// RunFileIVM parses and executes an English source file via the instruction-based VM.
+// It is the default execution path for .abc source files.
+func RunFileIVM(filename string) {
+	content, err := os.ReadFile(filename)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error reading file: %v\n", err)
+		os.Exit(1)
+	}
+
+	lexer := parser.NewLexer(string(content))
+	tokens := lexer.TokenizeAll()
+
+	p := parser.NewParser(tokens)
+	program, err := p.Parse()
+	if err != nil {
+		stacktraces.Print(err)
+		os.Exit(1)
+	}
+
+	typeErrs := vm.Check(program, stdlib.PredefinedNames()...)
+	if len(typeErrs) > 0 {
+		for _, e := range typeErrs {
+			stacktraces.Print(e)
+		}
+		os.Exit(1)
+	}
+
+	chunk, compileErr := ivm.Compile(program)
+	if compileErr != nil {
+		fmt.Fprintf(os.Stderr, "Compile error: %v\n", compileErr)
+		os.Exit(1)
+	}
+
+	_, execErr := ivm.Execute(chunk, stdlib.Eval, stdlib.PredefinedValues())
+	if execErr != nil {
+		stacktraces.Print(execErr)
+		os.Exit(1)
+	}
+}
+
+// RunFileAST parses and executes an English source file via the tree-walk evaluator.
+// Use the --vm=ast flag on the run command to select this path.
+func RunFileAST(filename string) {
 	content, err := os.ReadFile(filename)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error reading file: %v\n", err)

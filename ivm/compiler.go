@@ -870,8 +870,9 @@ func (c *Compiler) compileTryStatement(s *ast.TryStatement) error {
 	if s.ErrorType != "" {
 		errTypeIdx = c.chunk.AddName(s.ErrorType) + 1 // 0 = match any type
 	}
-	// catch section: always push a fresh scope so the error variable is
-	// scoped to this handler and doesn't leak into subsequent try blocks.
+	// catch section: always push a fresh scope so the error variable is scoped
+	// to this handler and does not leak into subsequent try blocks (even if the
+	// catch body is empty, the scope is needed to contain the error variable).
 	c.chunk.Emit(OP_PUSH_SCOPE, 0)
 	c.scopeDepth++
 	c.chunk.Emit(OP_CATCH, errVarIdx<<16|errTypeIdx)
@@ -883,6 +884,7 @@ func (c *Compiler) compileTryStatement(s *ast.TryStatement) error {
 		}
 	}
 
+	// Always pop the catch scope (paired with the PUSH_SCOPE above).
 	c.chunk.Emit(OP_POP_SCOPE, 0)
 	c.scopeDepth--
 

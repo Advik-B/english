@@ -561,3 +561,74 @@ if !strings.Contains(out, "Hello World") {
 t.Errorf("expected 'Hello World', got %q", out)
 }
 }
+
+// ─── Error variable not leaking across try blocks ─────────────────────────────
+
+func TestErrorVarNotLeakingAcrossTryBlocks(t *testing.T) {
+out := captureOutput(func() {
+_, err := run(`Declare NetworkError as an error type.
+Try doing the following:
+    Raise "first" as NetworkError.
+on NetworkError:
+    Print "caught:", error.
+thats it.
+Try doing the following:
+    Raise "second".
+on error:
+    Print "caught:", error.
+thats it.`)
+if err != nil {
+t.Errorf("unexpected error: %v", err)
+}
+})
+lines := strings.Split(strings.TrimSpace(out), "\n")
+if len(lines) != 2 {
+t.Fatalf("expected 2 output lines, got %d: %q", len(lines), out)
+}
+if !strings.Contains(lines[0], "first") {
+t.Errorf("line 0: expected 'first', got %q", lines[0])
+}
+if !strings.Contains(lines[1], "second") {
+t.Errorf("line 1: expected 'second', got %q (error leaked from previous block)", lines[1])
+}
+}
+
+// ─── Safe import runs only declarations ──────────────────────────────────────
+
+func TestSafeImportRunsOnlyDeclarations(t *testing.T) {
+tmpDir, err := os.MkdirTemp("", "ivm_safe_import")
+if err != nil {
+t.Fatal(err)
+}
+defer os.RemoveAll(tmpDir)
+
+libPath := tmpDir + "/lib.abc"
+if err := os.WriteFile(libPath, []byte(`
+Print "SHOULD NOT PRINT".
+Declare version to always be "1.0".
+Declare function greet and does the following:
+    Print "Hello from lib".
+thats it.
+Print "ALSO SHOULD NOT PRINT".
+`), 0644); err != nil {
+t.Fatal(err)
+}
+
+src := `Import all from "` + libPath + `" safely.
+Declare r to be "".
+Set r to be version.
+Print r.`
+
+out := captureOutput(func() {
+_, err := run(src)
+if err != nil {
+t.Errorf("unexpected error: %v", err)
+}
+})
+if strings.Contains(out, "SHOULD NOT PRINT") {
+t.Errorf("safe import ran side-effectful code; got %q", out)
+}
+if !strings.Contains(out, "1.0") {
+t.Errorf("expected version '1.0' to be imported; got %q", out)
+}
+}

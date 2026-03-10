@@ -48,14 +48,34 @@ func Execute(chunk *Chunk, builtin BuiltinFunc, predefined map[string]interface{
 		if err != nil {
 			return err
 		}
+
+		if isSafe {
+			// Safe import: execute only declarations (VariableDecl, FunctionDecl,
+			// StructDecl, typed declarations, error type declarations) in the current
+			// environment, skipping any top-level side-effectful statements (Print, Call,
+			// etc.). This mirrors the tree-walk evalSafeImport behaviour.
+			safeDecls := safeDeclsOnly(prog)
+			subChunk, err := Compile(safeDecls)
+			if err != nil {
+				return err
+			}
+			subMachine := newMachine(builtin)
+			subMachine.importHandler = m.importHandler
+			subMachine.cur = &callFrame{
+				chunk: subChunk,
+				ip:    0,
+				stack: []interface{}{},
+				env:   env, // define directly in caller's env
+			}
+			_, execErr := subMachine.execute(env)
+			return execErr
+		}
+
 		subChunk, err := Compile(prog)
 		if err != nil {
 			return err
 		}
-		subEnv := env
-		if isSafe {
-			subEnv = env.newChild()
-		}
+		subEnv := env.newChild()
 		subMachine := newMachine(builtin)
 		subMachine.importHandler = m.importHandler
 		subMachine.cur = &callFrame{
@@ -84,12 +104,10 @@ func Execute(chunk *Chunk, builtin BuiltinFunc, predefined map[string]interface{
 					env.funcs[name] = fn
 				}
 			}
-		} else if importAll || len(items) == 0 {
-			// Import everything
+		} else {
+			// Import everything (importAll == true or no explicit items list)
 			for k, v := range subEnv.vars {
-				if !isSafe {
-					env.vars[k] = v
-				}
+				env.vars[k] = v
 			}
 			for k, v := range subEnv.funcs {
 				env.funcs[k] = v
@@ -116,4 +134,23 @@ func Execute(chunk *Chunk, builtin BuiltinFunc, predefined map[string]interface{
 // compileProgram is a helper used internally.
 func compileProgram(prog *ast.Program) (*Chunk, error) {
 	return Compile(prog)
+}
+
+// safeDeclsOnly returns a new Program containing only declaration statements
+// (VariableDecl, TypedVariableDecl, FunctionDecl, StructDecl, ErrorTypeDecl).
+// Used by the safe-import path to skip side-effectful top-level code (Print,
+// Call, etc.), matching the tree-walk evalSafeImport.
+func safeDeclsOnly(prog *ast.Program) *ast.Program {
+	filtered := &ast.Program{}
+	for _, stmt := range prog.Statements {
+		switch stmt.(type) {
+		case *ast.VariableDecl,
+			*ast.TypedVariableDecl,
+			*ast.FunctionDecl,
+			*ast.StructDecl,
+			*ast.ErrorTypeDecl:
+			filtered.Statements = append(filtered.Statements, stmt)
+		}
+	}
+	return filtered
 }

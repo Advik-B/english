@@ -810,9 +810,17 @@ func (ev *Evaluator) evalBinaryExpression(be *ast.BinaryExpression) (Value, erro
 	case "*":
 		return Multiply(left, right)
 	case "/":
-		return Divide(left, right)
+		result, err := Divide(left, right)
+		if err != nil {
+			return nil, ev.runtimeError(err.Error())
+		}
+		return result, nil
 	case "%":
-		return Modulo(left, right)
+		result, err := Modulo(left, right)
+		if err != nil {
+			return nil, ev.runtimeError(err.Error())
+		}
+		return result, nil
 	case "is equal to", "is less than", "is greater than", "is less than or equal to", "is greater than or equal to", "is not equal to":
 		result, err := Compare(be.Operator, left, right)
 		return result, err

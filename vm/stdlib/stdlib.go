@@ -591,7 +591,7 @@ func Eval(name string, args []vm.Value) (vm.Value, error) {
 			return nil, err
 		}
 		if len(lst) == 0 {
-			return nil, fmt.Errorf("RuntimeError: average called on empty list")
+			return nil, vm.NewRuntimeError("average called on empty list")
 		}
 		total := 0.0
 		for _, item := range lst {
@@ -608,7 +608,7 @@ func Eval(name string, args []vm.Value) (vm.Value, error) {
 			return nil, err
 		}
 		if len(lst) == 0 {
-			return nil, fmt.Errorf("RuntimeError: min_value called on empty list")
+			return nil, vm.NewRuntimeError("min_value called on empty list")
 		}
 		best, err := vm.ToNumber(lst[0])
 		if err != nil {
@@ -630,7 +630,7 @@ func Eval(name string, args []vm.Value) (vm.Value, error) {
 			return nil, err
 		}
 		if len(lst) == 0 {
-			return nil, fmt.Errorf("RuntimeError: max_value called on empty list")
+			return nil, vm.NewRuntimeError("max_value called on empty list")
 		}
 		best, err := vm.ToNumber(lst[0])
 		if err != nil {
@@ -896,12 +896,12 @@ func Eval(name string, args []vm.Value) (vm.Value, error) {
 		switch col := args[0].(type) {
 		case []interface{}:
 			if len(col) == 0 {
-				return nil, fmt.Errorf("RuntimeError: first called on empty list")
+				return nil, vm.NewRuntimeError("first called on empty list")
 			}
 			return col[0], nil
 		case *types.ArrayValue:
 			if len(col.Elements) == 0 {
-				return nil, fmt.Errorf("RuntimeError: first called on empty array")
+				return nil, vm.NewRuntimeError("first called on empty array")
 			}
 			return col.Elements[0], nil
 		default:
@@ -911,12 +911,12 @@ func Eval(name string, args []vm.Value) (vm.Value, error) {
 		switch col := args[0].(type) {
 		case []interface{}:
 			if len(col) == 0 {
-				return nil, fmt.Errorf("RuntimeError: last called on empty list")
+				return nil, vm.NewRuntimeError("last called on empty list")
 			}
 			return col[len(col)-1], nil
 		case *types.ArrayValue:
 			if len(col.Elements) == 0 {
-				return nil, fmt.Errorf("RuntimeError: last called on empty array")
+				return nil, vm.NewRuntimeError("last called on empty array")
 			}
 			return col.Elements[len(col.Elements)-1], nil
 		default:

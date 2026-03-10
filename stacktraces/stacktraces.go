@@ -101,6 +101,7 @@ var (
 type RuntimeError interface {
 	error
 	RuntimeMessage() string
+	RuntimeLine() int
 	RuntimeCallStack() []string
 }
 
@@ -147,9 +148,13 @@ func renderPlain(err error) string {
 	var sb strings.Builder
 
 	if re, ok := err.(RuntimeError); ok {
-		sb.WriteString("Runtime Error: ")
-		sb.WriteString(re.RuntimeMessage())
-		sb.WriteString("\n")
+		if line := re.RuntimeLine(); line > 0 {
+			sb.WriteString(fmt.Sprintf("Runtime Error at line %d: %s\n", line, re.RuntimeMessage()))
+		} else {
+			sb.WriteString("Runtime Error: ")
+			sb.WriteString(re.RuntimeMessage())
+			sb.WriteString("\n")
+		}
 
 		stack := re.RuntimeCallStack()
 		if len(stack) > 0 {
@@ -211,6 +216,13 @@ func renderRuntimeError(sb *strings.Builder, re RuntimeError) {
 	sb.WriteString(labelStyle.Render("Message: "))
 	sb.WriteString(messageStyle.Render(re.RuntimeMessage()))
 	sb.WriteString("\n")
+
+	if line := re.RuntimeLine(); line > 0 {
+		sb.WriteString("  ")
+		sb.WriteString(labelStyle.Render("Line:    "))
+		sb.WriteString(messageStyle.Render(fmt.Sprintf("%d", line)))
+		sb.WriteString("\n")
+	}
 
 	stack := re.RuntimeCallStack()
 	if len(stack) > 0 {

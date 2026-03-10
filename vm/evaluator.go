@@ -13,9 +13,10 @@ import (
 
 // Evaluator executes the AST
 type Evaluator struct {
-	env       *Environment
-	callStack []string
-	builtinFn BuiltinFunc // injected stdlib evaluator
+	env         *Environment
+	callStack   []string
+	builtinFn   BuiltinFunc // injected stdlib evaluator
+	currentLine int         // source line of the statement currently being evaluated
 }
 
 // NewEvaluator creates a new evaluator with the given environment and optional builtin function.
@@ -31,7 +32,48 @@ func (ev *Evaluator) runtimeError(message string) error {
 	return &RuntimeError{
 		Message:   message,
 		CallStack: append([]string{}, ev.callStack...),
+		Line:      ev.currentLine,
 	}
+}
+
+// getStatementLine extracts the source line from an AST statement node.
+// Returns 0 if the node type does not carry line information.
+func getStatementLine(stmt ast.Statement) int {
+	switch s := stmt.(type) {
+	case *ast.VariableDecl:
+		return s.Line
+	case *ast.TypedVariableDecl:
+		return s.Line
+	case *ast.OutputStatement:
+		return s.Line
+	case *ast.Assignment:
+		return s.Line
+	case *ast.IndexAssignment:
+		return s.Line
+	case *ast.LookupKeyAssignment:
+		return s.Line
+	case *ast.CallStatement:
+		return s.Line
+	case *ast.ReturnStatement:
+		return s.Line
+	case *ast.IfStatement:
+		return s.Line
+	case *ast.WhileLoop:
+		return s.Line
+	case *ast.ForLoop:
+		return s.Line
+	case *ast.ForEachLoop:
+		return s.Line
+	case *ast.ToggleStatement:
+		return s.Line
+	case *ast.RaiseStatement:
+		return s.Line
+	case *ast.TryStatement:
+		return s.Line
+	case *ast.SwapStatement:
+		return s.Line
+	}
+	return 0
 }
 
 // Eval evaluates an AST node
@@ -150,6 +192,9 @@ func (ev *Evaluator) Eval(node interface{}) (Value, error) {
 func (ev *Evaluator) evalProgram(prog *ast.Program) (Value, error) {
 	var result Value
 	for _, stmt := range prog.Statements {
+		if line := getStatementLine(stmt); line > 0 {
+			ev.currentLine = line
+		}
 		val, err := ev.Eval(stmt)
 		if err != nil {
 			return nil, err
@@ -915,15 +960,24 @@ func (ev *Evaluator) evalFunctionCall(fc *ast.FunctionCall) (Value, error) {
 	oldEnv := ev.env
 	ev.env = funcEnv
 
-	// Add to call stack
-	ev.callStack = append(ev.callStack, fmt.Sprintf("%s(%s)", fc.Name, strings.Join(fn.Parameters, ", ")))
+	// Add to call stack, recording the call-site line
+	callSiteLine := ev.currentLine
+	frameLabel := fmt.Sprintf("%s(%s)", fc.Name, strings.Join(fn.Parameters, ", "))
+	if callSiteLine > 0 {
+		frameLabel = fmt.Sprintf("%s(%s) (line %d)", fc.Name, strings.Join(fn.Parameters, ", "), callSiteLine)
+	}
+	ev.callStack = append(ev.callStack, frameLabel)
 
 	defer func() {
 		ev.env = oldEnv
 		ev.callStack = ev.callStack[:len(ev.callStack)-1]
+		ev.currentLine = callSiteLine
 	}()
 
 	for _, stmt := range fn.Body {
+		if line := getStatementLine(stmt); line > 0 {
+			ev.currentLine = line
+		}
 		val, err := ev.Eval(stmt)
 		if err != nil {
 			return nil, err
@@ -965,13 +1019,22 @@ func (ev *Evaluator) callFunction(name string, args []Value) (Value, error) {
 
 	oldEnv := ev.env
 	ev.env = funcEnv
-	ev.callStack = append(ev.callStack, fmt.Sprintf("%s(...)", name))
+	callSiteLine := ev.currentLine
+	frameLabel := fmt.Sprintf("%s(...)", name)
+	if callSiteLine > 0 {
+		frameLabel = fmt.Sprintf("%s(...) (line %d)", name, callSiteLine)
+	}
+	ev.callStack = append(ev.callStack, frameLabel)
 	defer func() {
 		ev.env = oldEnv
 		ev.callStack = ev.callStack[:len(ev.callStack)-1]
+		ev.currentLine = callSiteLine
 	}()
 
 	for _, stmt := range fn.Body {
+		if line := getStatementLine(stmt); line > 0 {
+			ev.currentLine = line
+		}
 		val, err := ev.Eval(stmt)
 		if err != nil {
 			return nil, err

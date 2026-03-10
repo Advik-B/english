@@ -44,10 +44,14 @@ type ContinueValue struct{}
 type RuntimeError struct {
 	Message   string
 	CallStack []string
+	Line      int // source line where the error occurred (0 = unknown)
 }
 
 func (e *RuntimeError) Error() string {
 	result := fmt.Sprintf("Runtime Error: %s\n", e.Message)
+	if e.Line > 0 {
+		result = fmt.Sprintf("Runtime Error at line %d: %s\n", e.Line, e.Message)
+	}
 	if len(e.CallStack) > 0 {
 		result += "\nCall Stack (most recent first):\n"
 		for i, frame := range e.CallStack {
@@ -60,6 +64,10 @@ func (e *RuntimeError) Error() string {
 // RuntimeMessage implements the stacktraces.RuntimeError interface and returns
 // the human-readable error message without call-stack details.
 func (e *RuntimeError) RuntimeMessage() string { return e.Message }
+
+// RuntimeLine implements the stacktraces.RuntimeError interface and returns
+// the source line where the error occurred (0 = unknown).
+func (e *RuntimeError) RuntimeLine() int { return e.Line }
 
 // RuntimeCallStack implements the stacktraces.RuntimeError interface and
 // returns the full call-stack slice (most-recent frame first).

@@ -52,6 +52,7 @@ func (vd *VariableDecl) statementNode() {}
 type Assignment struct {
 	Name  string
 	Value Expression
+	Line  int
 }
 
 func (a *Assignment) node()          {}
@@ -80,6 +81,7 @@ func (fc *FunctionCall) expressionNode() {}
 type CallStatement struct {
 	FunctionCall *FunctionCall
 	MethodCall   *MethodCall
+	Line         int
 }
 
 func (cs *CallStatement) node()          {}
@@ -91,6 +93,7 @@ type IfStatement struct {
 	Then      []Statement
 	ElseIf    []*ElseIfPart
 	Else      []Statement
+	Line      int
 }
 
 func (is *IfStatement) node()          {}
@@ -106,6 +109,7 @@ type ElseIfPart struct {
 type WhileLoop struct {
 	Condition Expression
 	Body      []Statement
+	Line      int
 }
 
 func (wl *WhileLoop) node()          {}
@@ -115,6 +119,7 @@ func (wl *WhileLoop) statementNode() {}
 type ForLoop struct {
 	Count Expression
 	Body  []Statement
+	Line  int
 }
 
 func (fl *ForLoop) node()          {}
@@ -196,6 +201,7 @@ type IndexAssignment struct {
 	ListName string
 	Index    Expression
 	Value    Expression
+	Line     int
 }
 
 func (ia *IndexAssignment) node()          {}
@@ -212,6 +218,7 @@ func (le *LengthExpression) expressionNode() {}
 // ReturnStatement represents a return statement
 type ReturnStatement struct {
 	Value Expression
+	Line  int
 }
 
 func (rs *ReturnStatement) node()          {}
@@ -221,6 +228,7 @@ func (rs *ReturnStatement) statementNode() {}
 type OutputStatement struct {
 	Values  []Expression
 	Newline bool // true for Print, false for Write
+	Line    int
 }
 
 func (os *OutputStatement) node()          {}
@@ -229,6 +237,7 @@ func (os *OutputStatement) statementNode() {}
 // ToggleStatement toggles a boolean variable
 type ToggleStatement struct {
 	Name string
+	Line int
 }
 
 func (ts *ToggleStatement) node()          {}
@@ -310,6 +319,7 @@ type TryStatement struct {
 	ErrorType   string // If non-empty, only catch errors of this type
 	ErrorBody   []Statement
 	FinallyBody []Statement
+	Line        int
 }
 
 func (ts *TryStatement) node()          {}
@@ -319,6 +329,7 @@ func (ts *TryStatement) statementNode() {}
 type RaiseStatement struct {
 	Message   Expression
 	ErrorType string // Optional error type
+	Line      int
 }
 
 func (rs *RaiseStatement) node()          {}
@@ -374,6 +385,7 @@ func (ce *CopyExpression) expressionNode() {}
 type SwapStatement struct {
 	Name1 string
 	Name2 string
+	Line  int
 }
 
 func (ss *SwapStatement) node()          {}
@@ -428,6 +440,7 @@ type LookupKeyAssignment struct {
 	TableName string
 	Key       Expression
 	Value     Expression
+	Line      int
 }
 
 func (la *LookupKeyAssignment) node()          {}

@@ -12,10 +12,12 @@ import (
 type fakeRuntimeError struct {
 	msg   string
 	stack []string
+	line  int
 }
 
 func (e *fakeRuntimeError) Error() string          { return "Runtime Error: " + e.msg }
 func (e *fakeRuntimeError) RuntimeMessage() string { return e.msg }
+func (e *fakeRuntimeError) RuntimeLine() int       { return e.line }
 func (e *fakeRuntimeError) RuntimeCallStack() []string {
 	if e.stack == nil {
 		return []string{}
@@ -230,5 +232,50 @@ func TestRender_CompileVsRuntime_DifferentHeaders(t *testing.T) {
 	}
 	if strings.Contains(runtimeOut, "Compile Error") {
 		t.Errorf("runtime output should not contain 'Compile Error', got:\n%s", runtimeOut)
+	}
+}
+
+// ─── Runtime error line number ────────────────────────────────────────────────
+
+func TestRender_PlainRuntimeError_WithLine(t *testing.T) {
+	t.Setenv("NO_COLOR", "1")
+
+	re := &fakeRuntimeError{msg: "division by zero", stack: []string{"<main>"}, line: 7}
+	got := stacktraces.Render(re)
+
+	if !strings.Contains(got, "line 7") {
+		t.Errorf("expected 'line 7' in plain output, got:\n%s", got)
+	}
+	if !strings.Contains(got, "division by zero") {
+		t.Errorf("expected message in plain output, got:\n%s", got)
+	}
+}
+
+func TestRender_PlainRuntimeError_NoLine(t *testing.T) {
+	t.Setenv("NO_COLOR", "1")
+
+	re := &fakeRuntimeError{msg: "something went wrong", stack: []string{"<main>"}, line: 0}
+	got := stacktraces.Render(re)
+
+	if strings.Contains(got, "line 0") {
+		t.Errorf("should not show 'line 0' when line is unknown, got:\n%s", got)
+	}
+	if !strings.Contains(got, "Runtime Error") {
+		t.Errorf("expected 'Runtime Error' in output, got:\n%s", got)
+	}
+}
+
+func TestRenderWithColor_RuntimeError_WithLine(t *testing.T) {
+	re := &fakeRuntimeError{
+		msg:   "index out of range",
+		stack: []string{"<main>", "processItems"},
+		line:  42,
+	}
+	got := stacktraces.RenderWithColor(re, true)
+
+	for _, want := range []string{"index out of range", "42", "<main>", "processItems"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("expected %q in coloured output with line, got:\n%s", want, got)
+		}
 	}
 }

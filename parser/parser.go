@@ -517,6 +517,7 @@ func (p *Parser) parseAssignment() (ast.Statement, error) {
 	if err := p.expectToken(token.SET); err != nil {
 		return nil, err
 	}
+	setLine := p.curToken.Line
 	p.nextToken()
 
 	// Check for "Set the item at position X in Y to be Z"
@@ -524,10 +525,10 @@ func (p *Parser) parseAssignment() (ast.Statement, error) {
 	if p.curToken.Type == token.THE {
 		p.nextToken()
 		if p.curToken.Type == token.ITEM {
-			return p.parseIndexAssignment()
+			return p.parseIndexAssignment(setLine)
 		}
 		if p.curToken.Type == token.ENTRY {
-			return p.parseLookupKeyAssignment()
+			return p.parseLookupKeyAssignment(setLine)
 		}
 		return nil, fmt.Errorf("unexpected token after 'Set the': %v", p.curToken.Type)
 	}
@@ -560,7 +561,7 @@ func (p *Parser) parseAssignment() (ast.Statement, error) {
 			return nil, err
 		}
 		p.nextToken()
-		return &ast.LookupKeyAssignment{TableName: nameToken.Value, Key: key, Value: value}, nil
+		return &ast.LookupKeyAssignment{TableName: nameToken.Value, Key: key, Value: value, Line: setLine}, nil
 	}
 
 	if err := p.expectToken(token.TO); err != nil {
@@ -603,6 +604,7 @@ func (p *Parser) parseAssignment() (ast.Statement, error) {
 						Name:      funcName,
 						Arguments: args,
 					},
+					Line: setLine,
 				}, nil
 			}
 		}
@@ -621,11 +623,12 @@ func (p *Parser) parseAssignment() (ast.Statement, error) {
 	return &ast.Assignment{
 		Name:  nameToken.Value,
 		Value: value,
+		Line:  setLine,
 	}, nil
 }
 
 // parseIndexAssignment parses "the item at position X in Y to be Z"
-func (p *Parser) parseIndexAssignment() (ast.Statement, error) {
+func (p *Parser) parseIndexAssignment(setLine int) (ast.Statement, error) {
 	// Already consumed "Set the", now at "item"
 	if err := p.expectToken(token.ITEM); err != nil {
 		return nil, err
@@ -682,6 +685,7 @@ func (p *Parser) parseIndexAssignment() (ast.Statement, error) {
 		ListName: listName,
 		Index:    index,
 		Value:    value,
+		Line:     setLine,
 	}, nil
 }
 
@@ -689,6 +693,7 @@ func (p *Parser) parseCall() (ast.Statement, error) {
 	if err := p.expectToken(token.CALL); err != nil {
 		return nil, err
 	}
+	callLine := p.curToken.Line
 	p.nextToken()
 
 	// First identifier could be:
@@ -733,6 +738,7 @@ func (p *Parser) parseCall() (ast.Statement, error) {
 				MethodName: methodName,
 				Arguments:  args,
 			},
+			Line: callLine,
 		}, nil
 	}
 
@@ -767,6 +773,7 @@ func (p *Parser) parseCall() (ast.Statement, error) {
 				MethodName: methodName,
 				Arguments:  args,
 			},
+			Line: callLine,
 		}, nil
 	}
 
@@ -789,6 +796,7 @@ func (p *Parser) parseCall() (ast.Statement, error) {
 			Name:      funcName,
 			Arguments: args,
 		},
+		Line: callLine,
 	}, nil
 }
 
@@ -816,6 +824,7 @@ func (p *Parser) parseIfStatement() (ast.Statement, error) {
 	if err := p.expectToken(token.IF); err != nil {
 		return nil, err
 	}
+	startLine := p.curToken.Line
 	p.nextToken()
 
 	condition, err := p.parseComparison()
@@ -891,6 +900,7 @@ func (p *Parser) parseIfStatement() (ast.Statement, error) {
 		Then:      thenBody,
 		ElseIf:    elseIfParts,
 		Else:      elseBody,
+		Line:      startLine,
 	}, nil
 }
 
@@ -898,6 +908,7 @@ func (p *Parser) parseRepeat() (ast.Statement, error) {
 	if err := p.expectToken(token.REPEAT); err != nil {
 		return nil, err
 	}
+	startLine := p.curToken.Line
 	p.nextToken()
 
 	// Check for "repeat forever" syntax
@@ -929,6 +940,7 @@ func (p *Parser) parseRepeat() (ast.Statement, error) {
 		return &ast.WhileLoop{
 			Condition: &ast.BooleanLiteral{Value: true},
 			Body:      body,
+			Line:      startLine,
 		}, nil
 	}
 
@@ -975,6 +987,7 @@ func (p *Parser) parseRepeat() (ast.Statement, error) {
 		return &ast.WhileLoop{
 			Condition: condition,
 			Body:      body,
+			Line:      startLine,
 		}, nil
 	}
 
@@ -1014,6 +1027,7 @@ func (p *Parser) parseRepeat() (ast.Statement, error) {
 	return &ast.ForLoop{
 		Count: countExpr,
 		Body:  body,
+		Line:  startLine,
 	}, nil
 }
 
@@ -1105,6 +1119,7 @@ func (p *Parser) parseOutput(newline bool) (ast.Statement, error) {
 	if p.curToken.Type != token.PRINT && p.curToken.Type != token.WRITE {
 		return nil, fmt.Errorf("expected %v or %v, got %v", token.PRINT, token.WRITE, p.curToken.Type)
 	}
+	startLine := p.curToken.Line
 	p.nextToken()
 
 	var values []ast.Expression
@@ -1134,6 +1149,7 @@ func (p *Parser) parseOutput(newline bool) (ast.Statement, error) {
 	return &ast.OutputStatement{
 		Values:  values,
 		Newline: newline,
+		Line:    startLine,
 	}, nil
 }
 
@@ -1141,6 +1157,7 @@ func (p *Parser) parseReturn() (ast.Statement, error) {
 	if err := p.expectToken(token.RETURN); err != nil {
 		return nil, err
 	}
+	startLine := p.curToken.Line
 	p.nextToken()
 
 	value, err := p.parseExpression()
@@ -1155,6 +1172,7 @@ func (p *Parser) parseReturn() (ast.Statement, error) {
 
 	return &ast.ReturnStatement{
 		Value: value,
+		Line:  startLine,
 	}, nil
 }
 
@@ -2006,6 +2024,7 @@ func (p *Parser) parseToggle() (ast.Statement, error) {
 	if err := p.expectToken(token.TOGGLE); err != nil {
 		return nil, err
 	}
+	startLine := p.curToken.Line
 	p.nextToken()
 
 	// Handle "toggle the value of x"
@@ -2033,6 +2052,7 @@ func (p *Parser) parseToggle() (ast.Statement, error) {
 
 	return &ast.ToggleStatement{
 		Name: name,
+		Line: startLine,
 	}, nil
 }
 
@@ -2179,7 +2199,7 @@ func (p *Parser) parseLookupKeyAccess() (ast.Expression, error) {
 
 // parseLookupKeyAssignment parses "the entry KEY in TABLE to be VALUE."
 // Cursor is on ENTRY when called (parseAssignment has already consumed "Set the").
-func (p *Parser) parseLookupKeyAssignment() (ast.Statement, error) {
+func (p *Parser) parseLookupKeyAssignment(setLine int) (ast.Statement, error) {
 	p.nextToken() // consume ENTRY
 
 	key, err := p.parseExpression()
@@ -2216,5 +2236,5 @@ func (p *Parser) parseLookupKeyAssignment() (ast.Statement, error) {
 	}
 	p.nextToken()
 
-	return &ast.LookupKeyAssignment{TableName: tableName, Key: key, Value: value}, nil
+	return &ast.LookupKeyAssignment{TableName: tableName, Key: key, Value: value, Line: setLine}, nil
 }

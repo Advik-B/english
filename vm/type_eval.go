@@ -146,7 +146,9 @@ func (ev *Evaluator) evalTypedVariableDecl(node *ast.TypedVariableDecl) (Value, 
 		}
 	}
 	if err := ev.env.DefineTyped(node.Name, node.TypeName, value, node.IsConstant); err != nil {
-		return nil, ev.runtimeError(err.Error())
+		// Type annotation errors and redefinition errors are compile-time
+		// errors. Return a TypeError so the renderer shows "Compile Error".
+		return nil, &TypeError{Line: node.Line, Message: err.Error()}
 	}
 	return nil, nil
 }

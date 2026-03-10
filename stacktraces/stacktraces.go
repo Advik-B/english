@@ -136,6 +136,14 @@ type CompileError interface {
 	CompileLine() int
 }
 
+// CompileFileError is an optional extension of CompileError implemented by
+// errors that also know which source file they originated from (e.g. an error
+// inside an imported .abc file).
+type CompileFileError interface {
+	CompileError
+	CompileFile() string
+}
+
 // SyntaxError is the interface satisfied by parser.SyntaxError.
 // It carries a user-friendly message, the source line/column, and an optional
 // hint to guide the programmer towards a fix.
@@ -214,12 +222,24 @@ func renderPlain(err error) string {
 	}
 
 	if ce, ok := err.(CompileError); ok {
+		file := ""
+		if cfe, ok := err.(CompileFileError); ok {
+			file = cfe.CompileFile()
+		}
 		if line := ce.CompileLine(); line > 0 {
-			sb.WriteString(fmt.Sprintf("Compile Error at line %d: %s\n", line, ce.CompileMessage()))
+			if file != "" {
+				sb.WriteString(fmt.Sprintf("Compile Error in '%s' at line %d: %s\n", file, line, ce.CompileMessage()))
+			} else {
+				sb.WriteString(fmt.Sprintf("Compile Error at line %d: %s\n", line, ce.CompileMessage()))
+			}
 		} else {
-			sb.WriteString("Compile Error: ")
-			sb.WriteString(ce.CompileMessage())
-			sb.WriteString("\n")
+			if file != "" {
+				sb.WriteString(fmt.Sprintf("Compile Error in '%s': %s\n", file, ce.CompileMessage()))
+			} else {
+				sb.WriteString("Compile Error: ")
+				sb.WriteString(ce.CompileMessage())
+				sb.WriteString("\n")
+			}
 		}
 		return sb.String()
 	}
@@ -306,12 +326,24 @@ func renderCompileError(sb *strings.Builder, ce CompileError) {
 	sb.WriteString(sep)
 	sb.WriteString("\n\n")
 
+	file := ""
+	if cfe, ok := ce.(CompileFileError); ok {
+		file = cfe.CompileFile()
+	}
+
 	if line := ce.CompileLine(); line > 0 {
 		sb.WriteString("  ")
-		sb.WriteString(compileLabelStyle.Render(fmt.Sprintf("Line %d: ", line)))
+		if file != "" {
+			sb.WriteString(compileLabelStyle.Render(fmt.Sprintf("%s, Line %d: ", file, line)))
+		} else {
+			sb.WriteString(compileLabelStyle.Render(fmt.Sprintf("Line %d: ", line)))
+		}
 		sb.WriteString(compileMessageStyle.Render(ce.CompileMessage()))
 	} else {
 		sb.WriteString("  ")
+		if file != "" {
+			sb.WriteString(compileLabelStyle.Render(fmt.Sprintf("%s: ", file)))
+		}
 		sb.WriteString(compileMessageStyle.Render(ce.CompileMessage()))
 	}
 	sb.WriteString("\n")

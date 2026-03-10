@@ -2706,3 +2706,71 @@ if len(errs) != 0 {
 t.Errorf("expected no errors for distinct names, got: %v", errs)
 }
 }
+
+// ============================================
+// EVALUATOR REDEFINITION → COMPILE ERROR
+// ============================================
+
+// TestEvaluator_RedefinitionIsTypeError verifies that when the evaluator
+// encounters a variable redefinition at runtime (e.g. inside an imported
+// file that the checker did not inspect), it returns a *vm.TypeError so that
+// the error is rendered as "Compile Error" rather than a generic "Error".
+func TestEvaluator_RedefinitionIsTypeError(t *testing.T) {
+	// stdlib.Register puts "pi" into the environment; re-declaring it must
+	// produce a TypeError, not a plain/runtime error.
+	_, err := evaluate(`Declare pi to be 3.`)
+	if err == nil {
+		t.Fatal("expected error for redeclaring stdlib constant 'pi', got nil")
+	}
+	if _, ok := err.(*vm.TypeError); !ok {
+		t.Errorf("expected *vm.TypeError (Compile Error), got %T: %v", err, err)
+	}
+}
+
+// TestEvaluator_TypedRedefinitionIsTypeError verifies the same behaviour for
+// typed variable declarations (Declare x as number to be …).
+func TestEvaluator_TypedRedefinitionIsTypeError(t *testing.T) {
+	_, err := evaluate(`Declare pi as number to be 3.`)
+	if err == nil {
+		t.Fatal("expected error for redeclaring stdlib constant 'pi' as typed, got nil")
+	}
+	if _, ok := err.(*vm.TypeError); !ok {
+		t.Errorf("expected *vm.TypeError (Compile Error), got %T: %v", err, err)
+	}
+}
+
+// TestChecker_FollowsImports verifies that the checker reads and validates
+// imported .abc files, catching stdlib-constant shadowing at compile time so
+// that `english run` never partially executes a program with a compile error.
+func TestChecker_FollowsImports(t *testing.T) {
+	// Write a temporary library that redefines the stdlib constant "pi".
+	libFile, err := os.CreateTemp(t.TempDir(), "lib_*.abc")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := libFile.WriteString("Declare pi to always be 3.14159.\n"); err != nil {
+		t.Fatal(err)
+	}
+	libFile.Close()
+
+	// The main program just imports that library.
+	errs := checkCode(`Import "` + libFile.Name() + `".`)
+	if len(errs) == 0 {
+		t.Fatal("expected a compile error for importing a file that shadows 'pi', got none")
+	}
+	e := errs[0]
+	msg := e.Error()
+	if !strings.Contains(msg, "pi") {
+		t.Errorf("error should mention 'pi', got: %s", msg)
+	}
+	if !strings.Contains(msg, "shadows") {
+		t.Errorf("error should say 'shadows', got: %s", msg)
+	}
+	// The error must identify the file it came from.
+	if e.File == "" {
+		t.Errorf("error should carry the imported file path, but File is empty")
+	}
+	if e.File != libFile.Name() {
+		t.Errorf("expected error File to be %q, got %q", libFile.Name(), e.File)
+	}
+}

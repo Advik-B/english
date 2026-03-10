@@ -1,3 +1,341 @@
-Ask "Do you love me? [y/n]: " as her_love_txt.
+# program.abc — comprehensive showcase of every language feature.
+# This file is intentionally broad; each section exercises a distinct part
+# of the English language and can be inspected with:
+#   english cat program.abc          (syntax-highlighted source)
+#   english inspect program.abc      (instruction-level disassembly)
 
-Print her_love_txt.
+# ─── 1. OUTPUT ────────────────────────────────────────────────────────────────
+
+Print "=== English Language Feature Showcase ===".
+Write "Running... ".
+Print "done.".
+
+# ─── 2. VARIABLES ─────────────────────────────────────────────────────────────
+
+# Inferred-type declaration (VariableDecl)
+Declare counter to be 0.
+Declare greeting to be "Hello, World!".
+Declare active to be true.
+Declare ratio to be 3.14.
+Declare empty to be nothing.
+
+# Constant (VariableDecl with IsConstant=true)
+Declare maxItems to always be 100.
+
+# Typed declarations (TypedVariableDecl)
+Declare score as number to be 0.
+Declare username as text to be "guest".
+Declare finished as boolean to be false.
+
+# Assignment (Assignment)
+Set counter to be counter + 1.
+Set greeting to be "Hi there!".
+Set active to be false.
+
+# ─── 3. ARITHMETIC & EXPRESSIONS ──────────────────────────────────────────────
+
+Declare a to be 10.
+Declare b to be 3.
+Declare sum to be a + b.
+Declare diff to be a - b.
+Declare product to be a * b.
+Declare quotient to be a / b.
+Declare rem to be the remainder of a divided by b.
+
+Print "Sum:", sum.
+Print "Difference:", diff.
+Print "Product:", product.
+Print "Quotient:", quotient.
+Print "Remainder:", rem.
+
+# ─── 4. BOOLEAN EXPRESSIONS ───────────────────────────────────────────────────
+
+Declare negated to be not active.
+Print "negated:", negated.
+
+# ─── 5. CONDITIONALS ──────────────────────────────────────────────────────────
+
+If counter is equal to 1, then
+    Print "Counter is one.".
+otherwise if counter is equal to 2, then
+    Print "Counter is two.".
+otherwise
+    Print "Counter is something else.".
+thats it.
+
+# ─── 6. WHILE LOOP ────────────────────────────────────────────────────────────
+
+Declare i to be 1.
+repeat the following while i is less than or equal to 5:
+    Print "While:", i.
+    Set i to be i + 1.
+thats it.
+
+# ─── 7. REPEAT N TIMES ────────────────────────────────────────────────────────
+
+repeat the following 3 times:
+    Print "Hello from repeat!".
+thats it.
+
+# ─── 8. FOR-EACH LOOP ─────────────────────────────────────────────────────────
+
+Declare fruits to be ["apple", "banana", "cherry"].
+For each fruit in fruits, do the following:
+    Print "Fruit:", fruit.
+thats it.
+
+# ─── 9. FOREVER + BREAK ───────────────────────────────────────────────────────
+
+Declare n to be 0.
+repeat forever:
+    Set n to be n + 1.
+    If n is equal to 3, then
+        break out of this loop.
+    thats it.
+thats it.
+Print "Broke out at n =", n.
+
+# ─── 10. CONTINUE ─────────────────────────────────────────────────────────────
+
+Declare evens to be [2, 4, 6, 8, 10].
+For each v in evens, do the following:
+    If v is equal to 6, then
+        Continue.
+    thats it.
+    Print "Even:", v.
+thats it.
+
+# ─── 11. BREAK IN WHILE ───────────────────────────────────────────────────────
+
+Declare limit to be 0.
+repeat the following while limit is less than 10:
+    Set limit to be limit + 1.
+    If limit is equal to 5, then
+        break out of this loop.
+    thats it.
+thats it.
+Print "Limit stopped at:", limit.
+
+# ─── 12. FUNCTIONS ────────────────────────────────────────────────────────────
+
+Declare function add that takes x and y and does the following:
+    Return x + y.
+thats it.
+
+Declare function factorial that takes num and does the following:
+    If num is less than or equal to 1, then
+        Return 1.
+    thats it.
+    Declare sub to be num - 1.
+    Declare subFact to be 0.
+    Set subFact to be the result of calling factorial with sub.
+    Return num * subFact.
+thats it.
+
+Declare function greet that takes name and does the following:
+    Print "Hello,", name.
+thats it.
+
+Declare addResult to be 0.
+Set addResult to be the result of calling add with 7 and 8.
+Print "7 + 8 =", addResult.
+
+Declare fact5 to be 0.
+Set fact5 to be the result of calling factorial with 5.
+Print "5! =", fact5.
+
+Call greet with "Alice".
+
+# ─── 13. TOGGLE ───────────────────────────────────────────────────────────────
+
+Declare flag to be false.
+Toggle flag.
+Print "Flag after toggle:", flag.
+Toggle flag.
+Print "Flag after second toggle:", flag.
+
+# ─── 14. SWAP ─────────────────────────────────────────────────────────────────
+
+Declare p to be 10.
+Declare q to be 20.
+Print "Before swap: p =", p, "q =", q.
+Swap p and q.
+Print "After swap: p =", p, "q =", q.
+
+# ─── 15. ARRAYS & INDEX ACCESS ────────────────────────────────────────────────
+
+Declare numbers to be [10, 20, 30, 40, 50].
+Print "First element:", numbers[1].
+Print "Length:", count(numbers).
+
+# Index assignment
+Set the item at position 1 in numbers to be 99.
+Print "After update:", numbers[1].
+
+# ─── 16. CAST EXPRESSIONS ─────────────────────────────────────────────────────
+
+Declare ageStr to be "25".
+Declare ageNum to be ageStr cast to number.
+Print "Age as number:", ageNum.
+
+Declare scoreNum to be 97.
+Declare scoreTxt to be scoreNum cast to text.
+Print "Score as text:", scoreTxt.
+
+# ─── 17. NOTHING / NIL ────────────────────────────────────────────────────────
+
+Declare maybeValue to be nothing.
+If maybeValue is nothing, then
+    Print "maybeValue is nothing.".
+thats it.
+
+Set maybeValue to be 42.
+If maybeValue is something, then
+    Print "maybeValue is now:", maybeValue.
+thats it.
+
+# ─── 18. LOOKUP TABLES ────────────────────────────────────────────────────────
+
+Declare ages to be a lookup table.
+Set ages at "Alice" to be 30.
+Set ages at "Bob" to be 25.
+Set ages at "Carol" to be 35.
+
+Print "Alice's age:", ages at "Alice".
+Print "Bob's age:", ages at "Bob".
+
+If ages has "Alice", then
+    Print "Table has Alice.".
+thats it.
+
+If ages has "Dave", then
+    Print "Table has Dave.".
+otherwise
+    Print "Table does not have Dave.".
+thats it.
+
+For each person in ages, do the following:
+    Print "Name:", person.
+thats it.
+
+# ─── 19. STRUCTS ──────────────────────────────────────────────────────────────
+
+Declare Person as a structure with the following fields:
+    name is a text.
+    age is an unsigned integer with 0 being the default.
+thats it.
+
+Let alice be a new instance of Person with the following fields:
+    name is "Alice".
+    age is 30.
+thats it.
+
+Let bob be a new instance of Person.
+
+Print "Person name:", the name of alice.
+Print "Person age:", the age of alice.
+Print "Bob (defaults):", the age of bob.
+
+# ─── 20. CUSTOM ERROR TYPES ───────────────────────────────────────────────────
+
+Declare NetworkError as an error type.
+Declare ValidationError as an error type.
+
+# ─── 21. TRY / ON ERROR / FINALLY ────────────────────────────────────────────
+
+Try doing the following:
+    Raise "connection refused" as NetworkError.
+on NetworkError:
+    Print "Caught network error:", error.
+but finally:
+    Print "Network cleanup done.".
+thats it.
+
+Try doing the following:
+    Raise "value out of range" as ValidationError.
+on error:
+    Print "Generic catch:", error.
+thats it.
+
+# Nested try
+Try doing the following:
+    Try doing the following:
+        Raise "inner error" as NetworkError.
+    on ValidationError:
+        Print "Should NOT reach here.".
+    thats it.
+on NetworkError:
+    Print "Outer caught NetworkError.".
+thats it.
+
+# ─── 22. MEMORY LOCATIONS ─────────────────────────────────────────────────────
+
+Declare memVar to be 123.
+Print "Location of memVar:", the location of memVar.
+
+# ─── 23. LENGTH ───────────────────────────────────────────────────────────────
+
+Declare words to be ["one", "two", "three", "four"].
+Print "Length of words:", count(words).
+
+# ─── 24. IMPORT ───────────────────────────────────────────────────────────────
+
+Import "examples/math_library.abc".
+
+Declare sqResult to be 0.
+Set sqResult to be the result of calling square with 6.
+Print "Square of 6:", sqResult.
+
+# ─── 25. PRINT / WRITE (OUTPUT) ───────────────────────────────────────────────
+
+Write "Inline write: ".
+Write a.
+Write " + ".
+Write b.
+Write " = ".
+Print sum.
+
+# ─── 26. RECURSIVE FUNCTION ───────────────────────────────────────────────────
+
+Declare function fib that takes n and does the following:
+    If n is less than or equal to 1, then
+        Return n.
+    thats it.
+    Declare f1 to be 0.
+    Set f1 to be the result of calling fib with n - 1.
+    Declare f2 to be 0.
+    Set f2 to be the result of calling fib with n - 2.
+    Return f1 + f2.
+thats it.
+
+Declare fib10 to be 0.
+Set fib10 to be the result of calling fib with 10.
+Print "fib(10) =", fib10.
+
+# ─── 27. HIGHER-ORDER USAGE (functions calling functions) ─────────────────────
+
+Declare function applyTwice that takes val and does the following:
+    Declare once to be 0.
+    Set once to be the result of calling add with val and 1.
+    Declare twice to be 0.
+    Set twice to be the result of calling add with once and 1.
+    Return twice.
+thats it.
+
+Declare doubleInc to be 0.
+Set doubleInc to be the result of calling applyTwice with 5.
+Print "applyTwice(5):", doubleInc.
+
+# ─── 28. TYPED VARIABLE — SCOPE DEMO ─────────────────────────────────────────
+
+Declare function scopeDemo that does the following:
+    Declare local to be "I am local".
+    Print local.
+thats it.
+
+Call scopeDemo.
+
+# ─── Done ─────────────────────────────────────────────────────────────────────
+
+Print "".
+Print "=== All features exercised successfully ===".

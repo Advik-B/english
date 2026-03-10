@@ -18,7 +18,10 @@ import (
 func (p *Parser) parseStructDeclaration() (ast.Statement, error) {
 	nameToken := p.curToken
 	if p.curToken.Type != token.IDENTIFIER {
-		return nil, fmt.Errorf("expected struct name after 'Declare', got %v", p.curToken.Type)
+		return nil, p.syntaxErr(
+			msgStructName,
+			hintStructName,
+		)
 	}
 	p.nextToken()
 
@@ -35,7 +38,10 @@ func (p *Parser) parseStructDeclaration() (ast.Statement, error) {
 
 	// Expect "structure" or "struct"
 	if p.curToken.Type != token.STRUCTURE && p.curToken.Type != token.STRUCT {
-		return nil, fmt.Errorf("expected 'structure' or 'struct', got %v", p.curToken.Type)
+		return nil, p.syntaxErr(
+			fmt.Sprintf(msgFmtStructOrStruct, p.curToken.Value),
+			hintStructName,
+		)
 	}
 	p.nextToken()
 
@@ -58,7 +64,10 @@ func (p *Parser) parseStructDeclaration() (ast.Statement, error) {
 
 	// Expect "fields" or "field"
 	if p.curToken.Type != token.FIELDS && p.curToken.Type != token.FIELD {
-		return nil, fmt.Errorf("expected 'fields' or 'field', got %v", p.curToken.Type)
+		return nil, p.syntaxErr(
+			fmt.Sprintf(msgFmtFieldsAfter, p.curToken.Value),
+			hintStructName,
+		)
 	}
 	p.nextToken()
 
@@ -134,7 +143,10 @@ func (p *Parser) parseStructDeclaration() (ast.Statement, error) {
 func (p *Parser) parseStructField() (*ast.StructField, error) {
 	nameToken := p.curToken
 	if p.curToken.Type != token.IDENTIFIER {
-		return nil, fmt.Errorf("expected field name, got %v", p.curToken.Type)
+		return nil, p.syntaxErr(
+			msgFieldName,
+			hintFieldName,
+		)
 	}
 	p.nextToken()
 
@@ -159,7 +171,10 @@ func (p *Parser) parseStructField() (*ast.StructField, error) {
 	// Get type name
 	typeToken := p.curToken
 	if p.curToken.Type != token.IDENTIFIER && p.curToken.Type != token.INTEGER {
-		return nil, fmt.Errorf("expected type name, got %v", p.curToken.Type)
+		return nil, p.syntaxErr(
+			fmt.Sprintf(msgFmtFieldTypeName, nameToken.Value, p.curToken.Value),
+			hintFieldType,
+		)
 	}
 	typeName := typeToken.Value
 	if p.curToken.Type == token.INTEGER {
@@ -218,7 +233,10 @@ func (p *Parser) parseStructMethod() (*ast.FunctionDecl, error) {
 
 	nameToken := p.curToken
 	if p.curToken.Type != token.IDENTIFIER {
-		return nil, fmt.Errorf("expected method name, got %v", p.curToken.Type)
+		return nil, p.syntaxErr(
+			msgMethodName,
+			hintMethodName,
+		)
 	}
 	p.nextToken()
 
@@ -253,7 +271,10 @@ func (p *Parser) parseStructMethod() (*ast.FunctionDecl, error) {
 			for {
 				paramToken := p.curToken
 				if p.curToken.Type != token.IDENTIFIER {
-					return nil, fmt.Errorf("expected parameter name")
+					return nil, p.syntaxErr(
+						msgStructMethodParam,
+						hintMethodParam,
+					)
 				}
 				parameters = append(parameters, paramToken.Value)
 				p.nextToken()
@@ -354,7 +375,10 @@ func (p *Parser) parseStructInstantiation() (ast.Expression, error) {
 
 	// Get struct name
 	if p.curToken.Type != token.IDENTIFIER {
-		return nil, fmt.Errorf("expected struct name, got %v", p.curToken.Type)
+		return nil, p.syntaxErr(
+			msgNewInstanceName,
+			hintNewInstanceOf,
+		)
 	}
 	structName := p.curToken.Value
 	p.nextToken()
@@ -379,7 +403,10 @@ func (p *Parser) parseStructInstantiation() (ast.Expression, error) {
 
 		// Expect "fields" or "field"
 		if p.curToken.Type != token.FIELDS && p.curToken.Type != token.FIELD {
-			return nil, fmt.Errorf("expected 'fields' or 'field', got %v", p.curToken.Type)
+			return nil, p.syntaxErr(
+				fmt.Sprintf(msgFmtFieldsAfter, p.curToken.Value),
+				hintNewInstanceFields,
+			)
 		}
 		p.nextToken()
 
@@ -407,7 +434,10 @@ func (p *Parser) parseStructInstantiation() (ast.Expression, error) {
 
 			// Parse field assignment: name is "John".
 			if p.curToken.Type != token.IDENTIFIER {
-				return nil, fmt.Errorf("expected field name, got %v", p.curToken.Type)
+				return nil, p.syntaxErr(
+					msgNewInstanceField,
+					hintFieldAssignment,
+				)
 			}
 			fieldName := p.curToken.Value
 			p.nextToken()
@@ -461,7 +491,10 @@ func (p *Parser) parseStructInstantiation() (ast.Expression, error) {
 func (p *Parser) parseTypedVariableDecl() (ast.Statement, error) {
 	nameToken := p.curToken
 	if nameToken.Type != token.IDENTIFIER {
-		return nil, fmt.Errorf("expected variable name, got %v at line %d", nameToken.Type, nameToken.Line)
+		return nil, p.syntaxErr(
+			msgTypedVarName,
+			hintTypedVarName,
+		)
 	}
 	p.nextToken() // consume name
 
@@ -473,7 +506,10 @@ func (p *Parser) parseTypedVariableDecl() (ast.Statement, error) {
 
 	// Read the type name (e.g. "number", "text", "boolean")
 	if p.curToken.Type != token.IDENTIFIER {
-		return nil, fmt.Errorf("expected type name after 'as', got %v at line %d", p.curToken.Type, p.curToken.Line)
+		return nil, p.syntaxErr(
+			fmt.Sprintf(msgFmtTypedVarType, p.curToken.Value),
+			hintTypedVarType,
+		)
 	}
 	typeName := p.curToken.Value
 	p.nextToken()
@@ -517,5 +553,6 @@ func (p *Parser) parseTypedVariableDecl() (ast.Statement, error) {
 		TypeName:   typeName,
 		IsConstant: isConstant,
 		Value:      value,
+		Line:       nameToken.Line,
 	}, nil
 }

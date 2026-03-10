@@ -2508,3 +2508,79 @@ func TestCompileTimeTypeError_PossessiveSyntax(t *testing.T) {
 		t.Errorf("expected TypeError, got: %v", err)
 	}
 }
+
+// ============================================
+// COMPILE-TIME DUPLICATE VARIABLE DETECTION
+// ============================================
+
+// checkCode parses the given source and runs the static checker with stdlib
+// predefines, mirroring what cmd/root.go does before evaluation.
+func checkCode(input string) []*vm.TypeError {
+lexer := parser.NewLexer(input)
+tokens := lexer.TokenizeAll()
+p := parser.NewParser(tokens)
+program, err := p.Parse()
+if err != nil {
+return nil
+}
+return vm.Check(program, stdlib.PredefinedNames()...)
+}
+
+func TestChecker_DuplicateVarTopLevel(t *testing.T) {
+errs := checkCode(`Declare x to be 1.
+Declare x to be 2.`)
+if len(errs) == 0 {
+t.Fatal("expected a duplicate-variable error, got none")
+}
+msg := errs[0].Error()
+if !strings.Contains(msg, "x") {
+t.Errorf("error should mention variable name 'x', got: %s", msg)
+}
+if errs[0].Line != 2 {
+t.Errorf("error should be on line 2, got line %d", errs[0].Line)
+}
+}
+
+func TestChecker_DuplicateShadowsStdlibConstant(t *testing.T) {
+errs := checkCode(`Declare pi to be 3.`)
+if len(errs) == 0 {
+t.Fatal("expected error for redeclaring stdlib constant 'pi', got none")
+}
+msg := errs[0].Error()
+if !strings.Contains(msg, "pi") {
+t.Errorf("error should mention 'pi', got: %s", msg)
+}
+}
+
+func TestChecker_DuplicateLetSyntax(t *testing.T) {
+errs := checkCode(`let x be 1.
+let x be 2.`)
+if len(errs) == 0 {
+t.Fatal("expected a duplicate-variable error, got none")
+}
+if errs[0].Line != 2 {
+t.Errorf("error should be on line 2, got line %d", errs[0].Line)
+}
+}
+
+func TestChecker_NoDuplicateInDifferentScopes(t *testing.T) {
+// Same name in an inner scope (if body) must NOT be flagged.
+errs := checkCode(`Declare x to be 1.
+If yes, then
+    Declare x to be 2.
+thats it.`)
+for _, e := range errs {
+if strings.Contains(e.Error(), "x") {
+t.Errorf("unexpected error for shadowing in inner scope: %s", e.Error())
+}
+}
+}
+
+func TestChecker_NoDuplicateForUniqueNames(t *testing.T) {
+errs := checkCode(`Declare a to be 1.
+Declare b to be 2.
+Declare c to be 3.`)
+if len(errs) != 0 {
+t.Errorf("expected no errors for distinct names, got: %v", errs)
+}
+}

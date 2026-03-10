@@ -18,6 +18,7 @@ import (
 //	thats it.
 func (p *Parser) parseTryStatement() (ast.Statement, error) {
 	// Skip "try"
+	startLine := p.curToken.Line
 	p.nextToken()
 
 	// Expect "doing"
@@ -65,7 +66,10 @@ func (p *Parser) parseTryStatement() (ast.Statement, error) {
 
 		// Accept any identifier: "error" (catch-all) or a specific type name
 		if p.curToken.Type != token.IDENTIFIER {
-			return nil, fmt.Errorf("expected error type or 'error' after 'on', got %v", p.curToken.Type)
+			return nil, p.syntaxErr(
+				msgErrorTypeOnName,
+				hintOnError,
+			)
 		}
 		handlerName := p.curToken.Value
 		p.nextToken()
@@ -132,6 +136,7 @@ func (p *Parser) parseTryStatement() (ast.Statement, error) {
 		ErrorType:   errorType,
 		ErrorBody:   errorBody,
 		FinallyBody: finallyBody,
+		Line:        startLine,
 	}, nil
 }
 
@@ -141,6 +146,7 @@ func (p *Parser) parseTryStatement() (ast.Statement, error) {
 //	raise "error message".
 func (p *Parser) parseRaiseStatement() (ast.Statement, error) {
 	// Skip "raise"
+	startLine := p.curToken.Line
 	p.nextToken()
 
 	// Parse error message expression
@@ -156,7 +162,10 @@ func (p *Parser) parseRaiseStatement() (ast.Statement, error) {
 		p.nextToken()
 
 		if p.curToken.Type != token.IDENTIFIER {
-			return nil, fmt.Errorf("expected error type after 'as', got %v", p.curToken.Type)
+			return nil, p.syntaxErr(
+				msgRaiseErrorType,
+				hintRaiseAs,
+			)
 		}
 
 		errorType = p.curToken.Value
@@ -172,6 +181,7 @@ func (p *Parser) parseRaiseStatement() (ast.Statement, error) {
 	return &ast.RaiseStatement{
 		Message:   message,
 		ErrorType: errorType,
+		Line:      startLine,
 	}, nil
 }
 
@@ -179,10 +189,14 @@ func (p *Parser) parseRaiseStatement() (ast.Statement, error) {
 // Syntax: swap a and b.
 func (p *Parser) parseSwapStatement() (ast.Statement, error) {
 	// Skip "swap"
+	startLine := p.curToken.Line
 	p.nextToken()
 
 	if p.curToken.Type != token.IDENTIFIER {
-		return nil, fmt.Errorf("expected variable name after 'swap', got %v", p.curToken.Type)
+		return nil, p.syntaxErr(
+			msgSwapFirstVar,
+			hintSwapVars,
+		)
 	}
 	name1 := p.curToken.Value
 	p.nextToken()
@@ -194,7 +208,10 @@ func (p *Parser) parseSwapStatement() (ast.Statement, error) {
 	p.nextToken()
 
 	if p.curToken.Type != token.IDENTIFIER {
-		return nil, fmt.Errorf("expected variable name after 'and', got %v", p.curToken.Type)
+		return nil, p.syntaxErr(
+			msgSwapSecondVar,
+			hintSwapVars,
+		)
 	}
 	name2 := p.curToken.Value
 	p.nextToken()
@@ -208,6 +225,7 @@ func (p *Parser) parseSwapStatement() (ast.Statement, error) {
 	return &ast.SwapStatement{
 		Name1: name1,
 		Name2: name2,
+		Line:  startLine,
 	}, nil
 }
 
@@ -217,7 +235,10 @@ func (p *Parser) parseSwapStatement() (ast.Statement, error) {
 func (p *Parser) parseErrorTypeDecl() (ast.Statement, error) {
 	nameToken := p.curToken
 	if nameToken.Type != token.IDENTIFIER {
-		return nil, fmt.Errorf("expected error type name, got %v at line %d", nameToken.Type, nameToken.Line)
+		return nil, p.syntaxErr(
+			msgErrorTypeName,
+			hintErrorTypeDecl,
+		)
 	}
 	p.nextToken() // consume name
 
@@ -229,13 +250,19 @@ func (p *Parser) parseErrorTypeDecl() (ast.Statement, error) {
 
 	// Consume "an" or "a"
 	if p.curToken.Type != token.IDENTIFIER || (strings.ToLower(p.curToken.Value) != "a" && strings.ToLower(p.curToken.Value) != "an") {
-		return nil, fmt.Errorf("expected 'a' or 'an' after 'as', got %v", p.curToken.Value)
+		return nil, p.syntaxErr(
+			fmt.Sprintf(msgFmtArticleAfterAs, p.curToken.Value),
+			hintErrorTypeDecl,
+		)
 	}
 	p.nextToken()
 
 	// Consume "error"
 	if p.curToken.Type != token.IDENTIFIER || strings.ToLower(p.curToken.Value) != "error" {
-		return nil, fmt.Errorf("expected 'error' after article, got %v", p.curToken.Value)
+		return nil, p.syntaxErr(
+			fmt.Sprintf(msgFmtExpectedErrorWord, p.curToken.Value),
+			hintErrorTypeDecl,
+		)
 	}
 	p.nextToken()
 
@@ -262,7 +289,10 @@ func (p *Parser) parseErrorTypeDecl() (ast.Statement, error) {
 func (p *Parser) parseErrorSubtypeDecl() (ast.Statement, error) {
 	nameToken := p.curToken
 	if nameToken.Type != token.IDENTIFIER {
-		return nil, fmt.Errorf("expected error type name, got %v at line %d", nameToken.Type, nameToken.Line)
+		return nil, p.syntaxErr(
+			msgErrorSubtypeName,
+			hintErrorSubtypeDecl,
+		)
 	}
 	p.nextToken() // consume name
 
@@ -274,7 +304,10 @@ func (p *Parser) parseErrorSubtypeDecl() (ast.Statement, error) {
 
 	// Consume "a" or "an"
 	if p.curToken.Type != token.IDENTIFIER || (strings.ToLower(p.curToken.Value) != "a" && strings.ToLower(p.curToken.Value) != "an") {
-		return nil, fmt.Errorf("expected 'a' or 'an' after 'as', got %v", p.curToken.Value)
+		return nil, p.syntaxErr(
+			fmt.Sprintf(msgFmtArticleAfterAs, p.curToken.Value),
+			hintErrorSubtypeDecl,
+		)
 	}
 	p.nextToken()
 
@@ -292,7 +325,10 @@ func (p *Parser) parseErrorSubtypeDecl() (ast.Statement, error) {
 
 	// Consume parent type name
 	if p.curToken.Type != token.IDENTIFIER {
-		return nil, fmt.Errorf("expected parent error type name after 'of', got %v at line %d", p.curToken.Type, p.curToken.Line)
+		return nil, p.syntaxErr(
+			msgErrorParentType,
+			hintErrorSubtypeDecl,
+		)
 	}
 	parentName := p.curToken.Value
 	p.nextToken()

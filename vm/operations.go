@@ -2,7 +2,16 @@ package vm
 
 import (
 	"english/vm/types"
+	"errors"
 	"fmt"
+)
+
+// errDivisionByZero and errRemainderByZero are sentinel errors returned by
+// Divide and Modulo. The evaluator wraps these with ev.runtimeError() so that
+// the caller's live call stack is captured rather than a generic "<stdlib>" frame.
+var (
+	errDivisionByZero  = errors.New("division by zero")
+	errRemainderByZero = errors.New("division by zero in remainder")
 )
 
 // ─── Arithmetic ───────────────────────────────────────────────────────────────
@@ -86,7 +95,7 @@ func Divide(left, right Value) (Value, error) {
 		return nil, err
 	}
 	if r == 0 {
-		return nil, fmt.Errorf("RuntimeError: division by zero")
+		return nil, errDivisionByZero
 	}
 	return l / r, nil
 }
@@ -102,7 +111,7 @@ func Modulo(left, right Value) (Value, error) {
 		return nil, err
 	}
 	if r == 0 {
-		return nil, fmt.Errorf("RuntimeError: division by zero in remainder")
+		return nil, errRemainderByZero
 	}
 	return float64(int64(l) % int64(r)), nil
 }

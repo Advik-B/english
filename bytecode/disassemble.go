@@ -63,18 +63,23 @@ var (
 // Disassemble produces a colorised, instruction-level listing of a decoded
 // .101 bytecode program.  filename is used only for the header line.
 // When useColor is false the output contains no ANSI escape codes.
-func Disassemble(program *ast.Program, filename string, useColor bool) string {
-	d := &disassembler{useColor: useColor}
+// When friendlyOps is true, comparison/logical operators are shown as English
+// prose (e.g. "is less than or equal to") instead of their symbolic equivalents
+// (e.g. "<=").  friendlyOps has no effect on arithmetic operators (+, -, *, /,
+// %) which are always shown symbolically.
+func Disassemble(program *ast.Program, filename string, useColor, friendlyOps bool) string {
+	d := &disassembler{useColor: useColor, friendlyOps: friendlyOps}
 	return d.run(program, filename)
 }
 
 // ─── Internal disassembler ────────────────────────────────────────────────────
 
 type disassembler struct {
-	useColor bool
-	counter  int    // running instruction index
-	depth    int    // indentation depth (increases inside bodies)
-	out      []string
+	useColor    bool
+	friendlyOps bool
+	counter     int    // running instruction index
+	depth       int    // indentation depth (increases inside bodies)
+	out         []string
 }
 
 // s applies a lipgloss style only when colour is enabled.
@@ -83,6 +88,18 @@ func (d *disassembler) s(style lipgloss.Style, text string) string {
 		return style.Render(text)
 	}
 	return text
+}
+
+// opStr returns the display form of an operator.
+// When friendlyOps is true the original English-prose form is kept
+// (e.g. "is less than or equal to"); otherwise symOp() converts it to a
+// conventional symbol (e.g. "<=").  Arithmetic operators (+, -, *, /, %)
+// are always returned unchanged by symOp, so they are never affected.
+func (d *disassembler) opStr(op string) string {
+	if d.friendlyOps {
+		return op
+	}
+	return symOp(op)
 }
 
 // emit appends a formatted instruction line to the output.
@@ -232,13 +249,13 @@ func (d *disassembler) stmt(node ast.Statement) {
 		d.emitLabel(styleOpcodeEnd, fmt.Sprintf("%-18s", "END_WHILE"), "")
 
 	case *ast.ForLoop:
-		d.emit(styleOpcodeControl, "REPEAT", d.expr(s.Count)+"  "+d.s(styleMeta, "times"))
+		d.emit(styleOpcodeControl, "FOR_LOOP", d.expr(s.Count)+"  "+d.s(styleMeta, "times"))
 		d.depth++
 		for _, child := range s.Body {
 			d.stmt(child)
 		}
 		d.depth--
-		d.emitLabel(styleOpcodeEnd, fmt.Sprintf("%-18s", "END_REPEAT"), "")
+		d.emitLabel(styleOpcodeEnd, fmt.Sprintf("%-18s", "END_FOR_LOOP"), "")
 
 	case *ast.ForEachLoop:
 		item := d.s(styleIdent, s.Item)
@@ -374,11 +391,11 @@ func (d *disassembler) expr(node ast.Expression) string {
 	case *ast.BinaryExpression:
 		left := d.expr(ex.Left)
 		right := d.expr(ex.Right)
-		op := d.s(styleOp, symOp(ex.Operator))
+		op := d.s(styleOp, d.opStr(ex.Operator))
 		return d.s(stylePunct, "(") + left + " " + op + " " + right + d.s(stylePunct, ")")
 
 	case *ast.UnaryExpression:
-		return d.s(styleOp, symOp(ex.Operator)) + d.expr(ex.Right)
+		return d.s(styleOp, d.opStr(ex.Operator)) + d.expr(ex.Right)
 
 	case *ast.FunctionCall:
 		return d.s(styleLabel, ex.Name) + d.argList(ex.Arguments)

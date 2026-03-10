@@ -12,6 +12,8 @@ import (
 	"github.com/spf13/cobra"
 )
 
+var catFriendly bool
+
 var catCmd = &cobra.Command{
 	Use:     "cat [file]",
 	Aliases: []string{"display", "highlight"},
@@ -29,15 +31,20 @@ Source files (.abc):
 Bytecode files (.101):
   Decoded instructions are printed in the style of Python's dis module:
   each statement becomes one or more labelled opcodes with colourised
-  operands.  The output never contains English prose – only raw instruction
-  names and their arguments.`,
+  operands.
+
+  By default comparison and logical operators are shown as conventional
+  symbols (==, !=, <, <=, >, >=, &&, ||, !).  Pass --friendly to display
+  them as the original English prose stored in the bytecode instead
+  (e.g. "is less than or equal to").  Arithmetic operators (+, -, *, /, %)
+  are always shown symbolically regardless of this flag.`,
 	Args: cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		filename := args[0]
 		ext := strings.ToLower(filepath.Ext(filename))
 
 		if ext == ".101" {
-			catBytecode(filename)
+			catBytecode(filename, catFriendly)
 			return
 		}
 
@@ -52,7 +59,7 @@ Bytecode files (.101):
 }
 
 // catBytecode decodes a .101 file and prints a colourised disassembly.
-func catBytecode(filename string) {
+func catBytecode(filename string, friendlyOps bool) {
 	data, err := os.ReadFile(filename)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error reading file: %v\n", err)
@@ -67,9 +74,11 @@ func catBytecode(filename string) {
 	}
 
 	useColor := stacktraces.HasColor()
-	fmt.Print(bytecode.Disassemble(program, filename, useColor))
+	fmt.Print(bytecode.Disassemble(program, filename, useColor, friendlyOps))
 }
 
 func init() {
+	catCmd.Flags().BoolVar(&catFriendly, "friendly", false,
+		"Show operators as English prose instead of symbols (only affects .101 disassembly)")
 	rootCmd.AddCommand(catCmd)
 }

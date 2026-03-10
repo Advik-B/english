@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"english/bytecode"
+	"english/bytecode/disasm"
 	"english/highlight"
 	"english/stacktraces"
 	"fmt"
@@ -74,7 +75,7 @@ func catBytecode(filename string, friendlyOps bool) {
 	}
 
 	useColor := stacktraces.HasColor()
-	fmt.Print(bytecode.Disassemble(program, filename, useColor, friendlyOps))
+	fmt.Print(disasm.Disassemble(program, filename, useColor, friendlyOps))
 }
 
 func init() {

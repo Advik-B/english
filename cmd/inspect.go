@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"english/bytecode"
+	"english/bytecode/disasm"
 	"english/parser"
 	"english/stacktraces"
 	"fmt"
@@ -55,7 +56,7 @@ are always shown symbolically regardless of this flag.`,
 				fmt.Fprintf(os.Stderr, "Error decoding bytecode: %v\n", err)
 				os.Exit(1)
 			}
-			fmt.Print(bytecode.Disassemble(program, filename, useColor, inspectFriendly))
+			fmt.Print(disasm.Disassemble(program, filename, useColor, inspectFriendly))
 			return
 		}
 
@@ -73,7 +74,7 @@ are always shown symbolically regardless of this flag.`,
 			stacktraces.Print(err)
 			os.Exit(1)
 		}
-		fmt.Print(bytecode.Disassemble(program, filename, useColor, inspectFriendly))
+		fmt.Print(disasm.Disassemble(program, filename, useColor, inspectFriendly))
 	},
 }
 

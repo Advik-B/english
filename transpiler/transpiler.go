@@ -28,6 +28,21 @@ type Transpiler struct {
 	//       the generated Python contains no comment lines at all.
 	keepComments bool
 
+	// inlineMode controls how Import statements are handled.
+	//
+	// true  (--inline flag) – every ImportStatement is resolved by reading and
+	//       inlining the referenced .abc file's AST directly. The output is a
+	//       single self-contained Python file.
+	// false (default)       – Import statements are left in the AST and
+	//       transpileImport() emits Python importlib code that loads the
+	//       corresponding .py file produced alongside the main file.
+	inlineMode bool
+
+	// sourceDir is the directory of the main source file being transpiled. It
+	// is used (in non-inline mode) to compute the path from the main .py file
+	// to each sibling library .py file in the generated importlib statements.
+	sourceDir string
+
 	// userFunctions is the set of user-defined function names collected during
 	// the scan pass. Functions in this set take priority over any stdlib mapping
 	// with the same name, so "Declare function average ..." is emitted as a plain
@@ -49,13 +64,29 @@ type Transpiler struct {
 	methodFields map[string]bool
 }
 
-// NewTranspiler creates a Transpiler that preserves source comments in the
-// generated Python output. Use this when transpiling .abc source files.
+// NewTranspiler creates a Transpiler for .abc source files.
+// Source comments are preserved in the output.
+// Import statements produce sibling .py files and Python importlib calls (the
+// default; use NewTranspilerInlined() or the --inline flag to instead inline
+// all imported code into the single output file).
 func NewTranspiler() *Transpiler {
 	return &Transpiler{
 		helpers:       make(map[string]bool),
 		userFunctions: make(map[string]bool),
 		keepComments:  true,
+		inlineMode:    false,
+	}
+}
+
+// NewTranspilerInlined creates a Transpiler that resolves all Import statements
+// by reading and inlining the referenced .abc files into the single output file.
+// This is the behaviour activated by the --inline flag.
+func NewTranspilerInlined() *Transpiler {
+	return &Transpiler{
+		helpers:       make(map[string]bool),
+		userFunctions: make(map[string]bool),
+		keepComments:  true,
+		inlineMode:    true,
 	}
 }
 
@@ -67,7 +98,16 @@ func NewTranspilerStripped() *Transpiler {
 		helpers:       make(map[string]bool),
 		userFunctions: make(map[string]bool),
 		keepComments:  false,
+		inlineMode:    false,
 	}
+}
+
+// WithSourceDir sets the directory of the main source file so that the
+// transpiler can compute correct relative paths in Python importlib statements
+// when resolving imports in non-inline mode.
+func (t *Transpiler) WithSourceDir(dir string) *Transpiler {
+	t.sourceDir = dir
+	return t
 }
 
 // Transpile converts a parsed English program to a Python source string.
@@ -81,10 +121,13 @@ func NewTranspilerStripped() *Transpiler {
 //
 // banner + imports + helpers + body
 func (t *Transpiler) Transpile(program *ast.Program) string {
-	// Pass 0 – resolve imports by inlining the referenced files so that the
-	// generated Python is self-contained.  The 'seen' map prevents duplicate
-	// definitions when the same file is imported more than once.
-	program = inlineImports(program, make(map[string]bool))
+	// Pass 0 (inline mode only) – resolve imports by inlining the referenced
+	// files so that the generated Python is self-contained. In non-inline mode
+	// ImportStatements are kept in the AST and transpileImport() emits Python
+	// importlib code that loads the sibling .py files produced by the CLI.
+	if t.inlineMode {
+		program = inlineImports(program, make(map[string]bool))
+	}
 
 	// Pass 1 – collect import and helper requirements.
 	t.scanProgram(program)

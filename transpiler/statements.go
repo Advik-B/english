@@ -3,6 +3,7 @@ package transpiler
 import (
 	"english/ast"
 	"fmt"
+	"path/filepath"
 	"strings"
 )
 
@@ -70,16 +71,59 @@ func (t *Transpiler) transpileStatement(stmt ast.Statement) {
 // ─── Individual statement translators ────────────────────────────────────────
 
 func (t *Transpiler) transpileImport(s *ast.ImportStatement) {
-	// Import statements have no direct Python equivalent; they are emitted as
-	// informational comments. When comments are suppressed (e.g. for .101 files),
-	// import statements produce no output at all.
-	if !t.keepComments {
+	if t.inlineMode {
+		// In inline mode, ImportStatements are replaced before code generation.
+		// This code path is only reached if the referenced file couldn't be resolved.
+		if !t.keepComments {
+			return
+		}
+		if len(s.Items) > 0 {
+			t.writeLine(fmt.Sprintf("# from %q import %s", s.Path, strings.Join(s.Items, ", ")))
+		} else {
+			t.writeLine(fmt.Sprintf("# import %q", s.Path))
+		}
 		return
 	}
+
+	// Non-inline mode: the CLI has already transpiled the imported .abc file to a
+	// sibling .py file with a clean name (e.g. "examples/math_library.py").
+	// Emit standard Python import statements so the output stays simple and
+	// readable for beginners.
+
+	// Module name: base file name without any extensions (e.g. "math_library").
+	base := filepath.Base(s.Path)
+	module := strings.SplitN(base, ".", 2)[0]
+
+	// If the library lives in a different directory from the main file, emit a
+	// one-line sys.path insert so Python can find the module.
+	importedDir := filepath.Dir(s.Path)
+	mainDir := t.sourceDir
+	if mainDir == "" {
+		mainDir = "."
+	}
+	if rel, err := filepath.Rel(mainDir, importedDir); err == nil {
+		rel = filepath.ToSlash(rel)
+		if rel != "." {
+			t.writeLine("import sys")
+			t.writeLine("import os")
+			t.writeLine(fmt.Sprintf("sys.path.insert(0, os.path.join(os.path.dirname(__file__), %q))", rel))
+		}
+	}
+
+	// Emit the Python import.
 	if len(s.Items) > 0 {
-		t.writeLine(fmt.Sprintf("# from %q import %s", s.Path, strings.Join(s.Items, ", ")))
+		// Selective: "from math_library import square, cube"
+		sanitized := make([]string, len(s.Items))
+		for i, item := range s.Items {
+			sanitized[i] = sanitizeIdent(item)
+		}
+		t.writeLine(fmt.Sprintf("from %s import %s", module, strings.Join(sanitized, ", ")))
 	} else {
-		t.writeLine(fmt.Sprintf("# import %q", s.Path))
+		// ImportAll / IsSafe: "from math_library import *"
+		t.writeLine(fmt.Sprintf("from %s import *", module))
+	}
+	if t.keepComments {
+		t.write("\n")
 	}
 }
 

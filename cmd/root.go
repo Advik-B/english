@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"english/ast"
 	"english/bytecode"
 	"english/parser"
 	"english/transpiler"
@@ -70,10 +71,16 @@ var transpileCmd = &cobra.Command{
 	Short: "Transpile an English source or bytecode file to Python",
 	Long: `Transpile an English source file (.abc) or bytecode file (.101) to human-readable Python.
 The program is validated (parsed and type-checked) before transpilation.
-The output file will have the same name with .py added as a suffix.`,
+The output file has the source filename with its extension replaced by ".py".
+
+By default each imported .abc file is transpiled to its own .py file and
+imported in the main output via standard Python "from module import *".
+Pass --inline to instead merge all imported code into a single self-contained
+Python file.`,
 	Args: cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
-		TranspileFile(args[0])
+		inline, _ := cmd.Flags().GetBool("inline")
+		transpileWithOptions(args[0], inline, make(map[string]bool))
 	},
 }
 
@@ -100,6 +107,7 @@ func init() {
 	rootCmd.AddCommand(versionCmd)
 
 	compileCmd.Flags().StringP("output", "o", "", "Output file name (default: input file with .101 extension)")
+	transpileCmd.Flags().BoolP("inline", "i", false, "Inline all imported .abc files into a single Python output file")
 }
 
 // RunFile executes an English source file
@@ -190,12 +198,32 @@ func CompileFile(filename string, output string) {
 	fmt.Printf("Compiled %s -> %s (%d bytes)\n", filename, output, len(data))
 }
 
-// TranspileFile validates an English source or bytecode file and transpiles it to Python.
-// The output is written to the same filename with ".py" appended as a suffix.
+// TranspileFile validates an English source or bytecode file and transpiles it
+// to Python. This is a convenience wrapper that defaults to non-inline mode
+// (each imported .abc file becomes a sibling .py file).
+// The output file has the source filename with its extension replaced by ".py".
+//
+//	examples/fizzbuzz.abc  → examples/fizzbuzz.py
+//	examples/fizzbuzz.101  → examples/fizzbuzz.py
 func TranspileFile(filename string) {
+	transpileWithOptions(filename, false, make(map[string]bool))
+}
+
+// transpileWithOptions is the recursive worker for TranspileFile.
+// 'seen' prevents duplicate transpilation and infinite loops for circular imports.
+func transpileWithOptions(filename string, inline bool, seen map[string]bool) {
+	if seen[filename] {
+		return
+	}
+	seen[filename] = true
+
 	ext := strings.ToLower(filepath.Ext(filename))
 
-	// Parse or decode the input file into an AST, then validate it.
+	// Output filename: strip source extension, add ".py".
+	// The same rule applies to both .abc and .101 inputs so that module names
+	// are always valid Python identifiers (e.g. "fizzbuzz.abc" → "fizzbuzz.py").
+	output := strings.TrimSuffix(filename, filepath.Ext(filename)) + ".py"
+
 	var pySource string
 	if ext == ".101" {
 		data, err := os.ReadFile(filename)
@@ -211,7 +239,6 @@ func TranspileFile(filename string) {
 			os.Exit(1)
 		}
 
-		// Validate: run the type checker
 		typeErrs := vm.Check(prog)
 		if len(typeErrs) > 0 {
 			for _, e := range typeErrs {
@@ -238,7 +265,6 @@ func TranspileFile(filename string) {
 			os.Exit(1)
 		}
 
-		// Validate: run the type checker
 		typeErrs := vm.Check(prog)
 		if len(typeErrs) > 0 {
 			for _, e := range typeErrs {
@@ -247,10 +273,28 @@ func TranspileFile(filename string) {
 			os.Exit(1)
 		}
 
-		pySource = transpiler.NewTranspiler().Transpile(prog)
+		if inline {
+			// --inline: resolve all imports by inlining their ASTs into a single file.
+			pySource = transpiler.NewTranspilerInlined().Transpile(prog)
+		} else {
+			// Default: recursively transpile each imported .abc file to its own .py
+			// file, then emit "from module import *" statements in the main output.
+			// Only files with an explicit ".abc" extension are transpiled; other
+			// import paths (e.g. bare "math") are left for Python to resolve.
+			for _, stmt := range prog.Statements {
+				imp, ok := stmt.(*ast.ImportStatement)
+				if !ok {
+					continue
+				}
+				if strings.ToLower(filepath.Ext(imp.Path)) == ".abc" {
+					transpileWithOptions(imp.Path, false, seen)
+				}
+			}
+			sourceDir := filepath.Dir(filename)
+			pySource = transpiler.NewTranspiler().WithSourceDir(sourceDir).Transpile(prog)
+		}
 	}
 
-	output := filename + ".py"
 	err := os.WriteFile(output, []byte(pySource), 0644)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error writing Python file: %v\n", err)

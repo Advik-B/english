@@ -1,6 +1,7 @@
 package transpiler_test
 
 import (
+	ast_pkg "english/ast"
 	"english/parser"
 	"english/transpiler"
 	"os"
@@ -23,6 +24,35 @@ func transpile(t *testing.T, src string) string {
 	}
 	result := transpiler.NewTranspiler().Transpile(prog)
 	return strings.TrimSpace(result)
+}
+
+// transpileInlined is like transpile but uses NewTranspilerInlined, which
+// reads and inlines all imported .abc files into the single output (the
+// behaviour activated by the --inline CLI flag).
+func transpileInlined(t *testing.T, src string) string {
+	t.Helper()
+	lexer := parser.NewLexer(src)
+	tokens := lexer.TokenizeAll()
+	p := parser.NewParser(tokens)
+	prog, err := p.Parse()
+	if err != nil {
+		t.Fatalf("parse error: %v", err)
+	}
+	result := transpiler.NewTranspilerInlined().Transpile(prog)
+	return strings.TrimSpace(result)
+}
+
+// parse parses English source and returns the AST without transpiling.
+func parse(t *testing.T, src string) *ast_pkg.Program {
+	t.Helper()
+	lexer := parser.NewLexer(src)
+	tokens := lexer.TokenizeAll()
+	p := parser.NewParser(tokens)
+	prog, err := p.Parse()
+	if err != nil {
+		t.Fatalf("parse error: %v", err)
+	}
+	return prog
 }
 
 // containsLine returns true when the output contains a line that equals s
@@ -786,10 +816,11 @@ assertContains(t, out, "# say hello")
 }
 
 func TestImportCommentCarriedOver(t *testing.T) {
-out := transpile(t, `Import "math".
+	// In non-inline mode (default) an import emits a standard Python
+	// "from module import *" statement, not a comment.
+	out := transpile(t, `Import "math".
 Print "x".`)
-// Import produces a Python comment when keepComments is true.
-assertContains(t, out, `# import "math"`)
+	assertContains(t, out, "from math import *")
 }
 
 func TestMultipleComments(t *testing.T) {
@@ -822,9 +853,12 @@ assertContains(t, out, `print("hello")`)
 func TestStrippedModeNoImportComments(t *testing.T) {
 out := transpileStripped(t, `Import "math".
 Print "hi".`)
+// Stripped mode must not emit any '#' comment lines.
 if strings.Contains(out, "#") {
 t.Errorf("stripped mode should produce no '#' lines at all, got:\n%s", out)
 }
+// The import should still be emitted as Python code.
+assertContains(t, out, "from math import *")
 }
 
 func TestStrippedModeCodeStillCorrect(t *testing.T) {
@@ -849,36 +883,37 @@ t.Errorf("stripped mode should produce no '#' lines, got:\n%s", out)
 }
 }
 
-// ─── Import inlining ──────────────────────────────────────────────────────────
+// ─── Import inlining (--inline mode) ─────────────────────────────────────────
 
 func TestImportInlining(t *testing.T) {
-// Write a small library file to a temp dir.
-dir := t.TempDir()
-libPath := dir + "/mylib.abc"
-libSrc := `Declare function double that takes n and does the following:
+	// Write a small library file to a temp dir.
+	dir := t.TempDir()
+	libPath := dir + "/mylib.abc"
+	libSrc := `Declare function double that takes n and does the following:
     Return n * 2.
 thats it.
 `
-if err := os.WriteFile(libPath, []byte(libSrc), 0644); err != nil {
-t.Fatalf("write lib: %v", err)
-}
+	if err := os.WriteFile(libPath, []byte(libSrc), 0644); err != nil {
+		t.Fatalf("write lib: %v", err)
+	}
 
-// Main file imports the library and calls the function.
-mainSrc := `Import "` + libPath + `".
+	// Main file imports the library and calls the function.
+	mainSrc := `Import "` + libPath + `".
 Declare result to be 0.
 Set result to the result of calling double with 5.
 Print the value of result.`
 
-out := transpile(t, mainSrc)
-assertContains(t, out, "def double(n)")
-assertContains(t, out, "result = double(5)")
-assertContains(t, out, "print(result)")
+	// Use inlined mode — the library code is merged into the single output.
+	out := transpileInlined(t, mainSrc)
+	assertContains(t, out, "def double(n)")
+	assertContains(t, out, "result = double(5)")
+	assertContains(t, out, "print(result)")
 }
 
 func TestSelectiveImportInlining(t *testing.T) {
-dir := t.TempDir()
-libPath := dir + "/mathlib.abc"
-libSrc := `Declare function square that takes x and does the following:
+	dir := t.TempDir()
+	libPath := dir + "/mathlib.abc"
+	libSrc := `Declare function square that takes x and does the following:
     Return x * x.
 thats it.
 
@@ -886,19 +921,63 @@ Declare function cube that takes x and does the following:
     Return x * x * x.
 thats it.
 `
-if err := os.WriteFile(libPath, []byte(libSrc), 0644); err != nil {
-t.Fatalf("write lib: %v", err)
-}
+	if err := os.WriteFile(libPath, []byte(libSrc), 0644); err != nil {
+		t.Fatalf("write lib: %v", err)
+	}
 
-mainSrc := `Import square from "` + libPath + `".
+	mainSrc := `Import square from "` + libPath + `".
 Print square(3).`
 
-out := transpile(t, mainSrc)
-assertContains(t, out, "def square(x)")
-// cube should NOT be included since we only imported square.
-if strings.Contains(out, "def cube(") {
-t.Errorf("cube should not be inlined when only square is imported")
+	// Use inlined mode — only square is merged in.
+	out := transpileInlined(t, mainSrc)
+	assertContains(t, out, "def square(x)")
+	// cube should NOT be included since we only imported square.
+	if strings.Contains(out, "def cube(") {
+		t.Errorf("cube should not be inlined when only square is imported")
+	}
 }
+
+// ─── Non-inline import (default mode) ────────────────────────────────────────
+
+func TestNonInlineImportAll(t *testing.T) {
+	// In non-inline mode, "Import" emits "from module import *".
+	out := transpile(t, `Import "examples/math_library.abc".
+Print "hello".`)
+	assertContains(t, out, "from math_library import *")
+	// The function definition must NOT be inlined.
+	if strings.Contains(out, "def ") {
+		t.Errorf("non-inline mode should not inline function definitions")
+	}
+}
+
+func TestNonInlineSelectiveImport(t *testing.T) {
+	// Selective import emits "from module import X, Y".
+	out := transpile(t, `Import square and cube from "examples/math_library.abc".
+Print square(3).`)
+	assertContains(t, out, "from math_library import square, cube")
+}
+
+func TestNonInlineCrossDirectoryImport(t *testing.T) {
+	// When the library is in a subdirectory relative to the main file, a
+	// sys.path.insert line is emitted before the from-import.
+	prog := parse(t, `Import "subdir/utils.abc".
+Print "hello".`)
+	result := strings.TrimSpace(
+		transpiler.NewTranspiler().WithSourceDir(".").Transpile(prog))
+	assertContains(t, result, `sys.path.insert(0, os.path.join(os.path.dirname(__file__), "subdir"))`)
+	assertContains(t, result, "from utils import *")
+}
+
+func TestNonInlineSameDirectoryImport(t *testing.T) {
+	// When library and main file are in the same directory, no sys.path line needed.
+	prog := parse(t, `Import "examples/lib.abc".
+Print "hi".`)
+	result := strings.TrimSpace(
+		transpiler.NewTranspiler().WithSourceDir("examples").Transpile(prog))
+	assertContains(t, result, "from lib import *")
+	if strings.Contains(result, "sys.path") {
+		t.Errorf("same-directory import should not emit sys.path manipulation")
+	}
 }
 
 func TestUserDefinedFunctionOverridesStdlib(t *testing.T) {

@@ -1448,6 +1448,128 @@ thats it.`
 	}
 }
 
+func TestBooleanIsTrue(t *testing.T) {
+	tests := []struct {
+		code     string
+		expected string
+	}{
+		{`Declare isRaining to be true.
+If isRaining is true, then
+    Print "raining".
+thats it.`, "raining"},
+		{`Declare isRaining to be false.
+If isRaining is true, then
+    Print "raining".
+otherwise
+    Print "not raining".
+thats it.`, "not raining"},
+	}
+
+	for _, tt := range tests {
+		output := captureOutput(func() {
+			evaluate(tt.code)
+		})
+		if !strings.Contains(output, tt.expected) {
+			t.Errorf("Expected %q in output, got: %q", tt.expected, output)
+		}
+	}
+}
+
+func TestBooleanIsFalse(t *testing.T) {
+	tests := []struct {
+		code     string
+		expected string
+	}{
+		{`Declare isRaining to be false.
+If isRaining is false, then
+    Print "not raining".
+thats it.`, "not raining"},
+		{`Declare isRaining to be true.
+If isRaining is false, then
+    Print "not raining".
+otherwise
+    Print "raining".
+thats it.`, "raining"},
+	}
+
+	for _, tt := range tests {
+		output := captureOutput(func() {
+			evaluate(tt.code)
+		})
+		if !strings.Contains(output, tt.expected) {
+			t.Errorf("Expected %q in output, got: %q", tt.expected, output)
+		}
+	}
+}
+
+func TestBooleanIsntTrue(t *testing.T) {
+	tests := []struct {
+		name     string
+		code     string
+		expected string
+	}{
+		{"isn't true (apostrophe) with false", `Declare isRaining to be false.
+If isRaining isn't true, then
+    Print "not raining".
+thats it.`, "not raining"},
+		{"isn't true (apostrophe) with true", `Declare isRaining to be true.
+If isRaining isn't true, then
+    Print "not raining".
+otherwise
+    Print "raining".
+thats it.`, "raining"},
+		{"is not true with false", `Declare isRaining to be false.
+If isRaining is not true, then
+    Print "not raining".
+thats it.`, "not raining"},
+		{"is not true with true", `Declare isRaining to be true.
+If isRaining is not true, then
+    Print "not raining".
+otherwise
+    Print "raining".
+thats it.`, "raining"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			output := captureOutput(func() {
+				evaluate(tt.code)
+			})
+			if !strings.Contains(output, tt.expected) {
+				t.Errorf("Expected %q in output, got: %q", tt.expected, output)
+			}
+		})
+	}
+}
+
+func TestBooleanIsntFalse(t *testing.T) {
+	tests := []struct {
+		name     string
+		code     string
+		expected string
+	}{
+		{"isn't false (apostrophe) with true", `Declare isRaining to be true.
+If isRaining isn't false, then
+    Print "raining".
+thats it.`, "raining"},
+		{"is not false with true", `Declare isRaining to be true.
+If isRaining is not false, then
+    Print "raining".
+thats it.`, "raining"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			output := captureOutput(func() {
+				evaluate(tt.code)
+			})
+			if !strings.Contains(output, tt.expected) {
+				t.Errorf("Expected %q in output, got: %q", tt.expected, output)
+			}
+		})
+	}
+}
+
 func TestLogicalShortCircuit(t *testing.T) {
 	// AND short-circuit: condition is false when left side is false
 	code := `Declare x to be false.

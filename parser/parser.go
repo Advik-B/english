@@ -1479,6 +1479,42 @@ func (p *Parser) parseRelational() (ast.Expression, error) {
 		p.nextToken()
 		return &ast.NilCheckExpression{Value: left, IsSomethingCheck: false}, nil
 
+	case token.IS_TRUE:
+		// "x is true" — check that x is boolean true
+		p.nextToken()
+		return &ast.BinaryExpression{
+			Left:     left,
+			Operator: "is equal to",
+			Right:    &ast.BooleanLiteral{Value: true},
+		}, nil
+
+	case token.IS_FALSE:
+		// "x is false" — check that x is boolean false
+		p.nextToken()
+		return &ast.BinaryExpression{
+			Left:     left,
+			Operator: "is equal to",
+			Right:    &ast.BooleanLiteral{Value: false},
+		}, nil
+
+	case token.ISNT_TRUE:
+		// "x isn't true" — check that x is not boolean true
+		p.nextToken()
+		return &ast.BinaryExpression{
+			Left:     left,
+			Operator: "is not equal to",
+			Right:    &ast.BooleanLiteral{Value: true},
+		}, nil
+
+	case token.ISNT_FALSE:
+		// "x isn't false" — check that x is not boolean false
+		p.nextToken()
+		return &ast.BinaryExpression{
+			Left:     left,
+			Operator: "is not equal to",
+			Right:    &ast.BooleanLiteral{Value: false},
+		}, nil
+
 	case token.IS:
 		// "error is TypeName" — error type check (exact or inherited match)
 		p.nextToken()

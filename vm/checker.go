@@ -77,9 +77,16 @@ var builtinArgTypes = map[string][]types.TypeKind{
 type TypeError struct {
 	Line    int
 	Message string
+	// File is the source file in which the error occurred.
+	// It is empty for errors in the main (top-level) file and populated for
+	// errors detected inside imported files.
+	File string
 }
 
 func (te *TypeError) Error() string {
+	if te.File != "" && te.Line > 0 {
+		return fmt.Sprintf("TypeError in '%s' at line %d: %s", te.File, te.Line, te.Message)
+	}
 	if te.Line > 0 {
 		return fmt.Sprintf("TypeError at line %d: %s", te.Line, te.Message)
 	}
@@ -91,6 +98,9 @@ func (te *TypeError) CompileMessage() string { return te.Message }
 
 // CompileLine implements stacktraces.CompileError.
 func (te *TypeError) CompileLine() int { return te.Line }
+
+// CompileFile implements stacktraces.CompileFileError.
+func (te *TypeError) CompileFile() string { return te.File }
 
 // TypeChecker performs static type analysis on an AST before execution.
 type TypeChecker struct {
@@ -342,7 +352,17 @@ func (tc *TypeChecker) checkImportFile(path string) {
 		}
 	}
 	subChecker.checkStatements(prog.Statements)
-	tc.errors = append(tc.errors, subChecker.errors...)
+	// Tag every error from the sub-checker with the imported file path so the
+	// renderer can show which file the error came from. We copy each error
+	// rather than mutating the pointer, to avoid surprising side-effects if the
+	// error object is referenced elsewhere.
+	for _, e := range subChecker.errors {
+		tagged := *e // copy the struct
+		if tagged.File == "" {
+			tagged.File = path
+		}
+		tc.errors = append(tc.errors, &tagged)
+	}
 }
 
 func (tc *TypeChecker) checkExpression(expr ast.Expression) {

@@ -2758,11 +2758,19 @@ func TestChecker_FollowsImports(t *testing.T) {
 	if len(errs) == 0 {
 		t.Fatal("expected a compile error for importing a file that shadows 'pi', got none")
 	}
-	msg := errs[0].Error()
+	e := errs[0]
+	msg := e.Error()
 	if !strings.Contains(msg, "pi") {
 		t.Errorf("error should mention 'pi', got: %s", msg)
 	}
 	if !strings.Contains(msg, "shadows") {
 		t.Errorf("error should say 'shadows', got: %s", msg)
+	}
+	// The error must identify the file it came from.
+	if e.File == "" {
+		t.Errorf("error should carry the imported file path, but File is empty")
+	}
+	if e.File != libFile.Name() {
+		t.Errorf("expected error File to be %q, got %q", libFile.Name(), e.File)
 	}
 }

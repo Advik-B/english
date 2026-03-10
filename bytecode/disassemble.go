@@ -300,6 +300,97 @@ func (d *disassembler) stmt(node ast.Statement) {
 	case *ast.BreakStatement:
 		d.emit(styleOpcodeControl, "BREAK", "")
 
+	case *ast.ContinueStatement:
+		d.emit(styleOpcodeControl, "CONTINUE", "")
+
+	case *ast.SwapStatement:
+		d.emit(styleOpcodeAssign, "SWAP",
+			d.s(styleIdent, s.Name1)+"  "+d.s(styleOp, "↔")+"  "+d.s(styleIdent, s.Name2))
+
+	case *ast.RaiseStatement:
+		errType := ""
+		if s.ErrorType != "" {
+			errType = "  " + d.s(styleOp, "as") + "  " + d.s(styleIdent, s.ErrorType)
+		}
+		d.emit(styleOpcodeControl, "RAISE", d.expr(s.Message)+errType)
+
+	case *ast.TryStatement:
+		d.emitLabel(styleOpcodeControl, fmt.Sprintf("%-18s", "TRY"), "")
+		d.depth++
+		for _, child := range s.TryBody {
+			d.stmt(child)
+		}
+		d.depth--
+		catchLabel := "ON_ERROR"
+		catchExtra := ""
+		if s.ErrorType != "" {
+			catchExtra = d.s(styleIdent, s.ErrorType)
+		}
+		if s.ErrorVar != "" {
+			varPart := d.s(styleMeta, "→") + "  " + d.s(styleIdent, s.ErrorVar)
+			if catchExtra != "" {
+				catchExtra += "  " + varPart
+			} else {
+				catchExtra = varPart
+			}
+		}
+		d.emitLabel(styleOpcodeControl, fmt.Sprintf("%-18s", catchLabel), catchExtra)
+		d.depth++
+		for _, child := range s.ErrorBody {
+			d.stmt(child)
+		}
+		d.depth--
+		if len(s.FinallyBody) > 0 {
+			d.emitLabel(styleOpcodeControl, fmt.Sprintf("%-18s", "FINALLY"), "")
+			d.depth++
+			for _, child := range s.FinallyBody {
+				d.stmt(child)
+			}
+			d.depth--
+		}
+		d.emitLabel(styleOpcodeEnd, fmt.Sprintf("%-18s", "END_TRY"), "")
+
+	case *ast.StructDecl:
+		d.emit(styleOpcodeDecl, "STRUCT_DECL", d.s(styleLabel, s.Name))
+		d.depth++
+		for _, f := range s.Fields {
+			typeTag := d.s(styleType, ":"+f.TypeName)
+			defPart := ""
+			if f.DefaultValue != nil {
+				defPart = "  " + d.s(styleArrow, "←") + "  " + d.expr(f.DefaultValue)
+			}
+			d.emitLabel(styleOpcodeDecl,
+				fmt.Sprintf("%-18s", "FIELD"),
+				d.s(styleIdent, f.Name)+typeTag+defPart)
+		}
+		for _, m := range s.Methods {
+			params := make([]string, len(m.Parameters))
+			for i, p := range m.Parameters {
+				params[i] = d.s(styleIdent, p)
+			}
+			paramStr := d.s(stylePunct, "(") +
+				strings.Join(params, d.s(stylePunct, ", ")) +
+				d.s(stylePunct, ")")
+			d.emitLabel(styleOpcodeDecl,
+				fmt.Sprintf("%-18s", "METHOD"),
+				d.s(styleLabel, m.Name)+paramStr)
+		}
+		d.depth--
+		d.emitLabel(styleOpcodeEnd, fmt.Sprintf("%-18s", "END_STRUCT"), d.s(styleMeta, s.Name))
+
+	case *ast.FieldAssignment:
+		arrow := d.s(styleArrow, "←")
+		d.emit(styleOpcodeAssign, "FIELD_ASSIGN",
+			d.s(styleIdent, s.ObjectName)+d.s(stylePunct, ".")+d.s(styleIdent, s.Field)+
+				"  "+arrow+"  "+d.expr(s.Value))
+
+	case *ast.LookupKeyAssignment:
+		arrow := d.s(styleArrow, "←")
+		d.emit(styleOpcodeAssign, "LOOKUP_ASSIGN",
+			d.s(styleIdent, s.TableName)+
+				d.s(stylePunct, "[")+d.expr(s.Key)+d.s(stylePunct, "]")+
+				"  "+arrow+"  "+d.expr(s.Value))
+
 	case *ast.ImportStatement:
 		path := d.s(styleStr, `"`+s.Path+`"`)
 		detail := ""
@@ -416,6 +507,78 @@ func (d *disassembler) expr(node ast.Expression) string {
 
 	case *ast.ErrorTypeCheckExpression:
 		return d.expr(ex.Value) + " " + d.s(styleOp, "is") + " " + d.s(styleIdent, ex.TypeName)
+
+	case *ast.CastExpression:
+		return d.s(stylePunct, "(") +
+			d.expr(ex.Value) +
+			d.s(stylePunct, ")") +
+			d.s(styleMeta, " as ") +
+			d.s(styleType, ex.TypeName)
+
+	case *ast.AskExpression:
+		if ex.Prompt != nil {
+			return d.s(styleOpcodeIO, "ask") +
+				d.s(stylePunct, "(") + d.expr(ex.Prompt) + d.s(stylePunct, ")")
+		}
+		return d.s(styleOpcodeIO, "ask") + d.s(stylePunct, "()")
+
+	case *ast.ArrayLiteral:
+		elems := make([]string, len(ex.Elements))
+		for i, e := range ex.Elements {
+			elems[i] = d.expr(e)
+		}
+		typeTag := ""
+		if ex.ElementType != "" {
+			typeTag = d.s(styleType, ex.ElementType+"[]")
+		}
+		return typeTag + d.s(stylePunct, "[") +
+			strings.Join(elems, d.s(stylePunct, ", ")) +
+			d.s(stylePunct, "]")
+
+	case *ast.LookupTableLiteral:
+		return d.s(stylePunct, "{}")
+
+	case *ast.LookupKeyAccess:
+		return d.expr(ex.Table) +
+			d.s(stylePunct, "[") + d.expr(ex.Key) + d.s(stylePunct, "]")
+
+	case *ast.HasExpression:
+		return d.expr(ex.Table) + " " + d.s(styleOp, "has") + " " + d.expr(ex.Key)
+
+	case *ast.NilCheckExpression:
+		if ex.IsSomethingCheck {
+			return d.expr(ex.Value) + " " + d.s(styleOp, "is something")
+		}
+		return d.expr(ex.Value) + " " + d.s(styleOp, "is nothing")
+
+	case *ast.MethodCall:
+		return d.expr(ex.Object) +
+			d.s(stylePunct, ".") +
+			d.s(styleLabel, ex.MethodName) +
+			d.argList(ex.Arguments)
+
+	case *ast.FieldAccess:
+		return d.expr(ex.Object) +
+			d.s(stylePunct, ".") +
+			d.s(styleIdent, ex.Field)
+
+	case *ast.StructInstantiation:
+		if len(ex.FieldOrder) == 0 {
+			return d.s(styleOpcodeDecl, "new") + d.s(stylePunct, "(") +
+				d.s(styleLabel, ex.StructName) + d.s(stylePunct, ")")
+		}
+		parts := make([]string, 0, len(ex.FieldOrder))
+		for _, k := range ex.FieldOrder {
+			v := ex.FieldValues[k]
+			parts = append(parts,
+				d.s(styleIdent, k)+d.s(styleArrow, "←")+d.expr(v))
+		}
+		return d.s(styleOpcodeDecl, "new") +
+			d.s(stylePunct, "(") +
+			d.s(styleLabel, ex.StructName) +
+			d.s(stylePunct, " {") +
+			strings.Join(parts, d.s(stylePunct, ", ")) +
+			d.s(stylePunct, "})")
 
 	default:
 		return d.s(styleNull, "?")

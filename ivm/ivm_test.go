@@ -282,8 +282,8 @@ if err != nil {
 t.Errorf("unexpected error: %v", err)
 }
 })
-if !strings.Contains(out, "20") {
-t.Errorf("expected 20, got %q", out)
+if !strings.Contains(out, "30") {
+t.Errorf("expected 30, got %q", out)
 }
 }
 

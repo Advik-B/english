@@ -750,7 +750,7 @@ func (c *Compiler) compileForEachLoop(s *ast.ForEachLoop) error {
 	listIdx := c.chunk.AddName(listName)
 	c.chunk.Emit(OP_DEFINE_VAR, listIdx)
 
-	startIdx := c.chunk.AddConst(float64(1))
+	startIdx := c.chunk.AddConst(float64(0)) // 0-based indexing
 	c.chunk.Emit(OP_LOAD_CONST, startIdx)
 	idxIdx := c.chunk.AddName(idxName)
 	c.chunk.Emit(OP_DEFINE_VAR, idxIdx)
@@ -760,7 +760,7 @@ func (c *Compiler) compileForEachLoop(s *ast.ForEachLoop) error {
 	c.chunk.Emit(OP_LOAD_VAR, idxIdx)
 	c.chunk.Emit(OP_LOAD_VAR, listIdx)
 	c.chunk.Emit(OP_LENGTH, 0)
-	c.chunk.Emit(OP_BINARY_OP, uint32(BinLte))
+	c.chunk.Emit(OP_BINARY_OP, uint32(BinLt)) // idx < len (0-based: stop when idx == len)
 
 	exitJump := c.chunk.CurrentPos()
 	c.chunk.Emit(OP_JUMP_IF_FALSE, 0)

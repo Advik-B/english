@@ -1228,9 +1228,9 @@ func doIndexGet(container, index interface{}) (interface{}, error) {
 		if err != nil {
 			return nil, err
 		}
-		i := int(idx) - 1 // 1-based indexing
+		i := int(idx)
 		if i < 0 || i >= len(c) {
-			return nil, fmt.Errorf("index %d out of bounds (list length %d)", i+1, len(c))
+			return nil, fmt.Errorf("index %d out of range for list of length %d", i, len(c))
 		}
 		return c[i], nil
 	case *types.ArrayValue:
@@ -1238,9 +1238,9 @@ func doIndexGet(container, index interface{}) (interface{}, error) {
 		if err != nil {
 			return nil, err
 		}
-		i := int(idx) - 1 // 1-based indexing
+		i := int(idx)
 		if i < 0 || i >= len(c.Elements) {
-			return nil, fmt.Errorf("index %d out of bounds (array length %d)", i+1, len(c.Elements))
+			return nil, fmt.Errorf("index %d out of range for array of length %d", i, len(c.Elements))
 		}
 		return c.Elements[i], nil
 	case string:
@@ -1248,15 +1248,37 @@ func doIndexGet(container, index interface{}) (interface{}, error) {
 		if err != nil {
 			return nil, err
 		}
-		i := int(idx) - 1 // 1-based indexing
+		i := int(idx)
 		runes := []rune(c)
 		if i < 0 || i >= len(runes) {
-			return nil, fmt.Errorf("index %d out of bounds (string length %d)", i+1, len(runes))
+			return nil, fmt.Errorf("index %d out of range for string of length %d", i, len(runes))
 		}
 		return string(runes[i]), nil
+	case *types.LookupTableValue:
+		// Integer indexing into a lookup table yields the key at that position
+		// (used by the for-each loop when iterating over a lookup table).
+		idx, err := ivmToFloat(index, "index")
+		if err != nil {
+			return nil, err
+		}
+		return lookupTableGetByIndex(c, int(idx))
 	default:
 		return nil, fmt.Errorf("cannot index into %s", ivmGetTypeName(container))
 	}
+}
+
+// lookupTableGetByIndex returns the key at position i (0-based) in a lookup table.
+// Used by the for-each loop when iterating over a lookup table (yields keys in insertion order).
+func lookupTableGetByIndex(lt *types.LookupTableValue, i int) (interface{}, error) {
+	if i < 0 || i >= len(lt.KeyOrder) {
+		return nil, fmt.Errorf("index %d out of range for lookup table of length %d", i, len(lt.KeyOrder))
+	}
+	serialKey := lt.KeyOrder[i]
+	origKey, _, ok := types.DeserializeKey(serialKey)
+	if !ok {
+		origKey = serialKey
+	}
+	return origKey, nil
 }
 
 func doIndexSet(container, index, value interface{}) error {
@@ -1266,9 +1288,9 @@ func doIndexSet(container, index, value interface{}) error {
 		if err != nil {
 			return err
 		}
-		i := int(idx) - 1
+		i := int(idx)
 		if i < 0 || i >= len(c) {
-			return fmt.Errorf("index %d out of bounds (list length %d)", i+1, len(c))
+			return fmt.Errorf("index %d out of range for list of length %d", i, len(c))
 		}
 		c[i] = value
 		return nil
@@ -1277,9 +1299,9 @@ func doIndexSet(container, index, value interface{}) error {
 		if err != nil {
 			return err
 		}
-		i := int(idx) - 1
+		i := int(idx)
 		if i < 0 || i >= len(c.Elements) {
-			return fmt.Errorf("index %d out of bounds (array length %d)", i+1, len(c.Elements))
+			return fmt.Errorf("index %d out of range for array of length %d", i, len(c.Elements))
 		}
 		c.Elements[i] = value
 		return nil

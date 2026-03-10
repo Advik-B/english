@@ -1081,3 +1081,42 @@ func TestParserFunctionCallWithParens(t *testing.T) {
 		t.Errorf("Expected 2 arguments, got %d", len(funcCall.Arguments))
 	}
 }
+
+func TestParserAskStatement(t *testing.T) {
+tests := []struct {
+input   string
+varName string
+}{
+{`Ask "What is your age?" and store it in userAge.`, "userAge"},
+{`Ask "What is your age?" and store the answer in userAge.`, "userAge"},
+{`Ask "What is your age?" and store the result in userAge.`, "userAge"},
+{`Ask "What is your age?" as userAge.`, "userAge"},
+}
+
+for _, test := range tests {
+program, err := parse(test.input)
+if err != nil {
+t.Errorf("Input %q: parse error: %v", test.input, err)
+continue
+}
+
+if len(program.Statements) != 1 {
+t.Errorf("Input %q: expected 1 statement, got %d", test.input, len(program.Statements))
+continue
+}
+
+assign, ok := program.Statements[0].(*ast.Assignment)
+if !ok {
+t.Errorf("Input %q: expected *ast.Assignment, got %T", test.input, program.Statements[0])
+continue
+}
+
+if assign.Name != test.varName {
+t.Errorf("Input %q: expected variable name %q, got %q", test.input, test.varName, assign.Name)
+}
+
+if _, ok := assign.Value.(*ast.AskExpression); !ok {
+t.Errorf("Input %q: expected *ast.AskExpression as value, got %T", test.input, assign.Value)
+}
+}
+}

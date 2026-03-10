@@ -1325,8 +1325,10 @@ func (p *Parser) parseContinue() (ast.Statement, error) {
 }
 
 // parseAskStatement parses an ask statement for user input:
-//   - "Ask "prompt" as varname."   (create or set variable)
+//   - "Ask "prompt" as varname."
 //   - "Ask "prompt" and store it in varname."
+//   - "Ask "prompt" and store the answer in varname."
+//   - "Ask "prompt" and store the result in varname."
 func (p *Parser) parseAskStatement() (ast.Statement, error) {
 	p.nextToken() // consume ASK
 
@@ -1357,11 +1359,9 @@ func (p *Parser) parseAskStatement() (ast.Statement, error) {
 		if p.curToken.Type == token.IDENTIFIER {
 			p.nextToken()
 		}
-		// Skip "it", "the", "answer", "result", "response" identifiers/tokens
-		for p.curToken.Type == token.IDENTIFIER || p.curToken.Type == token.THE {
-			if p.curToken.Type == token.IN {
-				break
-			}
+		// Skip filler words: "it" (token.IT), "the" (token.THE), or plain identifiers
+		// like "answer", "result", "response"
+		for p.curToken.Type == token.IDENTIFIER || p.curToken.Type == token.THE || p.curToken.Type == token.IT {
 			p.nextToken()
 		}
 		// Expect "in"

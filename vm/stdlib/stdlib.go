@@ -1064,6 +1064,12 @@ func Eval(name string, args []vm.Value) (vm.Value, error) {
 
 // ── Registration helpers ───────────────────────────────────────────────────────
 
+// PredefinedNames returns the names of all constants registered by the stdlib.
+// Pass these to vm.Check so the compile-time checker can catch redeclarations.
+func PredefinedNames() []string {
+	return []string{"pi", "e", "infinity"}
+}
+
 func registerMathConstants(env *vm.Environment) {
 	env.Define("pi", math.Pi, true)
 	env.Define("e", math.E, true)

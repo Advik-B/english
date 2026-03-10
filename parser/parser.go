@@ -221,6 +221,7 @@ func (p *Parser) parseLetDeclaration() (ast.Statement, error) {
 		Name:       nameToken.Value,
 		IsConstant: isConstant,
 		Value:      value,
+		Line:       nameToken.Line,
 	}, nil
 }
 
@@ -372,6 +373,7 @@ func (p *Parser) parseDeclaration() (ast.Statement, error) {
 		Name:       nameToken.Value,
 		IsConstant: isConstant,
 		Value:      value,
+		Line:       nameToken.Line,
 	}, nil
 }
 
@@ -1094,6 +1096,7 @@ func (p *Parser) parseForEach() (ast.Statement, error) {
 		Item: itemName,
 		List: listExpr,
 		Body: body,
+		Line: itemToken.Line,
 	}, nil
 }
 

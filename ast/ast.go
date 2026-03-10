@@ -42,6 +42,7 @@ type VariableDecl struct {
 	Name       string
 	IsConstant bool
 	Value      Expression
+	Line       int
 }
 
 func (vd *VariableDecl) node()          {}
@@ -124,6 +125,7 @@ type ForEachLoop struct {
 	Item string
 	List Expression
 	Body []Statement
+	Line int // source line of the loop-variable declaration
 }
 
 func (fel *ForEachLoop) node()          {}
@@ -457,6 +459,7 @@ type TypedVariableDecl struct {
 	TypeName   string
 	IsConstant bool
 	Value      Expression
+	Line       int
 }
 
 func (tvd *TypedVariableDecl) node()          {}

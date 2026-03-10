@@ -131,7 +131,7 @@ func RunFile(filename string) {
 		os.Exit(1)
 	}
 
-	typeErrs := vm.Check(program)
+	typeErrs := vm.Check(program, stdlib.PredefinedNames()...)
 	if len(typeErrs) > 0 {
 		for _, e := range typeErrs {
 			stacktraces.Print(e)
@@ -165,7 +165,7 @@ func CompileFile(filename string, output string) {
 		os.Exit(1)
 	}
 
-	typeErrs := vm.Check(program)
+	typeErrs := vm.Check(program, stdlib.PredefinedNames()...)
 	if len(typeErrs) > 0 {
 		for _, e := range typeErrs {
 			stacktraces.Print(e)
@@ -240,7 +240,7 @@ func transpileWithOptions(filename string, inline bool, seen map[string]bool) {
 			os.Exit(1)
 		}
 
-		typeErrs := vm.Check(prog)
+		typeErrs := vm.Check(prog, stdlib.PredefinedNames()...)
 		if len(typeErrs) > 0 {
 			for _, e := range typeErrs {
 				stacktraces.Print(e)
@@ -266,7 +266,7 @@ func transpileWithOptions(filename string, inline bool, seen map[string]bool) {
 			os.Exit(1)
 		}
 
-		typeErrs := vm.Check(prog)
+		typeErrs := vm.Check(prog, stdlib.PredefinedNames()...)
 		if len(typeErrs) > 0 {
 			for _, e := range typeErrs {
 				stacktraces.Print(e)

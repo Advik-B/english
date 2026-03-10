@@ -87,13 +87,24 @@ type TypeChecker struct {
 	varTypes      map[string]types.TypeKind
 	userFunctions map[string]bool // names of user-defined functions (skip stdlib type check)
 	errors        []*TypeError
+	// scopeStack is a stack of per-scope declared variable sets.
+	// Each entry maps variable name → line of declaration (0 = predefined by stdlib).
+	// Duplicate detection is limited to the innermost matching scope.
+	scopeStack []map[string]int
 }
 
 // Check runs the type checker on a program and returns all type errors found.
-func Check(program *ast.Program) []*TypeError {
+// Provide the names of any stdlib-predefined variables via predefines so the
+// checker can report redeclarations as compile-time errors.
+func Check(program *ast.Program, predefines ...string) []*TypeError {
+	globalScope := make(map[string]int)
+	for _, name := range predefines {
+		globalScope[name] = 0 // 0 = predefined (no source line)
+	}
 	tc := &TypeChecker{
 		varTypes:      make(map[string]types.TypeKind),
 		userFunctions: make(map[string]bool),
+		scopeStack:    []map[string]int{globalScope},
 	}
 	// Pre-scan top-level function declarations so that user-defined functions
 	// sharing a name with a stdlib function are not falsely type-checked.
@@ -108,6 +119,37 @@ func Check(program *ast.Program) []*TypeError {
 
 func (tc *TypeChecker) error(line int, format string, args ...interface{}) {
 	tc.errors = append(tc.errors, &TypeError{Line: line, Message: fmt.Sprintf(format, args...)})
+}
+
+// pushScope opens a new lexical scope for duplicate-variable detection.
+func (tc *TypeChecker) pushScope() {
+	tc.scopeStack = append(tc.scopeStack, make(map[string]int))
+}
+
+// popScope closes the innermost lexical scope.
+func (tc *TypeChecker) popScope() {
+	if len(tc.scopeStack) > 0 {
+		tc.scopeStack = tc.scopeStack[:len(tc.scopeStack)-1]
+	}
+}
+
+// declareVar records a variable declaration in the current innermost scope.
+// If the name is already declared in that same scope (or is a predefined
+// stdlib constant in the global scope) an error is emitted and false is returned.
+func (tc *TypeChecker) declareVar(name string, line int) {
+	if len(tc.scopeStack) == 0 {
+		return
+	}
+	current := tc.scopeStack[len(tc.scopeStack)-1]
+	if prevLine, exists := current[name]; exists {
+		if prevLine == 0 {
+			tc.error(line, "variable '%s' shadows a predefined constant", name)
+		} else {
+			tc.error(line, "variable '%s' is already declared at line %d", name, prevLine)
+		}
+		return
+	}
+	current[name] = line
 }
 
 // exprType infers the static TypeKind of an expression.
@@ -139,6 +181,7 @@ func (tc *TypeChecker) checkStatements(stmts []ast.Statement) {
 func (tc *TypeChecker) checkStatement(stmt ast.Statement) {
 	switch s := stmt.(type) {
 	case *ast.VariableDecl:
+		tc.declareVar(s.Name, s.Line)
 		if s.Value != nil {
 			tk := tc.exprType(s.Value)
 			if tk != types.TypeUnknown {
@@ -147,6 +190,7 @@ func (tc *TypeChecker) checkStatement(stmt ast.Statement) {
 			tc.checkExpression(s.Value)
 		}
 	case *ast.TypedVariableDecl:
+		tc.declareVar(s.Name, s.Line)
 		declaredKind := types.Parse(s.TypeName)
 		if declaredKind != types.TypeUnknown {
 			tc.varTypes[s.Name] = types.Canonical(declaredKind)
@@ -155,33 +199,54 @@ func (tc *TypeChecker) checkStatement(stmt ast.Statement) {
 			actualKind := tc.exprType(s.Value)
 			if actualKind != types.TypeUnknown && declaredKind != types.TypeUnknown {
 				if types.Canonical(actualKind) != types.Canonical(declaredKind) {
-					tc.error(0, "cannot initialize %s with %s", types.Name(declaredKind), types.Name(actualKind))
+					tc.error(s.Line, "cannot initialize %s with %s", types.Name(declaredKind), types.Name(actualKind))
 				}
 			}
 			tc.checkExpression(s.Value)
 		}
 	case *ast.IfStatement:
 		tc.checkExpression(s.Condition)
+		tc.pushScope()
 		tc.checkStatements(s.Then)
+		tc.popScope()
 		for _, elif := range s.ElseIf {
 			tc.checkExpression(elif.Condition)
+			tc.pushScope()
 			tc.checkStatements(elif.Body)
+			tc.popScope()
 		}
 		if s.Else != nil {
+			tc.pushScope()
 			tc.checkStatements(s.Else)
+			tc.popScope()
 		}
 	case *ast.WhileLoop:
 		tc.checkExpression(s.Condition)
+		tc.pushScope()
 		tc.checkStatements(s.Body)
+		tc.popScope()
 	case *ast.ForLoop:
 		tc.checkExpression(s.Count)
+		tc.pushScope()
 		tc.checkStatements(s.Body)
+		tc.popScope()
 	case *ast.ForEachLoop:
+		tc.pushScope()
+		if s.Item != "" {
+			tc.declareVar(s.Item, s.Line)
+		}
 		tc.checkStatements(s.Body)
+		tc.popScope()
 	case *ast.TryStatement:
+		tc.pushScope()
 		tc.checkStatements(s.TryBody)
+		tc.popScope()
+		tc.pushScope()
 		tc.checkStatements(s.ErrorBody)
+		tc.popScope()
+		tc.pushScope()
 		tc.checkStatements(s.FinallyBody)
+		tc.popScope()
 	case *ast.OutputStatement:
 		for _, arg := range s.Values {
 			tc.checkExpression(arg)
@@ -200,7 +265,9 @@ func (tc *TypeChecker) checkStatement(stmt ast.Statement) {
 			tc.checkExpression(s.Value)
 		}
 	case *ast.FunctionDecl:
+		tc.pushScope()
 		tc.checkStatements(s.Body)
+		tc.popScope()
 	}
 }
 

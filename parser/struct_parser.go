@@ -517,5 +517,6 @@ func (p *Parser) parseTypedVariableDecl() (ast.Statement, error) {
 		TypeName:   typeName,
 		IsConstant: isConstant,
 		Value:      value,
+		Line:       nameToken.Line,
 	}, nil
 }

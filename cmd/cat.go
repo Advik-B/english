@@ -14,6 +14,8 @@ import (
 )
 
 var catFriendly bool
+var catImportDepth int
+var catUnrollDepth int
 
 var catCmd = &cobra.Command{
 	Use:     "cat [file]",
@@ -38,14 +40,22 @@ Bytecode files (.101):
   symbols (==, !=, <, <=, >, >=, &&, ||, !).  Pass --friendly to display
   them as the original English prose stored in the bytecode instead
   (e.g. "is less than or equal to").  Arithmetic operators (+, -, *, /, %)
-  are always shown symbolically regardless of this flag.`,
+  are always shown symbolically regardless of this flag.
+
+  --import-depth N additionally disassembles each file imported by the
+  program, up to N levels deep.  Use --import-depth -1 for unlimited depth.
+
+  --unroll-depth N extracts nested function-call arguments into temporary
+  variable declarations to improve readability (e.g. x = f1(f2(f3(0)))
+  becomes __tmp0 = f3(0); __tmp1 = f2(__tmp0); x = f1(__tmp1)).  Use
+  --unroll-depth -1 for fully recursive unrolling.`,
 	Args: cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		filename := args[0]
 		ext := strings.ToLower(filepath.Ext(filename))
 
 		if ext == ".101" {
-			catBytecode(filename, catFriendly)
+			catBytecode(filename, catFriendly, catImportDepth, catUnrollDepth)
 			return
 		}
 
@@ -60,7 +70,7 @@ Bytecode files (.101):
 }
 
 // catBytecode decodes a .101 file and prints a colourised disassembly.
-func catBytecode(filename string, friendlyOps bool) {
+func catBytecode(filename string, friendlyOps bool, importDepth, unrollDepth int) {
 	data, err := os.ReadFile(filename)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error reading file: %v\n", err)
@@ -75,11 +85,15 @@ func catBytecode(filename string, friendlyOps bool) {
 	}
 
 	useColor := stacktraces.HasColor()
-	fmt.Print(disasm.Disassemble(program, filename, useColor, friendlyOps))
+	fmt.Print(disasm.Disassemble(program, filename, useColor, friendlyOps, importDepth, unrollDepth))
 }
 
 func init() {
 	catCmd.Flags().BoolVar(&catFriendly, "friendly", false,
 		"Show operators as English prose instead of symbols (only affects .101 disassembly)")
+	catCmd.Flags().IntVar(&catImportDepth, "import-depth", 0,
+		"Follow imports this many levels deep when disassembling .101 files (0 = don't follow, -1 = unlimited)")
+	catCmd.Flags().IntVar(&catUnrollDepth, "unroll-depth", 0,
+		"Unroll nested function calls this many levels for readability (0 = off, -1 = fully recursive)")
 	rootCmd.AddCommand(catCmd)
 }

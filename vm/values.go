@@ -57,6 +57,19 @@ func (e *RuntimeError) Error() string {
 	return result
 }
 
+// RuntimeMessage implements the stacktraces.RuntimeError interface and returns
+// the human-readable error message without call-stack details.
+func (e *RuntimeError) RuntimeMessage() string { return e.Message }
+
+// RuntimeCallStack implements the stacktraces.RuntimeError interface and
+// returns the full call-stack slice (most-recent frame first).
+func (e *RuntimeError) RuntimeCallStack() []string {
+	if e.CallStack == nil {
+		return []string{}
+	}
+	return e.CallStack
+}
+
 // NewRuntimeError creates a RuntimeError with a default stdlib call-stack frame.
 func NewRuntimeError(message string) error {
 	return &RuntimeError{Message: message, CallStack: []string{"<stdlib>"}}

@@ -4,6 +4,7 @@ import (
 	"english/ast"
 	"english/bytecode"
 	"english/parser"
+	"english/stacktraces"
 	"english/transpiler"
 	"english/vm"
 	"english/vm/stdlib"
@@ -126,14 +127,14 @@ func RunFile(filename string) {
 	p := parser.NewParser(tokens)
 	program, err := p.Parse()
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Parse error: %v\n", err)
+		stacktraces.Print(err)
 		os.Exit(1)
 	}
 
 	typeErrs := vm.Check(program)
 	if len(typeErrs) > 0 {
 		for _, e := range typeErrs {
-			fmt.Fprintln(os.Stderr, e.Error())
+			stacktraces.Print(e)
 		}
 		os.Exit(1)
 	}
@@ -141,7 +142,7 @@ func RunFile(filename string) {
 	evaluator := vm.NewEvaluator(env, stdlib.Eval)
 	_, err = evaluator.Eval(program)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Runtime error: %v\n", err)
+		stacktraces.Print(err)
 		os.Exit(1)
 	}
 }
@@ -160,14 +161,14 @@ func CompileFile(filename string, output string) {
 	p := parser.NewParser(tokens)
 	program, err := p.Parse()
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Parse error: %v\n", err)
+		stacktraces.Print(err)
 		os.Exit(1)
 	}
 
 	typeErrs := vm.Check(program)
 	if len(typeErrs) > 0 {
 		for _, e := range typeErrs {
-			fmt.Fprintln(os.Stderr, e.Error())
+			stacktraces.Print(e)
 		}
 		os.Exit(1)
 	}
@@ -242,7 +243,7 @@ func transpileWithOptions(filename string, inline bool, seen map[string]bool) {
 		typeErrs := vm.Check(prog)
 		if len(typeErrs) > 0 {
 			for _, e := range typeErrs {
-				fmt.Fprintln(os.Stderr, e.Error())
+				stacktraces.Print(e)
 			}
 			os.Exit(1)
 		}
@@ -261,14 +262,14 @@ func transpileWithOptions(filename string, inline bool, seen map[string]bool) {
 		p := parser.NewParser(tokens)
 		prog, err := p.Parse()
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Parse error: %v\n", err)
+			stacktraces.Print(err)
 			os.Exit(1)
 		}
 
 		typeErrs := vm.Check(prog)
 		if len(typeErrs) > 0 {
 			for _, e := range typeErrs {
-				fmt.Fprintln(os.Stderr, e.Error())
+				stacktraces.Print(e)
 			}
 			os.Exit(1)
 		}
@@ -322,7 +323,7 @@ func RunBytecode(filename string) {
 	evaluator := vm.NewEvaluator(env, stdlib.Eval)
 	_, err = evaluator.Eval(program)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Runtime error: %v\n", err)
+		stacktraces.Print(err)
 		os.Exit(1)
 	}
 }

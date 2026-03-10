@@ -122,6 +122,10 @@ var controlFlowWords = map[string]bool{
 	"skip":      true,
 	"thats":     true,
 	"it":        true,
+	// Ask-statement helpers: "store it in", "store the answer in", "store the result in"
+	"store":  true,
+	"answer": true,
+	"result": true,
 }
 
 // declarationWords are keywords used when introducing names/functions.

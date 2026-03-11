@@ -2,8 +2,8 @@ package stdlib
 
 import (
 	"bufio"
-	"english/vm"
-	"english/vm/types"
+	"english/astvm"
+	"english/astvm/types"
 	"fmt"
 	"math"
 	"math/rand"

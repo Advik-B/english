@@ -5,7 +5,7 @@ import (
 	"english/ast"
 	"english/bytecode"
 	"english/parser"
-	"english/vm/types"
+	"english/astvm/types"
 	"fmt"
 	"os"
 	"strings"

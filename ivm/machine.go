@@ -2,7 +2,7 @@ package ivm
 
 import (
 	"bufio"
-	"english/vm/types"
+	"english/astvm/types"
 	"fmt"
 	"math"
 	"os"

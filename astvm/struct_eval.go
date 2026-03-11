@@ -2,7 +2,7 @@ package vm
 
 import (
 	"english/ast"
-	"english/vm/types"
+	"english/astvm/types"
 	"fmt"
 )
 

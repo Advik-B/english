@@ -1,6 +1,6 @@
 package vm
 
-import "english/vm/types"
+import "english/astvm/types"
 
 // StructDefinition describes a struct type declared in source code.
 // It lives in vm/ (not vm/types/) because Methods references *FunctionValue.

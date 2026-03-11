@@ -2,8 +2,8 @@ package cmd
 
 import (
 	"english/parser"
-	"english/vm"
-	"english/vm/stdlib"
+	"english/astvm"
+	"english/astvm/stdlib"
 	"fmt"
 	"io"
 	"os"

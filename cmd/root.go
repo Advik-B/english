@@ -65,11 +65,18 @@ var compileCmd = &cobra.Command{
 	Short: "Compile an English source file (.abc) to bytecode (.101)",
 	Long: `Compile an English source file to binary bytecode format.
 The output file will have the same name with .101 extension.
-Bytecode files can be executed directly without parsing.`,
+Bytecode files can be executed directly without parsing.
+
+By default the original source code is embedded as a trailing section in the
+.101 file so that "english transpile" can later reconstruct idiomatic Python
+without a separate .abc file.  Pass --strip (or --min) to omit the source
+trailer and produce a smaller, standalone bytecode file.`,
 	Args: cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		output, _ := cmd.Flags().GetString("output")
-		CompileFile(args[0], output)
+		strip, _ := cmd.Flags().GetBool("strip")
+		min, _ := cmd.Flags().GetBool("min")
+		CompileFileOptions(args[0], output, strip || min)
 	},
 }
 
@@ -114,6 +121,9 @@ func init() {
 	rootCmd.AddCommand(versionCmd)
 
 	compileCmd.Flags().StringP("output", "o", "", "Output file name (default: input file with .101 extension)")
+	compileCmd.Flags().Bool("strip", false, "Omit the source trailer (smaller file; 'transpile' will use opcode decompiler)")
+	compileCmd.Flags().Bool("min", false, "Alias for --strip")
+	_ = compileCmd.Flags().MarkHidden("min") // expose only --strip in help; --min still works
 	transpileCmd.Flags().BoolP("inline", "i", false, "Inline all imported .abc files into a single Python output file")
 	runCmd.Flags().StringP("vm", "V", "ivm", "VM to use for running .abc source files: 'ivm' (default) or 'ast'")
 }
@@ -201,8 +211,17 @@ func RunFileAST(filename string) {
 	}
 }
 
-// CompileFile compiles an English source file to bytecode
+// CompileFile compiles an English source file to bytecode, embedding the
+// original source as a trailing section (for later transpilation).
+// This is a convenience wrapper around CompileFileOptions.
 func CompileFile(filename string, output string) {
+	CompileFileOptions(filename, output, false)
+}
+
+// CompileFileOptions compiles an English source file to bytecode.
+// When stripSource is true the source trailer is omitted, producing a smaller
+// file; "english transpile" will then fall back to opcode decompilation.
+func CompileFileOptions(filename string, output string, stripSource bool) {
 	content, err := os.ReadFile(filename)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error reading file: %v\n", err)
@@ -233,7 +252,13 @@ func CompileFile(filename string, output string) {
 		os.Exit(1)
 	}
 
-	data, encodeErr := ivm.EncodeFileWithSource(chunk, string(content))
+	var data []byte
+	var encodeErr error
+	if stripSource {
+		data, encodeErr = ivm.EncodeFile(chunk)
+	} else {
+		data, encodeErr = ivm.EncodeFileWithSource(chunk, string(content))
+	}
 	if encodeErr != nil {
 		fmt.Fprintf(os.Stderr, "Encode error: %v\n", encodeErr)
 		os.Exit(1)

@@ -3,6 +3,7 @@ package cmd
 import (
 	"english/bytecode"
 	"english/bytecode/disasm"
+	"english/ivm"
 	"english/parser"
 	"english/stacktraces"
 	"fmt"
@@ -60,6 +61,37 @@ becomes __tmp0 = f3(0); __tmp1 = f2(__tmp0); x = f1(__tmp1)).  Use
 				fmt.Fprintf(os.Stderr, "Error reading file: %v\n", err)
 				os.Exit(1)
 			}
+
+			// Try ivm v2 format first; if recognised, extract the embedded
+			// source and show the AST-level view from it (inspect = AST view).
+			if len(data) >= 5 && data[4] == ivm.InstructionFormatVersion {
+				_, embeddedSrc, decodeErr := ivm.DecodeFileAll(data)
+				if decodeErr != nil {
+					fmt.Fprintf(os.Stderr, "Error decoding bytecode: %v\n", decodeErr)
+					os.Exit(1)
+				}
+				if embeddedSrc == "" {
+					fmt.Fprintf(os.Stderr,
+						"Error: %q was compiled without embedded source.\n"+
+							"Use 'english inspect-ivm %s' to view the opcode listing, or\n"+
+							"recompile with 'english compile' (without --strip) for AST inspection.\n",
+						filename, filename)
+					os.Exit(1)
+				}
+				// Parse the embedded source and show the AST disassembly.
+				lexer := parser.NewLexer(embeddedSrc)
+				tokens := lexer.TokenizeAll()
+				p := parser.NewParser(tokens)
+				program, parseErr := p.Parse()
+				if parseErr != nil {
+					stacktraces.Print(parseErr)
+					os.Exit(1)
+				}
+				fmt.Print(disasm.Disassemble(program, filename, useColor, inspectFriendly, inspectImportDepth, inspectUnrollDepth))
+				return
+			}
+
+			// v1 AST bytecode format.
 			dec := bytecode.NewDecoder(data)
 			program, err := dec.Decode()
 			if err != nil {

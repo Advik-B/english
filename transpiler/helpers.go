@@ -46,6 +46,8 @@ func sanitizeIdent(name string) string {
 
 // helperDefs maps a helper name to its Python source (no trailing newline).
 var helperDefs = map[string]string{
+	"_program_start": "_program_start = time.time()",
+
 	"_table_remove": `def _table_remove(d, k):
     result = dict(d)
     result.pop(k, None)
@@ -100,6 +102,7 @@ var helperDefs = map[string]string{
 
 // helperOrder defines the deterministic emission order for helper functions.
 var helperOrder = []string{
+	"_program_start",
 	"_table_remove",
 	"_flatten",
 	"_read_file",

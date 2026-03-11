@@ -54,6 +54,7 @@ type Transpiler struct {
 	needsCopy   bool
 	needsRandom bool
 	needsTyping bool // typing.Final for constants
+	needsTime   bool
 
 	// Python helper functions to inject at the top of the output.
 	helpers map[string]bool
@@ -159,10 +160,13 @@ func (t *Transpiler) Transpile(program *ast.Program) string {
 	if t.needsRandom {
 		out.WriteString("import random\n")
 	}
+	if t.needsTime {
+		out.WriteString("import time\n")
+	}
 	if t.needsTyping {
 		out.WriteString("from typing import Final\n")
 	}
-	if t.needsMath || t.needsCopy || t.needsRandom || t.needsTyping {
+	if t.needsMath || t.needsCopy || t.needsRandom || t.needsTime || t.needsTyping {
 		out.WriteString("\n")
 	}
 
@@ -372,6 +376,11 @@ func (t *Transpiler) scanFuncCall(name string) {
 		t.helpers["_read_file"] = true
 	case "write_file":
 		t.helpers["_write_file"] = true
+	case "sleep", "current_time", "elapsed_time":
+		t.needsTime = true
+		if name == "elapsed_time" {
+			t.helpers["_program_start"] = true
+		}
 	}
 }
 

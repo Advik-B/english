@@ -230,6 +230,14 @@ func (t *Transpiler) transpileFuncCallExpr(e *ast.FunctionCall) string {
 		return fmt.Sprintf("_read_file(%s)", a(0))
 	case "write_file":
 		return fmt.Sprintf("_write_file(%s, %s)", a(0), a(1))
+
+	// ── Time ──────────────────────────────────────────────────────────────────
+	case "sleep":
+		return fmt.Sprintf("time.sleep(%s)", a(0))
+	case "current_time":
+		return "time.strftime(\"%Y-%m-%d %H:%M:%S\")"
+	case "elapsed_time":
+		return "(time.time() - _program_start)"
 	}
 
 	// Unknown / user-defined function — emit a direct call.

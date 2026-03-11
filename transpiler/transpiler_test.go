@@ -1102,3 +1102,32 @@ thats it.`)
 		break // first non-comment line reached
 	}
 }
+
+// ─── Time functions ───────────────────────────────────────────────────────────
+
+func TestSleepTranslation(t *testing.T) {
+	out := transpile(t, `Sleep for 1 second.`)
+	assertContains(t, out, "import time")
+	assertContains(t, out, "time.sleep(1)")
+}
+
+func TestCurrentTimeTranslation(t *testing.T) {
+	out := transpile(t, `Declare current to be current_time().`)
+	assertContains(t, out, "import time")
+	assertContains(t, out, `time.strftime("%Y-%m-%d %H:%M:%S")`)
+}
+
+func TestElapsedTimeTranslation(t *testing.T) {
+	out := transpile(t, `Declare elapsed to be elapsed_time().`)
+	assertContains(t, out, "import time")
+	assertContains(t, out, "_program_start = time.time()")
+	assertContains(t, out, "(time.time() - _program_start)")
+}
+
+func TestSleepNoBareFunctionCall(t *testing.T) {
+	// sleep() must translate to time.sleep(), not a bare sleep() call.
+	out := transpile(t, `Sleep for 2 seconds.`)
+	if strings.Contains(out, "sleep(2)") && !strings.Contains(out, "time.sleep(2)") {
+		t.Errorf("sleep should emit time.sleep(), not bare sleep(); got:\n%s", out)
+	}
+}

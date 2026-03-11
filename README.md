@@ -1,4 +1,4 @@
-# 🗣️ English — A Natural-Language Programming Language
+# English — A Natural-Language Programming Language
 
 > Write code the way you speak. **English** is a fully-featured, Turing-complete programming language where your source code reads like plain English.
 
@@ -1159,17 +1159,8 @@ go test ./vm/...    -v
 ---
 
 ## 📦 Dependencies
-
-| Package | Version | Purpose |
-|---|---|---|
-| [cobra](https://github.com/spf13/cobra) | v1.10.2 | CLI framework |
-| [bubbletea](https://github.com/charmbracelet/bubbletea) | v1.3.10 | REPL TUI |
-| [lipgloss](https://github.com/charmbracelet/lipgloss) | v1.1.0 | Terminal styling |
-| [siphash](https://github.com/dchest/siphash) | v1.2.3 | Bytecode cache hashing |
-| [go-isatty](https://github.com/mattn/go-isatty) | v0.0.20 | TTY detection |
-
 ```bash
-go mod download
+go mod tidy
 ```
 
 ---
@@ -1177,7 +1168,3 @@ go mod download
 ## 📄 License
 
 MIT License
-
-## 🙏 Acknowledgments
-
-Built with the amazing [Charm](https://charm.sh/) terminal libraries.

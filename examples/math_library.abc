@@ -21,5 +21,4 @@ Declare function isEven that takes n and does the following:
     thats it.
 thats it.
 
-# A useful constant
-Declare pi to always be 3.14159.
+# Note: pi, e, and infinity are built-in predefined constants; no need to re-declare them here.

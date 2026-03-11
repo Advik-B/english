@@ -912,6 +912,14 @@ func (m *Machine) callFunction(name string, args []interface{}, callerChunk *Chu
 	if m.builtin != nil {
 		res, err := m.builtin(name, args)
 		if err != nil {
+			// stdlib.Eval returns "unknown built-in function: X" for names it
+			// doesn't recognise. That message is misleading when the function
+			// was supposed to be user-defined (e.g. imported but import was
+			// skipped). Normalise to "undefined function" so the user gets a
+			// clear, actionable error.
+			if strings.Contains(err.Error(), "unknown built-in function:") {
+				return nil, m.runtimeErr(fmt.Sprintf("undefined function '%s'", name))
+			}
 			return nil, err
 		}
 		return res, nil

@@ -263,8 +263,9 @@ var keywords = map[string]token.Type{
 	// Politeness prefixes – consumed by the parser before any statement.
 	"please": token.PLEASE,
 	"kindly": token.PLEASE,
-	// Sleep statement keyword.
+	// Sleep / wait statement keywords.
 	"sleep": token.SLEEP,
+	"wait":  token.SLEEP,
 }
 
 func (l *Lexer) lookupKeyword(word string) token.Type {

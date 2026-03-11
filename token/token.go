@@ -115,8 +115,8 @@ const (
 	// politeness quota.
 	PLEASE
 
-	// SLEEP is emitted for the "sleep" keyword used in "Sleep for <duration>."
-	// statements.
+	// SLEEP is emitted for the "sleep" and "wait" keywords used in
+	// "Sleep for <duration>." / "Wait for <duration>." statements.
 	SLEEP
 
 	// WHITESPACE is emitted by TokenizeForHighlight to represent horizontal

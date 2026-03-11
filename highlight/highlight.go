@@ -164,11 +164,13 @@ func mapTokenKind(t token.Type) tokenKind {
 		token.REPEAT, token.WHILE, token.FOREVER,
 		token.BREAK, token.OUT, token.LOOP, token.TIMES,
 		token.FOR, token.EACH, token.DO,
-		token.RETURN, token.CONTINUE, token.SKIP:
+		token.RETURN, token.CONTINUE, token.SKIP,
+		token.SLEEP:
 		return kindControlFlow
 
 	// ── Declaration keywords ──────────────────────────────────────────────────
-	case token.DECLARE, token.LET, token.FUNCTION, token.SET, token.CALL:
+	case token.DECLARE, token.LET, token.FUNCTION, token.SET, token.CALL,
+		token.PLEASE:
 		return kindDeclaration
 
 	// ── Everything else is a general keyword ──────────────────────────────────

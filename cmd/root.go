@@ -50,6 +50,12 @@ var runCmd = &cobra.Command{
 		filename := args[0]
 		vmFlag, _ := cmd.Flags().GetString("vm")
 		minPoliteness, _ := cmd.Flags().GetFloat64("minimum-politeness")
+		politeFlag, _ := cmd.Flags().GetBool("polite")
+		// --polite is a convenience shorthand for --minimum-politeness 100.
+		// --minimum-politeness takes precedence when both are provided.
+		if politeFlag && !cmd.Flags().Changed("minimum-politeness") {
+			minPoliteness = 100
+		}
 		ext := strings.ToLower(filepath.Ext(filename))
 		if ext == ".101" {
 			// Politeness only applies to .abc source files.
@@ -133,6 +139,9 @@ func init() {
 	runCmd.Flags().Float64("minimum-politeness", -1,
 		"Require at least this percentage (0–100) of statements to be polite "+
 			"(prefixed with 'please', 'kindly', 'could you', or 'would you kindly'). "+
+			"Only applies to .abc source files.")
+	runCmd.Flags().Bool("polite", false,
+		"Require all statements to be polite (equivalent to --minimum-politeness 100). "+
 			"Only applies to .abc source files.")
 }
 

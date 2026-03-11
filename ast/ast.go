@@ -73,6 +73,7 @@ type FunctionDecl struct {
 	Name       string
 	Parameters []string
 	Body       []Statement
+	Line       int
 }
 
 func (fd *FunctionDecl) node()          {}

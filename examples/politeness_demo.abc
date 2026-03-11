@@ -1,0 +1,38 @@
+# Politeness Example
+# Run with:  english run politeness_demo.abc --polite
+# or:        english run politeness_demo.abc --minimum-politeness 75
+#
+# Without the flag, all of the statements below run normally regardless of
+# whether they have a polite prefix.
+
+# ─── Accepted politeness prefixes ───────────────────────────────────────────
+
+Please declare x to be 10.
+Kindly print "x =".
+Please print the value of x.
+
+# ─── Multi-word prefixes ─────────────────────────────────────────────────────
+
+Could you declare y to be x * 2.
+Would you kindly print "y =".
+Could you print the value of y.
+
+# ─── Polite loop ─────────────────────────────────────────────────────────────
+
+Please declare counter to be 1.
+Please repeat the following while counter is less than or equal to 3:
+    Please print the value of counter.
+    Please set counter to be counter + 1.
+thats it.
+
+# ─── Polite function ─────────────────────────────────────────────────────────
+
+Please declare function greet that takes name and does the following:
+    Please print "Hello,".
+    Please print the value of name.
+thats it.
+
+Would you kindly call greet with "World".
+
+Please print "".
+Please print "All done — wasn't that polite?".

@@ -3,7 +3,6 @@ package stdlib
 import (
 	"english/astvm"
 	"fmt"
-	"math"
 	"time"
 )
 
@@ -16,8 +15,8 @@ func evalTime(name string, args []vm.Value) (vm.Value, error) {
 		return time.Now().Format("2006-01-02 15:04:05"), nil
 
 	case "elapsed_time":
-		secs := time.Since(programStart).Seconds()
-		return math.Round(secs*1e6) / 1e6, nil
+		// Round to microsecond precision to avoid nanosecond float-noise.
+		return time.Since(programStart).Round(time.Microsecond).Seconds(), nil
 
 	case "sleep":
 		if len(args) == 0 {

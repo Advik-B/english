@@ -249,19 +249,23 @@ func formatOperand(chunk *Chunk, instr Instruction) string {
 	case OP_TRY_END:
 		return fmt.Sprintf("end_offset=%d", operand)
 	case OP_CATCH:
-		errVarIdx := operand >> 16
-		errTypeIdx := operand & 0xFFFF
+		errVarIdx := operand
 		varStr := "var=_"
 		if errVarIdx > 0 && int(errVarIdx) < len(chunk.Names) {
 			varStr = fmt.Sprintf("var=%q", chunk.Names[errVarIdx])
 		} else if errVarIdx > 0 {
 			varStr = fmt.Sprintf("var=names[%d]", errVarIdx)
 		}
-		typeStr := "type=any"
-		if errTypeIdx > 0 {
-			typeStr = fmt.Sprintf("type=%s", name(errTypeIdx-1))
+		return varStr
+	case OP_TRY_SET_ERRORTYPE:
+		if operand == 0 {
+			return "type=any"
 		}
-		return fmt.Sprintf("%s %s", varStr, typeStr)
+		return fmt.Sprintf("type=%s", name(operand-1))
+	case OP_TRY_SET_FINALLY:
+		return fmt.Sprintf("finally_offset=%d", operand)
+	case OP_RERAISE_PENDING:
+		return ""
 	case OP_DEFINE_ERROR_TYPE:
 		nameIdx := operand >> 16
 		parentIdx := operand & 0xFFFF
@@ -368,6 +372,7 @@ func opStyle(op Opcode) lipgloss.Style {
 		return lsOpData
 	case OP_JUMP, OP_JUMP_IF_FALSE, OP_JUMP_IF_TRUE, OP_RETURN,
 		OP_TRY_BEGIN, OP_TRY_END, OP_CATCH, OP_RAISE,
+		OP_TRY_SET_ERRORTYPE, OP_TRY_SET_FINALLY, OP_RERAISE_PENDING,
 		OP_PUSH_SCOPE, OP_POP_SCOPE:
 		return lsOpCtrl
 	case OP_PRINT, OP_ASK:

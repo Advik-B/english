@@ -74,7 +74,23 @@ const (
 	OP_RAISE         // operand = type_name_idx (0 = generic/RuntimeError); pop message
 	OP_TRY_BEGIN     // operand = catch offset; push try frame
 	OP_TRY_END       // pop try frame; operand = end offset (jump past catch+finally)
-	OP_CATCH         // operand = error_var_name_idx<<16 | error_type_name_idx; bind error
+	OP_CATCH         // operand = error_var_name_idx; bind error var (type check moved to handleError)
+
+	// OP_TRY_SET_ERRORTYPE sets the error-type filter on the top try frame.
+	// operand = nameIdx+1 (0 means catch-all / no filter).
+	// Emitted immediately after OP_TRY_BEGIN when the catch clause has a type filter.
+	OP_TRY_SET_ERRORTYPE
+
+	// OP_TRY_SET_FINALLY records the bytecode offset where the finally body starts.
+	// operand = finally_offset. Emitted after OP_TRY_BEGIN (and optional OP_TRY_SET_ERRORTYPE).
+	// When set, handleError will jump to this offset (instead of the catch handler) on a type
+	// mismatch, run the finally body, and then re-raise via OP_RERAISE_PENDING.
+	OP_TRY_SET_FINALLY
+
+	// OP_RERAISE_PENDING re-raises frame.pendingError if it is set.
+	// Emitted at the end of every finally body so that a type-mismatch error gets
+	// re-propagated after the finally block finishes.
+	OP_RERAISE_PENDING
 
 	// ── Error type declaration ────────────────────────────────────────────
 	OP_DEFINE_ERROR_TYPE // operand = name_idx<<16 | parent_name_idx (0 = no parent)
@@ -212,6 +228,12 @@ func OpName(op Opcode) string {
 		return "TRY_END"
 	case OP_CATCH:
 		return "CATCH"
+	case OP_TRY_SET_ERRORTYPE:
+		return "TRY_SET_ERRORTYPE"
+	case OP_TRY_SET_FINALLY:
+		return "TRY_SET_FINALLY"
+	case OP_RERAISE_PENDING:
+		return "RERAISE_PENDING"
 	case OP_DEFINE_ERROR_TYPE:
 		return "DEFINE_ERROR_TYPE"
 	case OP_MAKE_REFERENCE:

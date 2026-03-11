@@ -263,17 +263,53 @@ func (c *Compiler) compileForEachLoop(s *ast.ForEachLoop) error {
 }
 
 func (c *Compiler) compileTryStatement(s *ast.TryStatement) error {
-	// Layout:
-	// TRY_BEGIN(catch_offset)
-	// ...try body...
-	// TRY_END(end_offset)   <- jumps past catch+finally
-	// catch_offset: CATCH(error_var_idx<<16 | error_type_idx)
-	// ...catch body...
-	// end_offset:
-	// ...finally body... (always runs)
+	// Layout (no finally):
+	//   TRY_BEGIN(catch_offset)
+	//   [TRY_SET_ERRORTYPE(nameIdx+1)]   ← only when ErrorType is set
+	//   ...try body...
+	//   TRY_END(end_offset)              ← jumps past catch section
+	//   catch_offset:
+	//     PUSH_SCOPE
+	//     CATCH(error_var_idx)
+	//     ...catch body...
+	//     POP_SCOPE
+	//   end_offset:
+	//
+	// Layout (with finally):
+	//   TRY_BEGIN(catch_offset)
+	//   [TRY_SET_ERRORTYPE(nameIdx+1)]   ← only when ErrorType is set
+	//   TRY_SET_FINALLY(0)               ← placeholder; patched to finally_offset
+	//   ...try body...
+	//   TRY_END(end_offset)              ← jumps to end_offset = finally start
+	//   catch_offset:
+	//     PUSH_SCOPE
+	//     CATCH(error_var_idx)
+	//     ...catch body...
+	//     POP_SCOPE
+	//   end_offset (= finally_offset):
+	//   ...finally body...
+	//   RERAISE_PENDING                  ← re-raises error if type mismatched
+	//
+	// When handleError detects a type mismatch AND finallyOffset is set, it
+	// stores the error as frame.pendingError and jumps directly to finallyOffset,
+	// skipping the entire catch section.  RERAISE_PENDING then re-propagates the
+	// error after the finally body executes.
 
 	tryBeginPos := c.chunk.CurrentPos()
 	c.chunk.Emit(OP_TRY_BEGIN, 0) // placeholder for catch_offset
+
+	// If there's a type filter, record it in the try frame at runtime.
+	if s.ErrorType != "" {
+		nameIdx := c.chunk.AddName(s.ErrorType)
+		c.chunk.Emit(OP_TRY_SET_ERRORTYPE, nameIdx+1) // +1 so 0 means "no filter"
+	}
+
+	// If there's a finally block, reserve a placeholder for the finally offset.
+	tryFinallyPos := -1
+	if len(s.FinallyBody) > 0 {
+		tryFinallyPos = c.chunk.CurrentPos()
+		c.chunk.Emit(OP_TRY_SET_FINALLY, 0) // placeholder; patched below
+	}
 
 	if err := c.compileStatements(s.TryBody); err != nil {
 		return err
@@ -286,20 +322,18 @@ func (c *Compiler) compileTryStatement(s *ast.TryStatement) error {
 	catchOffset := uint32(c.chunk.CurrentPos())
 	c.chunk.PatchJump(tryBeginPos, catchOffset)
 
-	// CATCH instruction
-	var errVarIdx, errTypeIdx uint32
+	// CATCH instruction — operand is the error variable name index only;
+	// the type check has been moved to handleError.
+	var errVarIdx uint32
 	if s.ErrorVar != "" {
 		errVarIdx = c.chunk.AddName(s.ErrorVar)
-	}
-	if s.ErrorType != "" {
-		errTypeIdx = c.chunk.AddName(s.ErrorType) + 1 // 0 = match any type
 	}
 	// catch section: always push a fresh scope so the error variable is scoped
 	// to this handler and does not leak into subsequent try blocks (even if the
 	// catch body is empty, the scope is needed to contain the error variable).
 	c.chunk.Emit(OP_PUSH_SCOPE, 0)
 	c.scopeDepth++
-	c.chunk.Emit(OP_CATCH, errVarIdx<<16|errTypeIdx)
+	c.chunk.Emit(OP_CATCH, errVarIdx)
 
 	// catch body (inside the same scope as the error variable)
 	if len(s.ErrorBody) > 0 {
@@ -316,11 +350,18 @@ func (c *Compiler) compileTryStatement(s *ast.TryStatement) error {
 	endOffset := uint32(c.chunk.CurrentPos())
 	c.chunk.PatchJump(tryEndPos, endOffset)
 
+	// Patch the TRY_SET_FINALLY placeholder with the actual finally offset.
+	if tryFinallyPos >= 0 {
+		c.chunk.PatchJump(tryFinallyPos, endOffset)
+	}
+
 	// finally body (always runs)
 	if len(s.FinallyBody) > 0 {
 		if err := c.compileStatements(s.FinallyBody); err != nil {
 			return err
 		}
+		// After the finally body, re-raise any pending error from a type-mismatch path.
+		c.chunk.Emit(OP_RERAISE_PENDING, 0)
 	}
 
 	return nil

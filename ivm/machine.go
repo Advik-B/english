@@ -11,20 +11,27 @@ import (
 // ─── Machine ──────────────────────────────────────────────────────────────────
 
 type tryFrame struct {
-catchOffset uint32
-stackHeight int
-envDepth    int // number of envs on envStack when TRY_BEGIN was emitted
+catchOffset   uint32
+finallyOffset uint32 // 0 = no finally block; otherwise offset of the finally body start
+errorType     string // "" = catch-all; otherwise the required error type name
+stackHeight   int
+envDepth      int // number of envs on envStack when TRY_BEGIN was emitted
 }
 
 type callFrame struct {
-chunk    *Chunk
-ip       int
-stack    []interface{}
-env      *ivmEnv
-envStack []*ivmEnv // scopes pushed during this frame
-tryStack []tryFrame
-line     int
-name     string
+chunk        *Chunk
+ip           int
+stack        []interface{}
+env          *ivmEnv
+envStack     []*ivmEnv // scopes pushed during this frame
+tryStack     []tryFrame
+line         int
+name         string
+// pendingError is set to the *types.ErrorValue that needs to be re-raised after a
+// finally block runs.  This is used when a typed catch handler did not match the
+// error: handleError jumps to the finally body and stores the original error here;
+// OP_RERAISE_PENDING reads and clears it at the end of the finally body.
+pendingError *types.ErrorValue
 }
 
 // Machine executes a compiled Chunk.
@@ -156,6 +163,22 @@ ev = &types.ErrorValue{Message: e.message, ErrorType: "RuntimeError"}
 default:
 ev = &types.ErrorValue{Message: err.Error(), ErrorType: "RuntimeError"}
 }
+
+// If this try frame has a type filter, check it now.
+if tf.errorType != "" && !m.env().isSubtypeOf(ev.ErrorType, tf.errorType) {
+// Error type does not match this handler.
+if tf.finallyOffset != 0 {
+// There IS a finally block: run it, then re-raise.
+// Store the error so OP_RERAISE_PENDING can re-raise it after finally.
+frame.pendingError = ev
+frame.ip = int(tf.finallyOffset)
+return true, nil
+}
+// No finally block: keep searching up the call stack.
+continue
+}
+
+// Type matches (or no type filter): route to the catch handler.
 m.push(ev)
 frame.ip = int(tf.catchOffset)
 return true, nil
@@ -614,25 +637,32 @@ m.cur.tryStack = m.cur.tryStack[:len(m.cur.tryStack)-1]
 // Jump past the catch body to the finally/end section
 m.cur.ip = int(operand)
 
+case OP_TRY_SET_ERRORTYPE:
+// Set the error-type filter on the top try frame.
+// operand = nameIdx+1 (0 means catch-all / no filter).
+idx := len(m.cur.tryStack) - 1
+if idx >= 0 && operand > 0 {
+m.cur.tryStack[idx].errorType = chunk.Names[operand-1]
+}
+
+case OP_TRY_SET_FINALLY:
+// Record where the finally body starts in the top try frame.
+idx := len(m.cur.tryStack) - 1
+if idx >= 0 {
+m.cur.tryStack[idx].finallyOffset = operand
+}
+
 case OP_CATCH:
-// The error value is on top of stack (pushed by handleError)
-errVarIdx := operand >> 16
-errTypeIdx := operand & 0xFFFF
+// The error value is on top of stack (pushed by handleError).
+// The type check has already been performed in handleError, so we just
+// bind the error variable and pop the error from the stack.
+errVarIdx := operand
 
 errVal, ok := m.peek().(*types.ErrorValue)
 if !ok {
-// Not a typed error, just leave it (unlikely)
+// Not a typed error — pop and move on (shouldn't normally happen)
+m.pop()
 break
-}
-
-// Check error type filter
-if errTypeIdx > 0 {
-errTypeName := chunk.Names[errTypeIdx-1]
-if !m.env().isSubtypeOf(errVal.ErrorType, errTypeName) {
-// Type mismatch: re-raise the error
-_ = m.pop()
-return nil, false, errVal
-}
 }
 
 // Bind error to variable
@@ -646,6 +676,14 @@ m.pop()
 }
 } else {
 m.pop()
+}
+
+case OP_RERAISE_PENDING:
+// Re-raise frame.pendingError if it was set by a finally-on-mismatch path.
+if m.cur.pendingError != nil {
+reraise := m.cur.pendingError
+m.cur.pendingError = nil
+return nil, false, reraise
 }
 
 case OP_DEFINE_ERROR_TYPE:

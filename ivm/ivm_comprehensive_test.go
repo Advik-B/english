@@ -416,6 +416,58 @@ thats it.`)
 	}
 }
 
+func TestFinallyRunsOnTypeMismatch(t *testing.T) {
+	// When the error type does NOT match the handler, the finally block must
+	// still execute before the error propagates (matching astvm behavior).
+	out := captureOutput(func() {
+		_, err := run(`Declare NetworkError as an error type.
+Declare ValidationError as an error type.
+Try doing the following:
+    Raise "bad value" as ValidationError.
+on NetworkError:
+    Print "wrong handler".
+but finally:
+    Print "finally ran".
+thats it.`)
+		if err == nil {
+			t.Error("expected error to propagate when type doesn't match")
+		}
+	})
+	if !strings.Contains(out, "finally ran") {
+		t.Errorf("expected finally block to run on type mismatch, got output: %q", out)
+	}
+	if strings.Contains(out, "wrong handler") {
+		t.Errorf("wrong handler should not have run, got output: %q", out)
+	}
+}
+
+func TestFinallyRunsOnTypeMismatchFromFunction(t *testing.T) {
+	// Finally must run even when the error comes from a nested function call.
+	out := captureOutput(func() {
+		_, err := run(`Declare NetworkError as an error type.
+Declare ValidationError as an error type.
+Declare function validate that takes x and does the following:
+    Raise "bad value" as ValidationError.
+thats it.
+Try doing the following:
+    Call validate with 0.
+on NetworkError:
+    Print "wrong handler".
+but finally:
+    Print "finally ran".
+thats it.`)
+		if err == nil {
+			t.Error("expected error to propagate")
+		}
+	})
+	if !strings.Contains(out, "finally ran") {
+		t.Errorf("expected finally block to run, got output: %q", out)
+	}
+	if strings.Contains(out, "wrong handler") {
+		t.Errorf("wrong handler should not have run, got output: %q", out)
+	}
+}
+
 // ─── Stdlib functions ────────────────────────────────────────────────────────
 
 func TestStdlibMathFunctions(t *testing.T) {

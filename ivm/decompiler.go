@@ -26,22 +26,22 @@ func Decompile(chunk *Chunk) string {
 
 type decompiler struct {
 	// root chunk (used for struct-def and func lookups across sub-chunks)
-	root      *Chunk
+	root *Chunk
 	// current chunk being decoded
-	chunk     *Chunk
+	chunk *Chunk
 	// code pointer (index into chunk.Code)
-	ip        int
+	ip int
 	// expression stack – each entry is a Python expression string
 	exprStack []string
 	// output buffer for the current scope level
-	buf       *strings.Builder
-	indent    int
+	buf    *strings.Builder
+	indent int
 
 	// tracking which Python modules / helpers are needed
 	needsMath   bool
 	needsRandom bool
 	needsCopy   bool
-	helpers     map[string]bool // helperDef keys from transpiler/helpers.go
+	helpers   map[string]bool // helperDef keys from transpiler/helpers.go
 	// user-defined function names (to distinguish from stdlib)
 	userFuncs map[string]bool
 }
@@ -728,10 +728,11 @@ func (d *decompiler) decodeIf(cond string, falseTarget int) {
 	// The POP_SCOPE precedes the optional JUMP-to-end, which precedes falseTarget.
 	// We need to find the POP_SCOPE position.
 	thenBodyEnd := d.findMatchingPopScope(d.ip)
+	thenStart := d.buf.Len()
 	d.decodeRange(thenBodyEnd)
 
 	// Check if empty body
-	if d.indent > 0 && d.indentBodyEmpty() {
+	if d.indent > 0 && d.bodyEmpty(thenStart) {
 		d.emit("pass")
 	}
 	d.indent--
@@ -772,8 +773,9 @@ func (d *decompiler) decodeElseChain(endTarget int) {
 		d.indent++
 		d.ip++ // consume PUSH_SCOPE
 		elseBodyEnd := d.findMatchingPopScope(d.ip)
+		elseStart := d.buf.Len()
 		d.decodeRange(elseBodyEnd)
-		if d.indentBodyEmpty() {
+		if d.bodyEmpty(elseStart) {
 			d.emit("pass")
 		}
 		d.indent--
@@ -810,8 +812,9 @@ func (d *decompiler) decodeElseChain(endTarget int) {
 		d.ip++
 	}
 	elifBodyEnd := d.findMatchingPopScope(d.ip)
+	elifStart := d.buf.Len()
 	d.decodeRange(elifBodyEnd)
-	if d.indentBodyEmpty() {
+	if d.bodyEmpty(elifStart) {
 		d.emit("pass")
 	}
 	d.indent--
@@ -843,8 +846,9 @@ func (d *decompiler) decodeWhileBody(cond string, exitTarget int) {
 	}
 
 	bodyEnd := d.findMatchingPopScope(d.ip)
+	whileStart := d.buf.Len()
 	d.decodeRange(bodyEnd)
-	if d.indentBodyEmpty() {
+	if d.bodyEmpty(whileStart) {
 		d.emit("pass")
 	}
 	d.indent--
@@ -945,8 +949,9 @@ func (d *decompiler) decodeForEach(listHidden, listExpr, idxHidden string, loopS
 
 	d.emit(fmt.Sprintf("for %s in %s:", itemName, listExpr))
 	d.indent++
+	forEachStart := d.buf.Len()
 	d.decodeRange(bodyEnd)
-	if d.indentBodyEmpty() {
+	if d.bodyEmpty(forEachStart) {
 		d.emit("pass")
 	}
 	d.indent--
@@ -988,8 +993,9 @@ func (d *decompiler) decodeRepeatN(counterHidden, countExpr string, loopStart in
 
 	d.emit(fmt.Sprintf("for _ in range(int(%s)):", countExpr))
 	d.indent++
+	repeatStart := d.buf.Len()
 	d.decodeRange(bodyEnd)
-	if d.indentBodyEmpty() {
+	if d.bodyEmpty(repeatStart) {
 		d.emit("pass")
 	}
 	d.indent--
@@ -1025,8 +1031,9 @@ func (d *decompiler) decodeTry(catchOffset int) {
 
 	d.emit("try:")
 	d.indent++
+	tryStart := d.buf.Len()
 	d.decodeRange(tryEndPos) // decode try body
-	if d.indentBodyEmpty() {
+	if d.bodyEmpty(tryStart) {
 		d.emit("pass")
 	}
 	d.indent--
@@ -1064,8 +1071,9 @@ func (d *decompiler) decodeTry(catchOffset int) {
 		d.indent++
 		// Catch body ends at POP_SCOPE before endOffset
 		catchBodyEnd := d.findMatchingPopScope(d.ip)
+		catchStart := d.buf.Len()
 		d.decodeRange(catchBodyEnd)
-		if d.indentBodyEmpty() {
+		if d.bodyEmpty(catchStart) {
 			d.emit("pass")
 		}
 		d.indent--
@@ -1109,10 +1117,11 @@ func (d *decompiler) decodeFunc(fc *FuncChunk) {
 		bodyEnd = bodyLen - 2
 	}
 
+	funcBodyStart := d.buf.Len()
 	d.decode(0, bodyEnd)
 
 	// If no code emitted (only empty scope lines), emit pass
-	if d.indentBodyEmpty() {
+	if d.bodyEmpty(funcBodyStart) {
 		d.emit("pass")
 	}
 	d.indent--
@@ -1183,8 +1192,9 @@ func (d *decompiler) decodeMethod(fc *FuncChunk) {
 		bodyEnd = bodyLen - 2
 	}
 
+	methBodyStart := d.buf.Len()
 	d.decode(0, bodyEnd)
-	if d.indentBodyEmpty() {
+	if d.bodyEmpty(methBodyStart) {
 		d.emit("pass")
 	}
 	d.indent--
@@ -1200,6 +1210,7 @@ func (d *decompiler) evalDefaultExpr(chunk *Chunk) string {
 		return "None"
 	}
 	saved := d.chunk
+	savedIP := d.ip // must save/restore d.ip: d.decode resets it to 0
 	savedStack := d.exprStack
 	d.chunk = chunk
 	d.exprStack = nil
@@ -1216,6 +1227,7 @@ func (d *decompiler) evalDefaultExpr(chunk *Chunk) string {
 		result = "None"
 	}
 	d.chunk = saved
+	d.ip = savedIP
 	d.exprStack = savedStack
 	return result
 }
@@ -1293,19 +1305,11 @@ func findStructInChunk(chunk *Chunk, name string) *StructDef {
 	return nil
 }
 
-// indentBodyEmpty returns true if the last emitted content at the current
-// indent level was just the header (def/if/while/etc.) with no body lines.
-// We check by counting lines at the current indentation in the output.
-func (d *decompiler) indentBodyEmpty() bool {
-	s := d.buf.String()
-	prefix := strings.Repeat("    ", d.indent)
-	lines := strings.Split(s, "\n")
-	for _, line := range lines {
-		if strings.HasPrefix(line, prefix) && strings.TrimSpace(line) != "" {
-			return false
-		}
-	}
-	return true
+// bodyEmpty returns true if nothing was written to the output buffer since
+// bodyStart (the value of d.buf.Len() captured before entering the body).
+// This is an O(1) check — no string scanning required.
+func (d *decompiler) bodyEmpty(bodyStart int) bool {
+	return d.buf.Len() == bodyStart
 }
 
 // ─── formatting helpers ───────────────────────────────────────────────────────

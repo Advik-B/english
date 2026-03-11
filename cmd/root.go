@@ -3,11 +3,12 @@ package cmd
 import (
 	"english/ast"
 	"english/bytecode"
+	"english/ivm"
 	"english/parser"
 	"english/stacktraces"
 	"english/transpiler"
-	"english/vm"
-	"english/vm/stdlib"
+	"english/astvm"
+	"english/stdlib"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -45,11 +46,16 @@ var runCmd = &cobra.Command{
 	Args:  cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		filename := args[0]
+		vmFlag, _ := cmd.Flags().GetString("vm")
 		ext := strings.ToLower(filepath.Ext(filename))
 		if ext == ".101" {
 			RunBytecode(filename)
 		} else {
-			RunFile(filename)
+			if strings.EqualFold(vmFlag, "ast") {
+				RunFileAST(filename)
+			} else {
+				RunFileIVM(filename)
+			}
 		}
 	},
 }
@@ -59,11 +65,18 @@ var compileCmd = &cobra.Command{
 	Short: "Compile an English source file (.abc) to bytecode (.101)",
 	Long: `Compile an English source file to binary bytecode format.
 The output file will have the same name with .101 extension.
-Bytecode files can be executed directly without parsing.`,
+Bytecode files can be executed directly without parsing.
+
+By default the original source code is embedded as a trailing section in the
+.101 file so that "english transpile" can later reconstruct idiomatic Python
+without a separate .abc file.  Pass --strip (or --min) to omit the source
+trailer and produce a smaller, standalone bytecode file.`,
 	Args: cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		output, _ := cmd.Flags().GetString("output")
-		CompileFile(args[0], output)
+		strip, _ := cmd.Flags().GetBool("strip")
+		min, _ := cmd.Flags().GetBool("min")
+		CompileFileOptions(args[0], output, strip || min)
 	},
 }
 
@@ -108,11 +121,62 @@ func init() {
 	rootCmd.AddCommand(versionCmd)
 
 	compileCmd.Flags().StringP("output", "o", "", "Output file name (default: input file with .101 extension)")
+	compileCmd.Flags().Bool("strip", false, "Omit the source trailer (smaller file; 'transpile' will use opcode decompiler)")
+	compileCmd.Flags().Bool("min", false, "Alias for --strip")
+	_ = compileCmd.Flags().MarkHidden("min") // expose only --strip in help; --min still works
 	transpileCmd.Flags().BoolP("inline", "i", false, "Inline all imported .abc files into a single Python output file")
+	runCmd.Flags().StringP("vm", "V", "ivm", "VM to use for running .abc source files: 'ivm' (default) or 'ast'")
 }
 
-// RunFile executes an English source file
+// RunFile executes an English source file using the instruction VM (ivm) by default.
+// This is a convenience wrapper for RunFileIVM.
 func RunFile(filename string) {
+	RunFileIVM(filename)
+}
+
+// RunFileIVM parses and executes an English source file via the instruction-based VM.
+// It is the default execution path for .abc source files.
+func RunFileIVM(filename string) {
+	content, err := os.ReadFile(filename)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error reading file: %v\n", err)
+		os.Exit(1)
+	}
+
+	lexer := parser.NewLexer(string(content))
+	tokens := lexer.TokenizeAll()
+
+	p := parser.NewParser(tokens)
+	program, err := p.Parse()
+	if err != nil {
+		stacktraces.Print(err)
+		os.Exit(1)
+	}
+
+	typeErrs := vm.Check(program, stdlib.PredefinedNames()...)
+	if len(typeErrs) > 0 {
+		for _, e := range typeErrs {
+			stacktraces.Print(e)
+		}
+		os.Exit(1)
+	}
+
+	chunk, compileErr := ivm.Compile(program)
+	if compileErr != nil {
+		fmt.Fprintf(os.Stderr, "Compile error: %v\n", compileErr)
+		os.Exit(1)
+	}
+
+	_, execErr := ivm.Execute(chunk, stdlib.Eval, stdlib.PredefinedValues())
+	if execErr != nil {
+		stacktraces.Print(execErr)
+		os.Exit(1)
+	}
+}
+
+// RunFileAST parses and executes an English source file via the tree-walk evaluator.
+// Use the --vm=ast flag on the run command to select this path.
+func RunFileAST(filename string) {
 	content, err := os.ReadFile(filename)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error reading file: %v\n", err)
@@ -147,8 +211,17 @@ func RunFile(filename string) {
 	}
 }
 
-// CompileFile compiles an English source file to bytecode
+// CompileFile compiles an English source file to bytecode, embedding the
+// original source as a trailing section (for later transpilation).
+// This is a convenience wrapper around CompileFileOptions.
 func CompileFile(filename string, output string) {
+	CompileFileOptions(filename, output, false)
+}
+
+// CompileFileOptions compiles an English source file to bytecode.
+// When stripSource is true the source trailer is omitted, producing a smaller
+// file; "english transpile" will then fall back to opcode decompilation.
+func CompileFileOptions(filename string, output string, stripSource bool) {
 	content, err := os.ReadFile(filename)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error reading file: %v\n", err)
@@ -173,10 +246,21 @@ func CompileFile(filename string, output string) {
 		os.Exit(1)
 	}
 
-	encoder := bytecode.NewEncoder()
-	data, err := encoder.Encode(program)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Compile error: %v\n", err)
+	chunk, compileErr := ivm.Compile(program)
+	if compileErr != nil {
+		fmt.Fprintf(os.Stderr, "Compile error: %v\n", compileErr)
+		os.Exit(1)
+	}
+
+	var data []byte
+	var encodeErr error
+	if stripSource {
+		data, encodeErr = ivm.EncodeFile(chunk)
+	} else {
+		data, encodeErr = ivm.EncodeFileWithSource(chunk, string(content))
+	}
+	if encodeErr != nil {
+		fmt.Fprintf(os.Stderr, "Encode error: %v\n", encodeErr)
 		os.Exit(1)
 	}
 
@@ -231,6 +315,54 @@ func transpileWithOptions(filename string, inline bool, seen map[string]bool) {
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error reading file: %v\n", err)
 			os.Exit(1)
+		}
+
+		// Detect format: version 2 = ivm instruction format, version 1 = AST format.
+		// v2 files compiled with `english compile` carry the original source code as
+		// a trailing section; extract it and parse normally so the transpiler works
+		// from a full AST (identical output to transpiling the .abc directly).
+		// When no embedded source is present, fall back to direct opcode decompilation.
+		if len(data) >= 5 && data[4] == ivm.InstructionFormatVersion {
+			chunk, embeddedSrc, decodeErr := ivm.DecodeFileAll(data)
+			if decodeErr != nil {
+				fmt.Fprintf(os.Stderr, "Bytecode error: %v\n", decodeErr)
+				os.Exit(1)
+			}
+			if embeddedSrc != "" {
+				// Preferred path: re-parse the embedded source and use the full
+				// AST transpiler for idiomatic, comment-preserving output.
+				lexer := parser.NewLexer(embeddedSrc)
+				tokens := lexer.TokenizeAll()
+				p := parser.NewParser(tokens)
+				prog, parseErr := p.Parse()
+				if parseErr != nil {
+					stacktraces.Print(parseErr)
+					os.Exit(1)
+				}
+				typeErrs := vm.Check(prog, stdlib.PredefinedNames()...)
+				if len(typeErrs) > 0 {
+					for _, e := range typeErrs {
+						stacktraces.Print(e)
+					}
+					os.Exit(1)
+				}
+				if inline {
+					pySource = transpiler.NewTranspilerInlined().Transpile(prog)
+				} else {
+					sourceDir := filepath.Dir(filename)
+					pySource = transpiler.NewTranspiler().WithSourceDir(sourceDir).Transpile(prog)
+				}
+			} else {
+				// Fallback: decompile from pure opcode stream.
+				// Comments are lost but all logic is preserved.
+				pySource = ivm.Decompile(chunk)
+			}
+			if writeErr := os.WriteFile(output, []byte(pySource), 0644); writeErr != nil {
+				fmt.Fprintf(os.Stderr, "Error writing Python file: %v\n", writeErr)
+				os.Exit(1)
+			}
+			fmt.Printf("Transpiled %s -> %s\n", filename, output)
+			return
 		}
 
 		decoder := bytecode.NewDecoder(data)
@@ -311,6 +443,22 @@ func RunBytecode(filename string) {
 		os.Exit(1)
 	}
 
+	// Detect format version: version 2 = instruction-based ivm format
+	if len(data) >= 5 && data[4] == ivm.InstructionFormatVersion {
+		chunk, decodeErr := ivm.DecodeFile(data)
+		if decodeErr != nil {
+			fmt.Fprintf(os.Stderr, "Bytecode error: %v\n", decodeErr)
+			os.Exit(1)
+		}
+		_, execErr := ivm.Execute(chunk, stdlib.Eval, stdlib.PredefinedValues())
+		if execErr != nil {
+			stacktraces.Print(execErr)
+			os.Exit(1)
+		}
+		return
+	}
+
+	// Version 1: AST-based format
 	decoder := bytecode.NewDecoder(data)
 	program, err := decoder.Decode()
 	if err != nil {

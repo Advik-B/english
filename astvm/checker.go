@@ -3,7 +3,7 @@ package vm
 import (
 	"english/ast"
 	"english/parser"
-	"english/vm/types"
+	"english/astvm/types"
 	"fmt"
 	"os"
 	"path/filepath"

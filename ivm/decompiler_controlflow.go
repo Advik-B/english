@@ -1,7 +1,6 @@
 package ivm
 
 import (
-	"fmt"
 	"strings"
 )
 
@@ -63,7 +62,7 @@ func (d *decompiler) decodeLogicalAnd(left string, falseTarget int) {
 	d.ip++ // skip LOAD_CONST false
 	// end: now at endTarget
 	d.ip = endTarget
-	d.push(fmt.Sprintf("(%s and %s)", left, right))
+	d.push("(" + left + " and " + right + ")")
 }
 
 // decodeLogicalOr handles: [left]=cond, JUMP_IF_TRUE->trueTarget, [right], JUMP->end, trueTarget: LOAD_CONST true, end:
@@ -78,7 +77,7 @@ func (d *decompiler) decodeLogicalOr(left string, trueTarget int) {
 	// skip LOAD_CONST true at trueTarget
 	d.ip++
 	d.ip = endTarget
-	d.push(fmt.Sprintf("(%s or %s)", left, right))
+	d.push("(" + left + " or " + right + ")")
 }
 
 // ─── if / elif / else ─────────────────────────────────────────────────────────
@@ -86,7 +85,7 @@ func (d *decompiler) decodeLogicalOr(left string, trueTarget int) {
 // decodeIf handles: cond already popped, ip is just past JUMP_IF_FALSE, target=falseTarget.
 func (d *decompiler) decodeIf(cond string, falseTarget int) {
 	code := d.chunk.Code
-	d.emit("if " + cond + ":")
+	d.emit("if " + stripParens(cond) + ":")
 	d.indent++
 
 	// Consume PUSH_SCOPE
@@ -188,7 +187,7 @@ func (d *decompiler) decodeElseChain(endTarget int) {
 		}
 	}
 
-	d.emit("elif " + elifCond + ":")
+	d.emit("elif " + stripParens(elifCond) + ":")
 	d.indent++
 	if d.ip < len(code) && code[d.ip].Op == OP_PUSH_SCOPE {
 		d.ip++
@@ -219,7 +218,7 @@ func (d *decompiler) decodeElseChain(endTarget int) {
 // the loop (JUMP_IF_FALSE operand).
 func (d *decompiler) decodeWhileBody(cond string, exitTarget int) {
 	code := d.chunk.Code
-	d.emit("while " + cond + ":")
+	d.emit("while " + stripParens(cond) + ":")
 	d.indent++
 
 	// Consume PUSH_SCOPE
@@ -329,7 +328,7 @@ func (d *decompiler) decodeForEach(listHidden, listExpr, idxHidden string, loopS
 	// Find the POP_SCOPE for the body
 	bodyEnd := d.findMatchingPopScope(d.ip)
 
-	d.emit(fmt.Sprintf("for %s in %s:", itemName, listExpr))
+	d.emit("for " + itemName + " in " + listExpr + ":")
 	d.indent++
 	forEachStart := d.buf.Len()
 	d.decodeRange(bodyEnd)
@@ -373,7 +372,7 @@ func (d *decompiler) decodeRepeatN(counterHidden, countExpr string, loopStart in
 
 	bodyEnd := d.findMatchingPopScope(d.ip)
 
-	d.emit(fmt.Sprintf("for _ in range(int(%s)):", countExpr))
+	d.emit("for _ in range(int(" + countExpr + ")):")
 	d.indent++
 	repeatStart := d.buf.Len()
 	d.decodeRange(bodyEnd)
@@ -436,7 +435,7 @@ func (d *decompiler) decodeTry(catchOffset int) {
 			// catch any error
 			if errVarIdx > 0 {
 				errVar := d.rawName(errVarIdx)
-				clause = fmt.Sprintf("except Exception as %s:", errVar)
+				clause = "except Exception as " + errVar + ":"
 			} else {
 				clause = "except Exception:"
 			}
@@ -444,9 +443,9 @@ func (d *decompiler) decodeTry(catchOffset int) {
 			errType := d.rawName(errTypeIdx - 1)
 			if errVarIdx > 0 {
 				errVar := d.rawName(errVarIdx)
-				clause = fmt.Sprintf("except %s as %s:", errType, errVar)
+				clause = "except " + errType + " as " + errVar + ":"
 			} else {
-				clause = fmt.Sprintf("except %s:", errType)
+				clause = "except " + errType + ":"
 			}
 		}
 		d.emit(clause)

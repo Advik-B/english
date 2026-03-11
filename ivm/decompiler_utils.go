@@ -1,17 +1,25 @@
 package ivm
 
 import (
-	"fmt"
 	"strings"
 )
 
 // ─── helper utilities ─────────────────────────────────────────────────────────
 
-// findMatchingPopScope scans forward from start and returns the position of the
-// first OP_POP_SCOPE that closes the scope opened by the PUSH_SCOPE that
-// precedes start (i.e. the direct matching POP_SCOPE, accounting for nesting).
+// findMatchingPopScope returns the position of the OP_POP_SCOPE that closes
+// the scope opened by the PUSH_SCOPE immediately before start. Uses the
+// pre-computed per-chunk bracket table (O(1)) with a linear scan fallback.
 func (d *decompiler) findMatchingPopScope(start int) int {
 	code := d.chunk.Code
+	m := d.getChunkMeta(d.chunk)
+	// The PUSH_SCOPE that we want to close is immediately before start.
+	pushIdx := start - 1
+	if pushIdx >= 0 && pushIdx < len(code) && code[pushIdx].Op == OP_PUSH_SCOPE {
+		if pair := m.scopePair[pushIdx]; pair >= 0 {
+			return pair
+		}
+	}
+	// Fallback: scan forward accounting for nesting.
 	depth := 0
 	for i := start; i < len(code); i++ {
 		switch code[i].Op {
@@ -28,10 +36,18 @@ func (d *decompiler) findMatchingPopScope(start int) int {
 }
 
 // findMatchingTryEnd returns the position of the TRY_END that matches the
-// TRY_BEGIN that preceded position start. It accounts for nesting so that
-// inner try blocks (which also contain TRY_END) don't confuse the search.
+// TRY_BEGIN that preceded position start. Uses the per-chunk bracket table (O(1)).
 func (d *decompiler) findMatchingTryEnd(start int) int {
 	code := d.chunk.Code
+	m := d.getChunkMeta(d.chunk)
+	// The TRY_BEGIN that opened this try block is immediately before start.
+	tryIdx := start - 1
+	if tryIdx >= 0 && tryIdx < len(code) && code[tryIdx].Op == OP_TRY_BEGIN {
+		if pair := m.tryPair[tryIdx]; pair >= 0 {
+			return pair
+		}
+	}
+	// Fallback: linear scan accounting for nesting.
 	depth := 0
 	for i := start; i < len(code); i++ {
 		switch code[i].Op {
@@ -88,46 +104,72 @@ func (d *decompiler) bodyEmpty(bodyStart int) bool {
 // ─── formatting helpers ───────────────────────────────────────────────────────
 
 func (d *decompiler) fmtBinOp(left string, op BinOp, right string) string {
+	var sym string
 	switch op {
 	case BinAdd:
-		return fmt.Sprintf("(%s + %s)", left, right)
+		sym = " + "
 	case BinSub:
-		return fmt.Sprintf("(%s - %s)", left, right)
+		sym = " - "
 	case BinMul:
-		return fmt.Sprintf("(%s * %s)", left, right)
+		sym = " * "
 	case BinDiv:
-		return fmt.Sprintf("(%s / %s)", left, right)
+		sym = " / "
 	case BinMod:
-		return fmt.Sprintf("(%s %% %s)", left, right)
+		sym = " % "
 	case BinEq:
-		return fmt.Sprintf("(%s == %s)", left, right)
+		sym = " == "
 	case BinNeq:
-		return fmt.Sprintf("(%s != %s)", left, right)
+		sym = " != "
 	case BinLt:
-		return fmt.Sprintf("(%s < %s)", left, right)
+		sym = " < "
 	case BinLte:
-		return fmt.Sprintf("(%s <= %s)", left, right)
+		sym = " <= "
 	case BinGt:
-		return fmt.Sprintf("(%s > %s)", left, right)
+		sym = " > "
 	case BinGte:
-		return fmt.Sprintf("(%s >= %s)", left, right)
+		sym = " >= "
 	default:
-		return fmt.Sprintf("(%s ? %s)", left, right)
+		sym = " ? "
 	}
+	return "(" + left + sym + right + ")"
+}
+
+// stripParens removes a single layer of surrounding parentheses if the whole
+// expression is wrapped in them and they are balanced. Used to produce cleaner
+// PEP8 output for conditions: `if (x == 1):` → `if x == 1:`.
+func stripParens(s string) string {
+	if len(s) < 2 || s[0] != '(' || s[len(s)-1] != ')' {
+		return s
+	}
+	// Verify the opening '(' is matched by the closing ')' (not an inner pair).
+	depth := 0
+	for i, ch := range s {
+		switch ch {
+		case '(':
+			depth++
+		case ')':
+			depth--
+			if depth == 0 && i < len(s)-1 {
+				// The '(' at 0 was closed before the end — don't strip.
+				return s
+			}
+		}
+	}
+	return s[1 : len(s)-1]
 }
 
 func (d *decompiler) fmtCast(typeName, val string) string {
 	switch strings.ToLower(typeName) {
 	case "number", "float":
-		return fmt.Sprintf("float(%s)", val)
+		return "float(" + val + ")"
 	case "integer", "int":
-		return fmt.Sprintf("int(%s)", val)
+		return "int(" + val + ")"
 	case "text", "string", "str":
-		return fmt.Sprintf("str(%s)", val)
+		return "str(" + val + ")"
 	case "boolean", "bool":
-		return fmt.Sprintf("bool(%s)", val)
+		return "bool(" + val + ")"
 	default:
-		return fmt.Sprintf("%s(%s)", typeName, val)
+		return typeName + "(" + val + ")"
 	}
 }
 

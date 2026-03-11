@@ -9,7 +9,6 @@ package ivm
 // would produce from the original source (modulo comment loss).
 
 import (
-	"fmt"
 	"math"
 	"strconv"
 	"strings"
@@ -24,13 +23,23 @@ func Decompile(chunk *Chunk) string {
 
 // ─── decompiler struct ────────────────────────────────────────────────────────
 
+// chunkMeta holds pre-computed, per-chunk data to speed up repeated lookups.
+type chunkMeta struct {
+	// constFmt[i] == fmtValue(chunk.Constants[i]): avoids repeated formatting.
+	constFmt []string
+	// scopePair[pushIdx] == matchingPopIdx for PUSH_SCOPE/POP_SCOPE pairs.
+	scopePair []int
+	// tryPair[tryBeginIdx] == matchingTryEndIdx for TRY_BEGIN/TRY_END pairs.
+	tryPair []int
+}
+
 type decompiler struct {
 	// root chunk (used for struct-def and func lookups across sub-chunks)
 	root *Chunk
 	// current chunk being decoded
 	chunk *Chunk
 	// code pointer (index into chunk.Code)
-	ip        int
+	ip int
 	// expression stack – each entry is a Python expression string
 	exprStack []string
 	// output buffer for the current scope level
@@ -44,19 +53,82 @@ type decompiler struct {
 	helpers     map[string]bool // helperDef keys from transpiler/helpers.go
 	// user-defined function names (to distinguish from stdlib)
 	userFuncs map[string]bool
+	// userImports collects "from X import Y" lines for PEP8 E402: all imports
+	// are hoisted to the top of the generated file in finish().
+	userImports []string
+
+	// Per-chunk metadata cache: keyed by chunk pointer, computed lazily.
+	// This is correct across sub-chunks (functions/methods) because each
+	// chunk has its own Constants, Code, etc.
+	chunkMetas map[*Chunk]*chunkMeta
+	// Whether the last thing emitted at indent==0 was a def/class body
+	// (tracked to emit required E302/E305 blank lines).
+	lastWasTopDef bool
 }
 
 func newDecompiler(root *Chunk) *decompiler {
 	var buf strings.Builder
 	d := &decompiler{
-		root:      root,
-		chunk:     root,
-		buf:       &buf,
-		helpers:   make(map[string]bool),
-		userFuncs: make(map[string]bool),
+		root:       root,
+		chunk:      root,
+		buf:        &buf,
+		helpers:    make(map[string]bool),
+		userFuncs:  make(map[string]bool),
+		chunkMetas: make(map[*Chunk]*chunkMeta),
 	}
 	d.scanUserFuncs(root)
 	return d
+}
+
+// getChunkMeta returns (or lazily computes) the pre-computed metadata for chunk.
+// Using chunk-pointer keying ensures each sub-chunk (function body, method body, etc.)
+// gets the correct metadata derived from its own constants and code.
+func (d *decompiler) getChunkMeta(chunk *Chunk) *chunkMeta {
+	if m, ok := d.chunkMetas[chunk]; ok {
+		return m
+	}
+	m := &chunkMeta{}
+
+	// Pre-format all constants for this chunk.
+	m.constFmt = make([]string, len(chunk.Constants))
+	for i, v := range chunk.Constants {
+		m.constFmt[i] = fmtValue(v)
+	}
+
+	// Build scope and try bracket pairs in a single pass.
+	// Both use -1 as sentinel for unmatched (consistent convention).
+	code := chunk.Code
+	n := len(code)
+	m.scopePair = make([]int, n)
+	m.tryPair = make([]int, n)
+	for i := range m.scopePair {
+		m.scopePair[i] = -1 // sentinel: unmatched
+		m.tryPair[i] = -1   // sentinel: unmatched
+	}
+	var scopeStack, tryStack []int
+	for i, instr := range code {
+		switch instr.Op {
+		case OP_PUSH_SCOPE:
+			scopeStack = append(scopeStack, i)
+		case OP_POP_SCOPE:
+			if len(scopeStack) > 0 {
+				top := scopeStack[len(scopeStack)-1]
+				scopeStack = scopeStack[:len(scopeStack)-1]
+				m.scopePair[top] = i
+			}
+		case OP_TRY_BEGIN:
+			tryStack = append(tryStack, i)
+		case OP_TRY_END:
+			if len(tryStack) > 0 {
+				top := tryStack[len(tryStack)-1]
+				tryStack = tryStack[:len(tryStack)-1]
+				m.tryPair[top] = i
+			}
+		}
+	}
+
+	d.chunkMetas[chunk] = m
+	return m
 }
 
 // scanUserFuncs pre-populates userFuncs so stdlib names don't collide.
@@ -78,6 +150,7 @@ func (d *decompiler) finish() string {
 	var out strings.Builder
 	out.WriteString("# Decompiled from ivm bytecode\n")
 
+	// Standard-library imports (PEP8 E402: all imports at top).
 	if d.needsMath {
 		out.WriteString("import math\n")
 	}
@@ -87,7 +160,18 @@ func (d *decompiler) finish() string {
 	if d.needsCopy {
 		out.WriteString("import copy\n")
 	}
-	hasMod := d.needsMath || d.needsRandom || d.needsCopy
+
+	// User-module imports (hoisted to top to satisfy PEP8 E402).
+	// Deduplicate while preserving order.
+	seen := make(map[string]bool, len(d.userImports))
+	for _, imp := range d.userImports {
+		if !seen[imp] {
+			seen[imp] = true
+			out.WriteString(imp + "\n")
+		}
+	}
+
+	hasMod := d.needsMath || d.needsRandom || d.needsCopy || len(d.userImports) > 0
 	if hasMod && len(d.helpers) > 0 {
 		out.WriteByte('\n')
 	}
@@ -112,6 +196,19 @@ func (d *decompiler) emit(s string) {
 	if s == "" {
 		return
 	}
+	// PEP8 E302/E305: two blank lines are required before and after top-level
+	// function/class definitions. We insert them once here, triggered either by
+	// the end of a previous top-level def (lastWasTopDef) or by the start of a
+	// new def/class when prior code exists.
+	if d.indent == 0 && d.buf.Len() > 0 {
+		needsBlank := d.lastWasTopDef ||
+			strings.HasPrefix(s, "def ") ||
+			strings.HasPrefix(s, "class ")
+		if needsBlank {
+			d.buf.WriteString("\n\n")
+		}
+	}
+	d.lastWasTopDef = false
 	d.buf.WriteString(strings.Repeat("    ", d.indent))
 	d.buf.WriteString(s)
 	d.buf.WriteByte('\n')
@@ -161,7 +258,7 @@ func (d *decompiler) rawName(idx uint32) string {
 	if int(idx) < len(d.chunk.Names) {
 		return d.chunk.Names[idx]
 	}
-	return fmt.Sprintf("__n%d", idx)
+	return "__n" + strconv.FormatUint(uint64(idx), 10)
 }
 
 func (d *decompiler) pyName(idx uint32) string {
@@ -190,6 +287,10 @@ var pyKeywords = map[string]bool{
 // ─── constant formatting ──────────────────────────────────────────────────────
 
 func (d *decompiler) fmtConst(idx uint32) string {
+	m := d.getChunkMeta(d.chunk)
+	if int(idx) < len(m.constFmt) {
+		return m.constFmt[idx]
+	}
 	if int(idx) >= len(d.chunk.Constants) {
 		return "None"
 	}
@@ -213,7 +314,7 @@ func fmtValue(v interface{}) string {
 		}
 		return strconv.FormatFloat(val, 'g', -1, 64)
 	case string:
-		return fmt.Sprintf("%q", val)
+		return strconv.Quote(val)
 	case bool:
 		if val {
 			return "True"
@@ -228,7 +329,7 @@ func fmtValue(v interface{}) string {
 		}
 		return "[" + strings.Join(parts, ", ") + "]"
 	default:
-		return fmt.Sprintf("None  # %T", v)
+		return "None"
 	}
 }
 
@@ -394,7 +495,7 @@ func (d *decompiler) processInstr(instr Instruction) { //nolint:gocyclo
 		obj := d.pop()
 		meth := d.rawName(methIdx)
 		argStr := strings.Join(args, ", ")
-		d.push(fmt.Sprintf("%s.%s(%s)", obj, meth, argStr))
+		d.push(obj + "." + meth + "(" + argStr + ")")
 
 	case OP_RETURN:
 		val := d.pop()
@@ -450,40 +551,39 @@ func (d *decompiler) processInstr(instr Instruction) { //nolint:gocyclo
 	case OP_INDEX_GET:
 		idx := d.pop()
 		list := d.pop()
-		// ivm uses 0-based indexing internally
-		d.push(fmt.Sprintf("%s[%s]", list, idx))
+		d.push(list + "[" + idx + "]")
 
 	case OP_INDEX_SET:
 		val := d.pop()
 		idx := d.pop()
 		listName := d.pyName(operand)
-		d.emit(fmt.Sprintf("%s[%s] = %s", listName, idx, val))
+		d.emit(listName + "[" + idx + "] = " + val)
 
 	case OP_LENGTH:
 		val := d.pop()
-		d.push(fmt.Sprintf("len(%s)", val))
+		d.push("len(" + val + ")")
 
 	// ── Lookup table ──────────────────────────────────────────────────────────
 	case OP_LOOKUP_GET:
 		key := d.pop()
 		table := d.pop()
-		d.push(fmt.Sprintf("%s[%s]", table, key))
+		d.push(table + "[" + key + "]")
 
 	case OP_LOOKUP_SET:
 		val := d.pop()
 		key := d.pop()
 		tableName := d.pyName(operand)
-		d.emit(fmt.Sprintf("%s[%s] = %s", tableName, key, val))
+		d.emit(tableName + "[" + key + "] = " + val)
 
 	case OP_LOOKUP_HAS:
 		key := d.pop()
 		table := d.pop()
-		d.push(fmt.Sprintf("(%s in %s)", key, table))
+		d.push(key + " in " + table)
 
 	// ── Type operations ───────────────────────────────────────────────────────
 	case OP_TYPEOF:
 		val := d.pop()
-		d.push(fmt.Sprintf("type(%s).__name__", val))
+		d.push("type(" + val + ").__name__")
 
 	case OP_CAST:
 		val := d.pop()
@@ -493,21 +593,21 @@ func (d *decompiler) processInstr(instr Instruction) { //nolint:gocyclo
 	case OP_NIL_CHECK:
 		val := d.pop()
 		if operand == 1 {
-			d.push(fmt.Sprintf("(%s is not None)", val))
+			d.push(val + " is not None")
 		} else {
-			d.push(fmt.Sprintf("(%s is None)", val))
+			d.push(val + " is None")
 		}
 
 	case OP_ERROR_TYPE_CHECK:
 		val := d.pop()
 		typeName := d.pyName(operand)
-		d.push(fmt.Sprintf("isinstance(%s, %s)", val, typeName))
+		d.push("isinstance(" + val + ", " + typeName + ")")
 
 	// ── Input ─────────────────────────────────────────────────────────────────
 	case OP_ASK:
 		if operand == 1 {
 			prompt := d.pop()
-			d.push(fmt.Sprintf("input(%s)", prompt))
+			d.push("input(" + prompt + ")")
 		} else {
 			d.push("input()")
 		}
@@ -515,7 +615,7 @@ func (d *decompiler) processInstr(instr Instruction) { //nolint:gocyclo
 	// ── Location ──────────────────────────────────────────────────────────────
 	case OP_LOCATION:
 		name := d.pyName(operand)
-		d.push(fmt.Sprintf("id(%s)", name))
+		d.push("id(" + name + ")")
 
 	// ── Structs ───────────────────────────────────────────────────────────────
 	case OP_DEFINE_STRUCT:
@@ -538,27 +638,27 @@ func (d *decompiler) processInstr(instr Instruction) { //nolint:gocyclo
 		} else {
 			parts = fieldVals
 		}
-		d.push(fmt.Sprintf("%s(%s)", structName, strings.Join(parts, ", ")))
+		d.push(structName + "(" + strings.Join(parts, ", ") + ")")
 
 	case OP_GET_FIELD:
 		obj := d.pop()
 		field := d.pyName(operand)
-		d.push(fmt.Sprintf("%s.%s", obj, field))
+		d.push(obj + "." + field)
 
 	case OP_SET_FIELD:
 		val := d.pop()
 		obj := d.pop()
 		field := d.pyName(operand)
-		d.emit(fmt.Sprintf("%s.%s = %s", obj, field, val))
+		d.emit(obj + "." + field + " = " + val)
 
 	// ── Error handling ────────────────────────────────────────────────────────
 	case OP_RAISE:
 		msg := d.pop()
 		if operand == 0 {
-			d.emit(fmt.Sprintf("raise Exception(%s)", msg))
+			d.emit("raise Exception(" + msg + ")")
 		} else {
 			typeName := d.pyName(operand - 1)
-			d.emit(fmt.Sprintf("raise %s(%s)", typeName, msg))
+			d.emit("raise " + typeName + "(" + msg + ")")
 		}
 
 	case OP_TRY_BEGIN:
@@ -577,7 +677,14 @@ func (d *decompiler) processInstr(instr Instruction) { //nolint:gocyclo
 		} else {
 			parent = d.rawName(parentIdx - 1)
 		}
-		d.emit(fmt.Sprintf("class %s(%s): pass", typeName, parent))
+		// PEP8 E302/E701: blank lines are handled by emit(); body on its own line.
+		d.emit("class " + typeName + "(" + parent + "):")
+		d.indent++
+		d.emit("pass")
+		d.indent--
+		if d.indent == 0 {
+			d.lastWasTopDef = true
+		}
 
 	// ── Reference / copy ──────────────────────────────────────────────────────
 	case OP_MAKE_REFERENCE:
@@ -587,7 +694,7 @@ func (d *decompiler) processInstr(instr Instruction) { //nolint:gocyclo
 	case OP_MAKE_COPY:
 		val := d.pop()
 		d.needsCopy = true
-		d.push(fmt.Sprintf("copy.deepcopy(%s)", val))
+		d.push("copy.deepcopy(" + val + ")")
 
 	// ── Import ────────────────────────────────────────────────────────────────
 	case OP_IMPORT:
@@ -608,16 +715,19 @@ func (d *decompiler) processInstr(instr Instruction) { //nolint:gocyclo
 		path := strings.Trim(pathExpr, "\"")
 		moduleName := pathToModuleName(path)
 
+		// Collect imports for hoisting to the top of the file (PEP8 E402).
+		var stmt string
 		if importAll || len(items) == 0 {
-			d.emit(fmt.Sprintf("from %s import *", moduleName))
+			stmt = "from " + moduleName + " import *"
 		} else {
-			d.emit(fmt.Sprintf("from %s import %s", moduleName, strings.Join(items, ", ")))
+			stmt = "from " + moduleName + " import " + strings.Join(items, ", ")
 		}
+		d.userImports = append(d.userImports, stmt)
 
 	// ── Normally-never-seen-standalone ────────────────────────────────────────
 	default:
 		// emit a comment so the output is still valid Python
-		d.emit(fmt.Sprintf("pass  # unhandled opcode %s", OpName(op)))
+		d.emit("pass  # unhandled opcode " + OpName(op))
 	}
 
 	_ = code // suppress unused warning (code is used via d.chunk.Code in helpers)

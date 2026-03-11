@@ -1,7 +1,6 @@
 package ivm
 
 import (
-	"fmt"
 	"strings"
 )
 
@@ -12,7 +11,8 @@ func (d *decompiler) decodeFunc(fc *FuncChunk) {
 	for i, p := range fc.Params {
 		params[i] = sanitizeDecompIdent(p)
 	}
-	d.emit(fmt.Sprintf("def %s(%s):", sanitizeDecompIdent(fc.Name), strings.Join(params, ", ")))
+	// PEP8 E302 blank lines are handled automatically by emit().
+	d.emit("def " + sanitizeDecompIdent(fc.Name) + "(" + strings.Join(params, ", ") + "):")
 	d.indent++
 
 	saved := d.chunk
@@ -43,12 +43,18 @@ func (d *decompiler) decodeFunc(fc *FuncChunk) {
 	d.chunk = saved
 	d.ip = savedIP
 	d.exprStack = savedStack
+
+	// PEP8 E305: two blank lines after a top-level function definition.
+	if d.indent == 0 {
+		d.lastWasTopDef = true
+	}
 }
 
 // ─── structs ──────────────────────────────────────────────────────────────────
 
 func (d *decompiler) decodeStruct(sd *StructDef) {
-	d.emit(fmt.Sprintf("class %s:", sd.Name))
+	// PEP8 E302 blank lines are handled automatically by emit().
+	d.emit("class " + sd.Name + ":")
 	d.indent++
 	d.emit("def __init__(self, " + d.structInitParams(sd) + "):")
 	d.indent++
@@ -57,16 +63,22 @@ func (d *decompiler) decodeStruct(sd *StructDef) {
 	} else {
 		for _, f := range sd.Fields {
 			// self.field = field  (parameter carries the default from structInitParams)
-			d.emit(fmt.Sprintf("self.%s = %s", f.Name, sanitizeDecompIdent(f.Name)))
+			d.emit("self." + f.Name + " = " + sanitizeDecompIdent(f.Name))
 		}
 	}
 	d.indent--
 
-	// Methods
+	// Methods — PEP8 E301: one blank line before each method inside a class.
 	for _, m := range sd.Methods {
+		d.buf.WriteByte('\n')
 		d.decodeMethod(m)
 	}
 	d.indent--
+
+	// PEP8 E305: two blank lines after a top-level class definition.
+	if d.indent == 0 {
+		d.lastWasTopDef = true
+	}
 }
 
 func (d *decompiler) structInitParams(sd *StructDef) string {
@@ -75,7 +87,7 @@ func (d *decompiler) structInitParams(sd *StructDef) string {
 		var defExpr string
 		if f.DefaultExprChunk != nil {
 			defExpr = d.evalDefaultExpr(f.DefaultExprChunk)
-			parts[i] = fmt.Sprintf("%s=%s", sanitizeDecompIdent(f.Name), defExpr)
+			parts[i] = sanitizeDecompIdent(f.Name) + "=" + defExpr
 		} else {
 			parts[i] = sanitizeDecompIdent(f.Name)
 		}
@@ -89,7 +101,7 @@ func (d *decompiler) decodeMethod(fc *FuncChunk) {
 	for i, p := range fc.Params {
 		params[i+1] = sanitizeDecompIdent(p)
 	}
-	d.emit(fmt.Sprintf("def %s(%s):", sanitizeDecompIdent(fc.Name), strings.Join(params, ", ")))
+	d.emit("def " + sanitizeDecompIdent(fc.Name) + "(" + strings.Join(params, ", ") + "):")
 	d.indent++
 
 	saved := d.chunk

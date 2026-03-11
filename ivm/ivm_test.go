@@ -870,17 +870,17 @@ t.Errorf("missing and operator in:\n%s", py)
 }
 
 func TestDecompileCustomErrorType(t *testing.T) {
-py, err := decompileSource(`Declare MyError as an error type.
+	py, err := decompileSource(`Declare MyError as an error type.
 Declare ChildError as a type of MyError.`)
-if err != nil {
-t.Fatal(err)
-}
-if !strings.Contains(py, "class MyError(Exception): pass") {
-t.Errorf("missing error class def in:\n%s", py)
-}
-if !strings.Contains(py, "class ChildError(MyError): pass") {
-t.Errorf("missing child error class def in:\n%s", py)
-}
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(py, "class MyError(Exception):") {
+		t.Errorf("missing error class def in:\n%s", py)
+	}
+	if !strings.Contains(py, "class ChildError(MyError):") {
+		t.Errorf("missing child error class def in:\n%s", py)
+	}
 }
 
 func TestDecompileMathFunctions(t *testing.T) {

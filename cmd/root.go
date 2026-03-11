@@ -296,40 +296,41 @@ func transpileWithOptions(filename string, inline bool, seen map[string]bool) {
 		// v2 files compiled with `english compile` carry the original source code as
 		// a trailing section; extract it and parse normally so the transpiler works
 		// from a full AST (identical output to transpiling the .abc directly).
+		// When no embedded source is present, fall back to direct opcode decompilation.
 		if len(data) >= 5 && data[4] == ivm.InstructionFormatVersion {
-			_, embeddedSrc, decodeErr := ivm.DecodeFileAll(data)
+			chunk, embeddedSrc, decodeErr := ivm.DecodeFileAll(data)
 			if decodeErr != nil {
 				fmt.Fprintf(os.Stderr, "Bytecode error: %v\n", decodeErr)
 				os.Exit(1)
 			}
-			if embeddedSrc == "" {
-				srcFile := strings.TrimSuffix(filename, filepath.Ext(filename)) + ".abc"
-				fmt.Fprintf(os.Stderr,
-					"Error: %q was compiled without embedded source and cannot be transpiled.\n"+
-						"Recompile with 'english compile %s' and try again.\n",
-					filename, srcFile)
-				os.Exit(1)
-			}
-			lexer := parser.NewLexer(embeddedSrc)
-			tokens := lexer.TokenizeAll()
-			p := parser.NewParser(tokens)
-			prog, parseErr := p.Parse()
-			if parseErr != nil {
-				stacktraces.Print(parseErr)
-				os.Exit(1)
-			}
-			typeErrs := vm.Check(prog, stdlib.PredefinedNames()...)
-			if len(typeErrs) > 0 {
-				for _, e := range typeErrs {
-					stacktraces.Print(e)
+			if embeddedSrc != "" {
+				// Preferred path: re-parse the embedded source and use the full
+				// AST transpiler for idiomatic, comment-preserving output.
+				lexer := parser.NewLexer(embeddedSrc)
+				tokens := lexer.TokenizeAll()
+				p := parser.NewParser(tokens)
+				prog, parseErr := p.Parse()
+				if parseErr != nil {
+					stacktraces.Print(parseErr)
+					os.Exit(1)
 				}
-				os.Exit(1)
-			}
-			if inline {
-				pySource = transpiler.NewTranspilerInlined().Transpile(prog)
+				typeErrs := vm.Check(prog, stdlib.PredefinedNames()...)
+				if len(typeErrs) > 0 {
+					for _, e := range typeErrs {
+						stacktraces.Print(e)
+					}
+					os.Exit(1)
+				}
+				if inline {
+					pySource = transpiler.NewTranspilerInlined().Transpile(prog)
+				} else {
+					sourceDir := filepath.Dir(filename)
+					pySource = transpiler.NewTranspiler().WithSourceDir(sourceDir).Transpile(prog)
+				}
 			} else {
-				sourceDir := filepath.Dir(filename)
-				pySource = transpiler.NewTranspiler().WithSourceDir(sourceDir).Transpile(prog)
+				// Fallback: decompile from pure opcode stream.
+				// Comments are lost but all logic is preserved.
+				pySource = ivm.Decompile(chunk)
 			}
 			if writeErr := os.WriteFile(output, []byte(pySource), 0644); writeErr != nil {
 				fmt.Fprintf(os.Stderr, "Error writing Python file: %v\n", writeErr)

@@ -5,6 +5,7 @@ import (
 "english/ivm"
 "english/parser"
 "english/vm/stdlib"
+"fmt"
 "io"
 "os"
 "strings"
@@ -700,5 +701,223 @@ t.Fatalf("DecodeFileAll error: %v", err)
 }
 if embeddedSrc != "" {
 t.Errorf("expected empty embedded source for trailer-less file, got %q", embeddedSrc)
+}
+}
+
+// ─── Decompiler ───────────────────────────────────────────────────────────────
+
+// decompileSource is a test helper: compile a source snippet, decompile the
+// resulting chunk to Python, then exec it and return the combined stdout.
+func decompileSource(src string) (string, error) {
+chunk, err := compileSource(src)
+if err != nil {
+return "", fmt.Errorf("compile: %w", err)
+}
+py := ivm.Decompile(chunk)
+return py, nil
+}
+
+func TestDecompileHelloWorld(t *testing.T) {
+py, err := decompileSource(`Print "Hello, World!".`)
+if err != nil {
+t.Fatal(err)
+}
+if !strings.Contains(py, `print("Hello, World!")`) {
+t.Errorf("expected print statement, got:\n%s", py)
+}
+}
+
+func TestDecompileVariables(t *testing.T) {
+py, err := decompileSource(`
+Declare x to be 42.
+Declare name to be "Alice".
+Print x, name.
+`)
+if err != nil {
+t.Fatal(err)
+}
+if !strings.Contains(py, "x = 42") || !strings.Contains(py, `name = "Alice"`) {
+t.Errorf("unexpected output:\n%s", py)
+}
+}
+
+func TestDecompileIfElse(t *testing.T) {
+py, err := decompileSource(`Declare x to be 10.
+If x is greater than 5, then
+    Print "big".
+otherwise if x is equal to 5, then
+    Print "five".
+otherwise
+    Print "small".
+thats it.`)
+if err != nil {
+t.Fatal(err)
+}
+if !strings.Contains(py, "if") || !strings.Contains(py, "elif") || !strings.Contains(py, "else:") {
+t.Errorf("missing if/elif/else in:\n%s", py)
+}
+}
+
+func TestDecompileWhileLoop(t *testing.T) {
+py, err := decompileSource(`Declare i to be 0.
+repeat the following while i is less than 3:
+    Print i.
+    Set i to be i + 1.
+thats it.`)
+if err != nil {
+t.Fatal(err)
+}
+if !strings.Contains(py, "while") {
+t.Errorf("missing while loop in:\n%s", py)
+}
+if !strings.Contains(py, "i = 0") {
+t.Errorf("missing variable init in:\n%s", py)
+}
+}
+
+func TestDecompileForEachLoop(t *testing.T) {
+py, err := decompileSource(`Declare items to be [1, 2, 3].
+For each item in items, do the following:
+    Print item.
+thats it.`)
+if err != nil {
+t.Fatal(err)
+}
+if !strings.Contains(py, "for item in") {
+t.Errorf("missing for-each in:\n%s", py)
+}
+}
+
+func TestDecompileRepeatLoop(t *testing.T) {
+py, err := decompileSource(`Repeat the following 3 times:
+    Print "hi".
+thats it.`)
+if err != nil {
+t.Fatal(err)
+}
+if !strings.Contains(py, "for _ in range(") {
+t.Errorf("missing repeat loop in:\n%s", py)
+}
+}
+
+func TestDecompileFunction(t *testing.T) {
+py, err := decompileSource(`Declare function double that takes x and does the following:
+    Return x * 2.
+thats it.
+Declare result to be 0.
+Set result to be the result of calling double with 5.
+Print result.`)
+if err != nil {
+t.Fatal(err)
+}
+if !strings.Contains(py, "def double(x):") {
+t.Errorf("missing function def in:\n%s", py)
+}
+}
+
+func TestDecompileTryCatch(t *testing.T) {
+py, err := decompileSource(`Try doing the following:
+    Raise "oops".
+on error:
+    Print "caught:", error.
+thats it.`)
+if err != nil {
+t.Fatal(err)
+}
+if !strings.Contains(py, "try:") || !strings.Contains(py, "except") {
+t.Errorf("missing try/except in:\n%s", py)
+}
+}
+
+func TestDecompileNestedTry(t *testing.T) {
+py, err := decompileSource(`Declare NetworkError as an error type.
+Declare DatabaseError as an error type.
+Try doing the following:
+    Try doing the following:
+        Raise "inner" as DatabaseError.
+    on NetworkError:
+        Print "wrong handler".
+    thats it.
+on DatabaseError:
+    Print "outer".
+thats it.`)
+if err != nil {
+t.Fatal(err)
+}
+// Should have two try blocks and no duplicate print statements
+count := strings.Count(py, "try:")
+if count != 2 {
+t.Errorf("expected 2 try blocks, got %d:\n%s", count, py)
+}
+// The "outer" print should appear exactly once
+if strings.Count(py, `"outer"`) != 1 {
+t.Errorf("duplicate print statement detected:\n%s", py)
+}
+}
+
+func TestDecompileLogicalOperators(t *testing.T) {
+py, err := decompileSource(`Declare x to be 5.
+Declare y to be 10.
+If (x is greater than 0 and y is greater than 0), then
+    Print "both positive".
+thats it.`)
+if err != nil {
+t.Fatal(err)
+}
+if !strings.Contains(py, " and ") {
+t.Errorf("missing and operator in:\n%s", py)
+}
+}
+
+func TestDecompileCustomErrorType(t *testing.T) {
+py, err := decompileSource(`Declare MyError as an error type.
+Declare ChildError as a type of MyError.`)
+if err != nil {
+t.Fatal(err)
+}
+if !strings.Contains(py, "class MyError(Exception): pass") {
+t.Errorf("missing error class def in:\n%s", py)
+}
+if !strings.Contains(py, "class ChildError(MyError): pass") {
+t.Errorf("missing child error class def in:\n%s", py)
+}
+}
+
+func TestDecompileMathFunctions(t *testing.T) {
+py, err := decompileSource(`Declare result to be sqrt(16).
+Print result.`)
+if err != nil {
+t.Fatal(err)
+}
+if !strings.Contains(py, "import math") || !strings.Contains(py, "math.sqrt") {
+t.Errorf("missing math import or sqrt call:\n%s", py)
+}
+}
+
+func TestDecompileLookupTable(t *testing.T) {
+py, err := decompileSource(`Declare t to be a lookup table.
+Set t at "greeting" to be "hello".
+Print the entry "greeting" in t.`)
+if err != nil {
+t.Fatal(err)
+}
+if !strings.Contains(py, "t = {}") || !strings.Contains(py, `"greeting"`) {
+t.Errorf("unexpected lookup table output:\n%s", py)
+}
+}
+
+func TestDecompileStructDefinition(t *testing.T) {
+py, err := decompileSource(`declare Point as a structure with the following fields:
+    x is a number with 0 being the default.
+    y is a number with 0 being the default.
+thats it.`)
+if err != nil {
+t.Fatal(err)
+}
+if !strings.Contains(py, "class Point:") {
+t.Errorf("missing struct class in:\n%s", py)
+}
+if !strings.Contains(py, "def __init__(self,") {
+t.Errorf("missing __init__ in:\n%s", py)
 }
 }

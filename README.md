@@ -83,7 +83,7 @@ Declare variables with `Declare … to be …`:
 ```english
 Declare name to be "Alice".
 Declare age  to be 30.
-Declare pi   to always be 3.14159.   # constant — cannot be reassigned
+Declare TAX_RATE to always be 0.2.   # constant — cannot be reassigned
 ```
 
 Reassign with `Set … to …`:
@@ -232,16 +232,16 @@ thats it.
 
 ```english
 Declare i to be 1.
-Repeat while i is less than or equal to 5, do the following:
+repeat the following while i is less than or equal to 5:
     Print the value of i.
-    Set i to i + 1.
+    Set i to be i + 1.
 thats it.
 ```
 
 #### Counted loop (repeat N times)
 
 ```english
-Repeat 3 times, do the following:
+repeat the following 3 times:
     Print "Hello!".
 thats it.
 ```
@@ -251,7 +251,7 @@ thats it.
 ```english
 Declare x to be 0.
 Repeat forever:
-    Set x to x + 1.
+    Set x to be x + 1.
     If x is equal to 5, then
         Break out of this loop.
     thats it.
@@ -270,8 +270,9 @@ thats it.
 #### `Continue` (skip to next iteration)
 
 ```english
-Repeat while i is less than 10, do the following:
-    Set i to i + 1.
+Declare i to be 0.
+repeat the following while i is less than 10:
+    Set i to be i + 1.
     If the remainder of i divided by 2 is equal to 0, then
         Continue.
     thats it.
@@ -310,7 +311,8 @@ Declare function add that takes a and b and does the following:
     Return a + b.
 thats it.
 
-Declare result to be the result of calling add with 5 and 3.
+Declare result to be 0.
+Set result to be the result of calling add with 5 and 3.
 Print the value of result.   # 8
 ```
 
@@ -321,10 +323,14 @@ Declare function factorial that takes n and does the following:
     If n is less than or equal to 1, then
         Return 1.
     thats it.
-    Return n * the result of calling factorial with n - 1.
+    Declare smaller to be 0.
+    Set smaller to be the result of calling factorial with n - 1.
+    Return n * smaller.
 thats it.
 
-Print the result of calling factorial with 6.   # 720
+Declare result to be 0.
+Set result to be the result of calling factorial with 6.
+Print the value of result.   # 720
 ```
 
 ---
@@ -526,25 +532,47 @@ Declare temp to be "98.6" casted to number.
 
 ### Step 15 — Structures (Custom Types)
 
-Define a struct with named fields:
+Define a struct with named fields using `declare … as a structure with the following fields:`:
 
 ```english
-Declare structure Person with fields name as text and age as number.
+declare Person as a structure with the following fields:
+    name is a string.
+    age is an unsigned integer with 0 being the default.
+thats it.
 ```
 
-Create an instance with `new`:
+Create an instance with `a new instance of`:
 
 ```english
-Declare alice to be a new Person with name "Alice" and age 30.
+let alice be a new instance of Person with the following fields:
+    name is "Alice".
+    age is 30.
+thats it.
 ```
 
-Access and modify fields using the **possessive `'s`** syntax:
+Access fields using `the field_name of obj`:
 
 ```english
-Print alice's name.          # Alice
-Print alice's age.           # 30
+Print the name of alice.     # Alice
+Print the age of alice.      # 30
+```
 
-Set alice's age to 31.
+Add methods to a struct and call them with the possessive `'s` syntax:
+
+```english
+declare Person as a structure with the following fields:
+    name is a string.
+
+    let greet be a function that does the following:
+        Print "Hello, my name is", name.
+    thats it.
+thats it.
+
+let alice be a new instance of Person with the following fields:
+    name is "Alice".
+thats it.
+
+Call alice's greet.
 ```
 
 ---
@@ -565,7 +593,7 @@ thats it.
 
 #### Custom Error Types
 
-Declare named error types and catch them selectively:
+Declare named error types and catch them selectively. Each `Try` block supports one `on TypeName:` clause:
 
 ```english
 Declare NetworkError    as an error type.
@@ -575,12 +603,20 @@ Try doing the following:
     Raise "Host unreachable" as NetworkError.
 on NetworkError:
     Print "Network error:", error.
-on ValidationError:
-    Print "Validation error:", error.
-on error:
-    Print "Unknown error:", error.
 but finally:
     Print "Done.".
+thats it.
+
+Try doing the following:
+    Raise "bad input" as ValidationError.
+on ValidationError:
+    Print "Validation error:", error.
+thats it.
+
+Try doing the following:
+    Raise "unexpected".
+on error:
+    Print "Any error:", error.
 thats it.
 ```
 
@@ -643,7 +679,7 @@ Declare function square that takes x and does the following:
     Return x * x.
 thats it.
 
-Declare pi to always be 3.14159.
+Declare TAX_RATE to always be 0.2.
 ```
 
 ---
@@ -652,16 +688,14 @@ Declare pi to always be 3.14159.
 
 #### References & Copies
 
-By default, primitive values are **copied** on assignment. Use `a reference to` for an alias:
+Use `a reference to` to create a named alias that stores the variable's name and environment. When printed it shows `<ref: varname>`:
 
 ```english
 Declare x to be 10.
 Declare ref_x to be a reference to x.
+Print the value of ref_x.     # <ref: x>
 
-Set x to 99.
-Print the value of ref_x.     # 99 — ref_x mirrors x
-
-# Explicit copy
+# Explicit copy of a list (copies the elements, not the reference)
 Declare my_list  to be [1, 2, 3].
 Declare my_copy  to be a copy of my_list.
 ```
@@ -895,9 +929,9 @@ Quick translation reference:
 | `Print "hello".` | `print("hello")` |
 | `Write "hello".` | `print("hello", end="")` |
 | `If x is greater than 5, then …` | `if x > 5:` |
-| `Repeat while x is less than 10, …` | `while x < 10:` |
-| `Repeat 5 times, …` | `for _ in range(5):` |
-| `For each item in list, …` | `for item in list:` |
+| `repeat the following while x is less than 10:` | `while x < 10:` |
+| `repeat the following 5 times:` | `for _ in range(5):` |
+| `For each item in list, do the following:` | `for item in list:` |
 | `Repeat forever:` | `while True:` |
 | `Declare function foo that takes a …` | `def foo(a):` |
 | `Return x.` | `return x` |
@@ -924,7 +958,7 @@ Print "Hello, World!".
 
 ```english
 Declare i to be 1.
-Repeat while i is less than or equal to 100, do the following:
+repeat the following while i is less than or equal to 100:
     If the remainder of i divided by 15 is equal to 0, then
         Print "FizzBuzz".
     otherwise if the remainder of i divided by 3 is equal to 0, then
@@ -934,7 +968,7 @@ Repeat while i is less than or equal to 100, do the following:
     otherwise
         Print the value of i.
     thats it.
-    Set i to i + 1.
+    Set i to be i + 1.
 thats it.
 ```
 
@@ -945,14 +979,19 @@ Declare function fib that takes n and does the following:
     If n is less than or equal to 1, then
         Return n.
     thats it.
-    Return the result of calling fib with n - 1
-         + the result of calling fib with n - 2.
+    Declare a to be 0.
+    Declare b to be 0.
+    Set a to be the result of calling fib with n - 1.
+    Set b to be the result of calling fib with n - 2.
+    Return a + b.
 thats it.
 
 Declare i to be 0.
-Repeat while i is less than 10, do the following:
-    Print the result of calling fib with i.
-    Set i to i + 1.
+Declare r to be 0.
+repeat the following while i is less than 10:
+    Set r to be the result of calling fib with i.
+    Print the value of r.
+    Set i to be i + 1.
 thats it.
 ```
 
@@ -963,18 +1002,18 @@ Declare arr to be [64, 34, 25, 12, 22, 11, 90].
 Declare n to be 7.
 Declare i to be 0.
 
-Repeat while i is less than n - 1:
+repeat the following while i is less than n - 1:
     Declare j to be 0.
-    Repeat while j is less than n - i - 1:
+    repeat the following while j is less than n - i - 1:
         Declare a to be the item at position j in arr.
         Declare b to be the item at position j + 1 in arr.
         If a is greater than b, then
             Set the item at position j in arr to be b.
             Set the item at position j + 1 in arr to be a.
         thats it.
-        Set j to j + 1.
+        Set j to be j + 1.
     thats it.
-    Set i to i + 1.
+    Set i to be i + 1.
 thats it.
 
 Print the value of arr.
@@ -983,14 +1022,25 @@ Print the value of arr.
 ### Custom Structs
 
 ```english
-Declare structure Point with fields x as number and y as number.
-
-Declare function distance that takes p and does the following:
-    Return sqrt(p's x * p's x + p's y * p's y).
+declare Point as a structure with the following fields:
+    x is a number.
+    y is a number.
 thats it.
 
-Declare origin to be a new Point with x 3 and y 4.
-Print the result of calling distance with origin.   # 5
+Declare function distance that takes p and does the following:
+    Declare px to be the x of p.
+    Declare py to be the y of p.
+    Return sqrt(px * px + py * py).
+thats it.
+
+let origin be a new instance of Point with the following fields:
+    x is 3.
+    y is 4.
+thats it.
+
+Declare d to be 0.
+Set d to be the result of calling distance with origin.
+Print the value of d.   # 5
 ```
 
 ### Error Handling

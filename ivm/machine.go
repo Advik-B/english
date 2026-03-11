@@ -109,6 +109,11 @@ frame.ip++
 
 result, stop, err := m.step(instr, frame.chunk)
 if err != nil {
+// errCaughtByParent means callFuncChunk detected that handleError()
+// already set m.cur to this frame's catch handler.  Just continue.
+if _, ok := err.(errCaughtByParent); ok {
+continue
+}
 // Check if there's a try frame to catch this
 caught, jumpErr := m.handleError(err)
 if jumpErr != nil {
@@ -748,6 +753,16 @@ return res, nil
 return nil, m.runtimeErr(fmt.Sprintf("undefined function '%s'", name))
 }
 
+// errCaughtByParent is a sentinel returned by callFuncChunk when an error
+// escapes the function and is caught by a try block in a *parent* frame.
+// handleError has already rewound the frame stack and set m.cur to the parent
+// frame's catch handler.  The caller must not call handleError again on this
+// sentinel; instead it should propagate it upward until it reaches execute(),
+// which simply continues the main loop (now running the catch handler).
+type errCaughtByParent struct{}
+
+func (errCaughtByParent) Error() string { return "caught by parent frame" }
+
 func (m *Machine) callFuncChunk(fn *FuncChunk, args []interface{}, selfEnv *ivmEnv) (interface{}, error) {
 if len(args) != len(fn.Params) {
 return nil, m.runtimeErr(fmt.Sprintf("function '%s' expects %d argument(s), got %d", fn.Name, len(fn.Params), len(args)))
@@ -766,21 +781,30 @@ for i, param := range fn.Params {
 funcEnv.defineVar(param, args[i], false)
 }
 
-// Push current frame, start new frame
+// Push current frame, start new frame.
+// Remember which frame belongs to this function so we can detect if
+// handleError() has swapped m.cur to a parent frame.
 m.frames = append(m.frames, m.cur)
-m.cur = &callFrame{
+funcFrame := &callFrame{
 chunk: fn.Body,
 ip:    0,
 stack: []interface{}{},
 env:   funcEnv,
 name:  fn.Name,
 }
+m.cur = funcFrame
 
 // Run until RETURN or end of code
 for {
 frame := m.cur
+if frame != funcFrame {
+// m.cur was changed to a parent frame by handleError (catch handler
+// found in a parent frame).  Return the sentinel; execute() will
+// continue at the catch handler.
+return nil, errCaughtByParent{}
+}
 if frame.ip >= len(frame.chunk.Code) {
-// Implicit nil return at end of function
+// Implicit nil return at end of function; restore caller frame.
 m.cur = m.frames[len(m.frames)-1]
 m.frames = m.frames[:len(m.frames)-1]
 return nil, nil
@@ -791,23 +815,25 @@ frame.ip++
 
 result, stop, err := m.step(instr, frame.chunk)
 if err != nil {
+// Propagate the sentinel without calling handleError again.
+if _, ok := err.(errCaughtByParent); ok {
+return nil, err
+}
 caught, jumpErr := m.handleError(err)
 if jumpErr != nil {
-// Restore caller frame before propagating
-m.cur = m.frames[len(m.frames)-1]
-m.frames = m.frames[:len(m.frames)-1]
 return nil, jumpErr
 }
 if caught {
+// If the handler is in a parent frame, m.cur has been updated.
+// The sentinel check at the top of the loop will catch this.
 continue
 }
-// Error propagates out of this function
-m.cur = m.frames[len(m.frames)-1]
-m.frames = m.frames[:len(m.frames)-1]
+// Error was not caught anywhere.  handleError has already unwound
+// m.cur and m.frames; do NOT touch them again.
 return nil, err
 }
 if stop {
-// OP_RETURN: restore caller frame, return the value
+// OP_RETURN: restore caller frame, return the value.
 m.cur = m.frames[len(m.frames)-1]
 m.frames = m.frames[:len(m.frames)-1]
 return result, nil

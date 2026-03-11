@@ -402,6 +402,17 @@ func (d *decompiler) decodeRepeatN(counterHidden, countExpr string, loopStart in
 func (d *decompiler) decodeTry(catchOffset int) {
 	code := d.chunk.Code
 
+	// Skip optional OP_TRY_SET_ERRORTYPE and OP_TRY_SET_FINALLY instructions
+	// that immediately follow OP_TRY_BEGIN.
+	var errTypeName string
+	for d.ip < len(code) && (code[d.ip].Op == OP_TRY_SET_ERRORTYPE || code[d.ip].Op == OP_TRY_SET_FINALLY) {
+		instr := code[d.ip]
+		d.ip++
+		if instr.Op == OP_TRY_SET_ERRORTYPE && instr.Operand > 0 {
+			errTypeName = d.rawName(instr.Operand - 1)
+		}
+	}
+
 	// TRY_END is at the end of the try body; its operand = end offset (past catch, before finally).
 	// Use a depth-aware search so nested try blocks don't confuse the outer match.
 	tryEndPos := d.findMatchingTryEnd(d.ip)
@@ -421,17 +432,16 @@ func (d *decompiler) decodeTry(catchOffset int) {
 	d.ip++ // consume TRY_END
 
 	// We're now at catchOffset.
-	// Expect: PUSH_SCOPE; CATCH(errVar<<16 | errType); [catch body]; POP_SCOPE
+	// Expect: PUSH_SCOPE; CATCH(errVarIdx); [catch body]; POP_SCOPE
 	if d.ip < len(code) && code[d.ip].Op == OP_PUSH_SCOPE {
 		d.ip++
 	}
 	if d.ip < len(code) && code[d.ip].Op == OP_CATCH {
 		catchInstr := code[d.ip]
 		d.ip++
-		errVarIdx := catchInstr.Operand >> 16
-		errTypeIdx := catchInstr.Operand & 0xFFFF
+		errVarIdx := catchInstr.Operand
 		var clause string
-		if errTypeIdx == 0 {
+		if errTypeName == "" {
 			// catch any error
 			if errVarIdx > 0 {
 				errVar := d.rawName(errVarIdx)
@@ -440,12 +450,11 @@ func (d *decompiler) decodeTry(catchOffset int) {
 				clause = "except Exception:"
 			}
 		} else {
-			errType := d.rawName(errTypeIdx - 1)
 			if errVarIdx > 0 {
 				errVar := d.rawName(errVarIdx)
-				clause = "except " + errType + " as " + errVar + ":"
+				clause = "except " + errTypeName + " as " + errVar + ":"
 			} else {
-				clause = "except " + errType + ":"
+				clause = "except " + errTypeName + ":"
 			}
 		}
 		d.emit(clause)
@@ -469,5 +478,7 @@ func (d *decompiler) decodeTry(catchOffset int) {
 		// Peek: is there a finally body?
 		// There's no explicit OP_FINALLY, so just decode remaining statements
 		// in the enclosing range (handled by the outer decode loop).
+		// Skip OP_RERAISE_PENDING if present at end of finally body (it's an
+		// implementation detail and has no Python equivalent).
 	}
 }

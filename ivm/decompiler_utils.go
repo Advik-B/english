@@ -40,8 +40,13 @@ func (d *decompiler) findMatchingPopScope(start int) int {
 func (d *decompiler) findMatchingTryEnd(start int) int {
 	code := d.chunk.Code
 	m := d.getChunkMeta(d.chunk)
-	// The TRY_BEGIN that opened this try block is immediately before start.
+	// The TRY_BEGIN that opened this try block is immediately before start,
+	// possibly with OP_TRY_SET_ERRORTYPE / OP_TRY_SET_FINALLY in between.
+	// Walk backwards past those helper instructions to find TRY_BEGIN.
 	tryIdx := start - 1
+	for tryIdx >= 0 && tryIdx < len(code) && (code[tryIdx].Op == OP_TRY_SET_ERRORTYPE || code[tryIdx].Op == OP_TRY_SET_FINALLY) {
+		tryIdx--
+	}
 	if tryIdx >= 0 && tryIdx < len(code) && code[tryIdx].Op == OP_TRY_BEGIN {
 		if pair := m.tryPair[tryIdx]; pair >= 0 {
 			return pair

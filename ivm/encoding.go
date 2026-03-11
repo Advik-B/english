@@ -11,7 +11,7 @@ import (
 var MagicBytes = []byte{0x10, 0x1E, 0x4E, 0x47}
 
 // InstructionFormatVersion is the bytecode format version for instruction-based .101 files.
-const InstructionFormatVersion uint8 = 2
+const InstructionFormatVersion uint8 = 3
 
 // EncodeFile serialises chunk with magic header + version byte.
 func EncodeFile(chunk *Chunk) ([]byte, error) {

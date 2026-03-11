@@ -664,7 +664,7 @@ func (d *decompiler) processInstr(instr Instruction) { //nolint:gocyclo
 	case OP_TRY_BEGIN:
 		d.decodeTry(int(operand))
 
-	case OP_TRY_END, OP_CATCH:
+	case OP_TRY_END, OP_CATCH, OP_TRY_SET_ERRORTYPE, OP_TRY_SET_FINALLY, OP_RERAISE_PENDING:
 		// consumed by decodeTry
 
 	case OP_DEFINE_ERROR_TYPE:

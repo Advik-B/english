@@ -114,7 +114,7 @@ func (d *decompiler) decodeIf(cond string, falseTarget int) {
 	d.decodeRange(thenBodyEnd)
 
 	// Check if empty body
-	if d.indent > 0 && d.bodyEmpty(thenStart) {
+	if d.bodyEmpty(thenStart) {
 		d.emit("pass")
 	}
 	d.indent--

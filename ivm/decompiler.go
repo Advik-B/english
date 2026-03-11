@@ -30,7 +30,7 @@ type decompiler struct {
 	// current chunk being decoded
 	chunk *Chunk
 	// code pointer (index into chunk.Code)
-	ip int
+	ip        int
 	// expression stack – each entry is a Python expression string
 	exprStack []string
 	// output buffer for the current scope level
@@ -41,7 +41,7 @@ type decompiler struct {
 	needsMath   bool
 	needsRandom bool
 	needsCopy   bool
-	helpers   map[string]bool // helperDef keys from transpiler/helpers.go
+	helpers     map[string]bool // helperDef keys from transpiler/helpers.go
 	// user-defined function names (to distinguish from stdlib)
 	userFuncs map[string]bool
 }

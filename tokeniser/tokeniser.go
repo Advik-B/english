@@ -260,6 +260,11 @@ var keywords = map[string]token.Type{
 	"table":      token.TABLE,
 	"has":        token.HAS,
 	"entry":      token.ENTRY,
+	// Politeness prefixes – consumed by the parser before any statement.
+	"please": token.PLEASE,
+	"kindly": token.PLEASE,
+	// Sleep statement keyword.
+	"sleep": token.SLEEP,
 }
 
 func (l *Lexer) lookupKeyword(word string) token.Type {
@@ -369,6 +374,44 @@ func (l *Lexer) NextToken() token.Token {
 			return tok
 		} else if unicode.IsLetter(rune(l.ch)) || l.ch == '_' {
 			ident := l.readIdentifier()
+			lower := strings.ToLower(ident)
+
+			// Detect multi-word politeness prefixes: "could you" and
+			// "would you kindly". These must start at the beginning of a
+			// statement (i.e. after NEWLINE / EOF / at position 0), but
+			// checking that strictly would be complex; instead we simply
+			// look ahead for the expected following words and emit PLEASE.
+			if lower == "could" {
+				savPos, savReadPos, savLine, savCol, savCh := l.position, l.readPosition, l.line, l.col, l.ch
+				l.skipWhitespace()
+				next := l.readIdentifier()
+				if strings.ToLower(next) == "you" {
+					tok := token.Token{Type: token.PLEASE, Value: "could you", Line: line, Col: col, Pos: pos}
+					l.lastTokenType = tok.Type
+					return tok
+				}
+				// Rollback
+				l.position, l.readPosition, l.line, l.col, l.ch = savPos, savReadPos, savLine, savCol, savCh
+			} else if lower == "would" {
+				savPos, savReadPos, savLine, savCol, savCh := l.position, l.readPosition, l.line, l.col, l.ch
+				l.skipWhitespace()
+				next1 := l.readIdentifier()
+				if strings.ToLower(next1) == "you" {
+					l.skipWhitespace()
+					next2 := l.readIdentifier()
+					if strings.ToLower(next2) == "kindly" {
+						tok := token.Token{Type: token.PLEASE, Value: "would you kindly", Line: line, Col: col, Pos: pos}
+						l.lastTokenType = tok.Type
+						return tok
+					}
+					// "would you" without "kindly" - rollback to after "would"
+					l.position, l.readPosition, l.line, l.col, l.ch = savPos, savReadPos, savLine, savCol, savCh
+				} else {
+					// Rollback
+					l.position, l.readPosition, l.line, l.col, l.ch = savPos, savReadPos, savLine, savCol, savCh
+				}
+			}
+
 			tokenType := l.lookupKeyword(ident)
 			tok := token.Token{Type: tokenType, Value: ident, Line: line, Col: col, Pos: pos}
 			l.lastTokenType = tok.Type

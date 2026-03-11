@@ -109,6 +109,16 @@ const (
 	HAS
 	ENTRY
 
+	// PLEASE is emitted for politeness prefixes: "please", "kindly",
+	// "could you", and "would you kindly". When --minimum-politeness is
+	// active the parser counts PLEASE-prefixed statements toward the
+	// politeness quota.
+	PLEASE
+
+	// SLEEP is emitted for the "sleep" keyword used in "Sleep for <duration>."
+	// statements.
+	SLEEP
+
 	// WHITESPACE is emitted by TokenizeForHighlight to represent horizontal
 	// whitespace (spaces / tabs) that was skipped by the lexer between tokens.
 	// It is never produced by NextToken or TokenizeAll; it exists solely for
@@ -348,6 +358,10 @@ func (t Type) String() string {
 		return "HAS"
 	case ENTRY:
 		return "ENTRY"
+	case PLEASE:
+		return "PLEASE"
+	case SLEEP:
+		return "SLEEP"
 	case WHITESPACE:
 		return "WHITESPACE"
 	case PERIOD:

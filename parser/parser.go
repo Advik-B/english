@@ -92,12 +92,29 @@ func (p *Parser) Parse() (*ast.Program, error) {
 	program := &ast.Program{}
 
 	for p.curToken.Type != token.EOF {
+		// Check for a politeness prefix (please / kindly / could you /
+		// would you kindly) and consume it before parsing the real statement.
+		polite := false
+		if p.curToken.Type == token.PLEASE {
+			polite = true
+			p.nextToken()
+		}
+
 		stmt, err := p.parseStatement()
 		if err != nil {
 			return nil, err
 		}
 		if stmt != nil {
 			program.Statements = append(program.Statements, stmt)
+			// Comments don't count toward the politeness tally.
+			if _, isComment := stmt.(*ast.CommentStatement); !isComment {
+				program.TotalCount++
+				if polite {
+					program.PoliteCount++
+				} else {
+					program.ImpoliteLines = append(program.ImpoliteLines, stmtLine(stmt))
+				}
+			}
 		}
 	}
 
@@ -146,6 +163,8 @@ func (p *Parser) parseStatement() (ast.Statement, error) {
 		return p.parseRaiseStatement()
 	case token.SWAP:
 		return p.parseSwapStatement()
+	case token.SLEEP:
+		return p.parseSleepStatement()
 	default:
 		switch p.curToken.Type {
 		case token.IDENTIFIER:
@@ -2420,4 +2439,126 @@ func (p *Parser) parseLookupKeyAssignment(setLine int) (ast.Statement, error) {
 	p.nextToken()
 
 	return &ast.LookupKeyAssignment{TableName: tableName, Key: key, Value: value, Line: setLine}, nil
+}
+
+// parseSleepStatement parses "Sleep for <number><unit>." where unit is one of
+// ms (milliseconds), s (seconds), m (minutes), or h (hours).
+// It desugars into a CallStatement that calls the stdlib "sleep" function
+// with the duration converted to seconds as a float64 number literal.
+//
+// Examples:
+//
+//	Sleep for 10ms.
+//	Sleep for 2s.
+//	Sleep for 1m.
+//	Sleep for 1h.
+func (p *Parser) parseSleepStatement() (ast.Statement, error) {
+	line := p.curToken.Line
+	p.nextToken() // consume SLEEP
+
+	if p.curToken.Type != token.FOR {
+		return nil, &SyntaxError{
+			Msg:  "Expected 'for' after 'sleep'.",
+			Line: p.curToken.Line,
+			Col:  p.curToken.Col,
+			Hint: "Use the form: 'Sleep for 10ms.' (units: ms, s, m, h)",
+		}
+	}
+	p.nextToken() // consume FOR
+
+	if p.curToken.Type != token.NUMBER {
+		return nil, &SyntaxError{
+			Msg:  fmt.Sprintf("Expected a number after 'sleep for', got %s.", tokenFriendlyValue(p.curToken.Type, p.curToken.Value)),
+			Line: p.curToken.Line,
+			Col:  p.curToken.Col,
+			Hint: "Use the form: 'Sleep for 10ms.' (units: ms, s, m, h)",
+		}
+	}
+	numVal, err := strconv.ParseFloat(p.curToken.Value, 64)
+	if err != nil {
+		return nil, &SyntaxError{
+			Msg:  fmt.Sprintf("Invalid duration number: %s", p.curToken.Value),
+			Line: p.curToken.Line,
+			Col:  p.curToken.Col,
+		}
+	}
+	p.nextToken() // consume NUMBER
+
+	// Read the unit identifier (ms, s, m, h).
+	if p.curToken.Type != token.IDENTIFIER {
+		return nil, &SyntaxError{
+			Msg:  fmt.Sprintf("Expected a time unit (ms, s, m, h) after the number, got %s.", tokenFriendlyValue(p.curToken.Type, p.curToken.Value)),
+			Line: p.curToken.Line,
+			Col:  p.curToken.Col,
+			Hint: "Use the form: 'Sleep for 10ms.' (units: ms, s, m, h)",
+		}
+	}
+	unit := strings.ToLower(p.curToken.Value)
+	var multiplier float64
+	switch unit {
+	case "ms":
+		multiplier = 0.001
+	case "s":
+		multiplier = 1.0
+	case "m":
+		multiplier = 60.0
+	case "h":
+		multiplier = 3600.0
+	default:
+		return nil, &SyntaxError{
+			Msg:  fmt.Sprintf("Unknown time unit %q. Use ms, s, m, or h.", unit),
+			Line: p.curToken.Line,
+			Col:  p.curToken.Col,
+			Hint: "Use the form: 'Sleep for 10ms.' (units: ms, s, m, h)",
+		}
+	}
+	p.nextToken() // consume unit
+
+	if err := p.expectToken(token.PERIOD); err != nil {
+		return nil, err
+	}
+	p.nextToken() // consume PERIOD
+
+	seconds := numVal * multiplier
+	return &ast.CallStatement{
+		FunctionCall: &ast.FunctionCall{
+			Name:      "sleep",
+			Arguments: []ast.Expression{&ast.NumberLiteral{Value: seconds}},
+		},
+		Line: line,
+	}, nil
+}
+
+// stmtLine extracts the source line number from a statement.  Returns 0 if
+// the statement type does not carry a line field (e.g. CommentStatement).
+func stmtLine(stmt ast.Statement) int {
+	switch s := stmt.(type) {
+	case *ast.VariableDecl:
+		return s.Line
+	case *ast.Assignment:
+		return s.Line
+	case *ast.CallStatement:
+		return s.Line
+	case *ast.IfStatement:
+		return s.Line
+	case *ast.WhileLoop:
+		return s.Line
+	case *ast.ForLoop:
+		return s.Line
+	case *ast.ForEachLoop:
+		return s.Line
+	case *ast.OutputStatement:
+		return s.Line
+	case *ast.ReturnStatement:
+		return s.Line
+	case *ast.RaiseStatement:
+		return s.Line
+	case *ast.TryStatement:
+		return s.Line
+	case *ast.SwapStatement:
+		return s.Line
+	case *ast.ToggleStatement:
+		return s.Line
+	}
+	return 0
 }

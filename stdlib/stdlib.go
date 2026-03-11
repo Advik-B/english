@@ -16,6 +16,7 @@ func Register(env *vm.Environment) {
 	registerIOFunctions(env)
 	registerLookupTableFunctions(env)
 	registerNumberFunctions(env)
+	registerTimeFunctions(env)
 }
 
 // Eval evaluates a built-in function by name with the provided arguments.
@@ -55,6 +56,10 @@ func Eval(name string, args []vm.Value) (vm.Value, error) {
 	// ── Lookup table ──────────────────────────────────────────────────────────
 	case "keys", "values", "table_remove", "table_has", "merge", "get_or_default":
 		return evalLookup(name, args)
+
+	// ── Time ──────────────────────────────────────────────────────────────────
+	case "current_time", "elapsed_time", "sleep":
+		return evalTime(name, args)
 	}
 
 	return nil, vm.NewRuntimeError("unknown built-in function: " + name)

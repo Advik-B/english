@@ -1446,3 +1446,152 @@ thats it.`
 		}
 	}
 }
+
+
+// ─── Time stdlib ─────────────────────────────────────────────────────────────
+
+func TestCurrentTime(t *testing.T) {
+out := captureOutput(func() {
+_, err := run(`Declare ts to be current_time().
+Print the value of ts.`)
+if err != nil {
+t.Errorf("unexpected error: %v", err)
+}
+})
+// current_time returns a date-time string like "2006-01-02 15:04:05"
+if len(strings.TrimSpace(out)) < 10 {
+t.Errorf("expected non-empty time string, got: %q", out)
+}
+}
+
+func TestElapsedTime(t *testing.T) {
+out := captureOutput(func() {
+_, err := run(`Declare elapsed to be elapsed_time().
+Print the value of elapsed.`)
+if err != nil {
+t.Errorf("unexpected error: %v", err)
+}
+})
+if strings.TrimSpace(out) == "" {
+t.Errorf("expected elapsed time value, got empty output")
+}
+}
+
+func TestSleepMs(t *testing.T) {
+_, err := run(`Sleep for 10ms.`)
+if err != nil {
+t.Fatalf("unexpected error from 'Sleep for 10ms.': %v", err)
+}
+}
+
+func TestSleepSeconds(t *testing.T) {
+_, err := run(`Sleep for 0s.`)
+if err != nil {
+t.Fatalf("unexpected error from 'Sleep for 0s.': %v", err)
+}
+}
+
+func TestSleepMinutes(t *testing.T) {
+_, err := run(`Sleep for 0m.`)
+if err != nil {
+t.Fatalf("unexpected error from 'Sleep for 0m.': %v", err)
+}
+}
+
+func TestSleepHours(t *testing.T) {
+_, err := run(`Sleep for 0h.`)
+if err != nil {
+t.Fatalf("unexpected error from 'Sleep for 0h.': %v", err)
+}
+}
+
+func TestSleepBadUnit(t *testing.T) {
+_, err := run(`Sleep for 1x.`)
+if err == nil {
+t.Fatal("expected parse error for unknown time unit")
+}
+}
+
+func TestSleepMissingFor(t *testing.T) {
+_, err := run(`Sleep 1s.`)
+if err == nil {
+t.Fatal("expected parse error when 'for' is missing")
+}
+}
+
+// ─── Politeness (parser-level) ───────────────────────────────────────────────
+
+func TestPolitePrefix_Please(t *testing.T) {
+out := captureOutput(func() {
+_, err := run(`Please print "Hello".`)
+if err != nil {
+t.Errorf("unexpected error: %v", err)
+}
+})
+if !strings.Contains(out, "Hello") {
+t.Errorf("expected 'Hello' in output, got: %q", out)
+}
+}
+
+func TestPolitePrefix_Kindly(t *testing.T) {
+out := captureOutput(func() {
+_, err := run(`Kindly print "World".`)
+if err != nil {
+t.Errorf("unexpected error: %v", err)
+}
+})
+if !strings.Contains(out, "World") {
+t.Errorf("expected 'World' in output, got: %q", out)
+}
+}
+
+func TestPolitePrefix_CouldYou(t *testing.T) {
+out := captureOutput(func() {
+_, err := run(`Could you print "CouldYou".`)
+if err != nil {
+t.Errorf("unexpected error: %v", err)
+}
+})
+if !strings.Contains(out, "CouldYou") {
+t.Errorf("expected 'CouldYou' in output, got: %q", out)
+}
+}
+
+func TestPolitePrefix_WouldYouKindly(t *testing.T) {
+out := captureOutput(func() {
+_, err := run(`Would you kindly print "WouldYouKindly".`)
+if err != nil {
+t.Errorf("unexpected error: %v", err)
+}
+})
+if !strings.Contains(out, "WouldYouKindly") {
+t.Errorf("expected 'WouldYouKindly' in output, got: %q", out)
+}
+}
+
+func TestPolitenessStats_AllPolite(t *testing.T) {
+// All statements polite – should compile and run fine.
+_, err := run(`Please print "A".
+Please print "B".`)
+if err != nil {
+t.Fatalf("unexpected error: %v", err)
+}
+}
+
+func TestPolitenessStats_NonePolite(t *testing.T) {
+// No politeness prefix – still parses/runs fine (prefix is always optional).
+_, err := run(`Print "A".
+Print "B".`)
+if err != nil {
+t.Fatalf("unexpected error: %v", err)
+}
+}
+
+func TestPolitenessStats_CommentsExcluded(t *testing.T) {
+// Comments should not count toward the tally.
+_, err := run(`# This is a comment.
+Please print "Hello".`)
+if err != nil {
+t.Fatalf("unexpected error: %v", err)
+}
+}

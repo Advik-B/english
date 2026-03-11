@@ -49,14 +49,22 @@ var runCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		filename := args[0]
 		vmFlag, _ := cmd.Flags().GetString("vm")
+		minPoliteness, _ := cmd.Flags().GetFloat64("minimum-politeness")
+		politeFlag, _ := cmd.Flags().GetBool("polite")
+		// --polite is a convenience shorthand for --minimum-politeness 100.
+		// --minimum-politeness takes precedence when both are provided.
+		if politeFlag && !cmd.Flags().Changed("minimum-politeness") {
+			minPoliteness = 100
+		}
 		ext := strings.ToLower(filepath.Ext(filename))
 		if ext == ".101" {
+			// Politeness only applies to .abc source files.
 			RunBytecode(filename)
 		} else {
 			if strings.EqualFold(vmFlag, "ast") {
-				RunFileAST(filename)
+				RunFileAST(filename, minPoliteness)
 			} else {
-				RunFileIVM(filename)
+				RunFileIVM(filename, minPoliteness)
 			}
 		}
 	},
@@ -128,17 +136,26 @@ func init() {
 	_ = compileCmd.Flags().MarkHidden("min") // expose only --strip in help; --min still works
 	transpileCmd.Flags().BoolP("inline", "i", false, "Inline all imported .abc files into a single Python output file")
 	runCmd.Flags().StringP("vm", "V", "ivm", "VM to use for running .abc source files: 'ivm' (default) or 'ast'")
+	runCmd.Flags().Float64("minimum-politeness", -1,
+		"Require at least this percentage (0–100) of statements to be polite "+
+			"(prefixed with 'please', 'kindly', 'could you', or 'would you kindly'). "+
+			"Only applies to .abc source files.")
+	runCmd.Flags().Bool("polite", false,
+		"Require all statements to be polite (equivalent to --minimum-politeness 100). "+
+			"Only applies to .abc source files.")
 }
 
 // RunFile executes an English source file using the instruction VM (ivm) by default.
 // This is a convenience wrapper for RunFileIVM.
 func RunFile(filename string) {
-	RunFileIVM(filename)
+	RunFileIVM(filename, -1)
 }
 
 // RunFileIVM parses and executes an English source file via the instruction-based VM.
 // It is the default execution path for .abc source files.
-func RunFileIVM(filename string) {
+// minPoliteness is the minimum required politeness percentage (0–100); pass a
+// negative value to disable the check.
+func RunFileIVM(filename string, minPoliteness float64) {
 	content, err := os.ReadFile(filename)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error reading file: %v\n", err)
@@ -153,6 +170,15 @@ func RunFileIVM(filename string) {
 	if err != nil {
 		stacktraces.Print(err)
 		os.Exit(1)
+	}
+
+	if minPoliteness >= 0 {
+		if errs := checkPoliteness(program, minPoliteness); len(errs) > 0 {
+			for _, e := range errs {
+				stacktraces.Print(e)
+			}
+			os.Exit(1)
+		}
 	}
 
 	typeErrs := vm.Check(program, stdlib.PredefinedNames()...)
@@ -178,7 +204,9 @@ func RunFileIVM(filename string) {
 
 // RunFileAST parses and executes an English source file via the tree-walk evaluator.
 // Use the --vm=ast flag on the run command to select this path.
-func RunFileAST(filename string) {
+// minPoliteness is the minimum required politeness percentage (0–100); pass a
+// negative value to disable the check.
+func RunFileAST(filename string, minPoliteness float64) {
 	content, err := os.ReadFile(filename)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error reading file: %v\n", err)
@@ -195,6 +223,15 @@ func RunFileAST(filename string) {
 	if err != nil {
 		stacktraces.Print(err)
 		os.Exit(1)
+	}
+
+	if minPoliteness >= 0 {
+		if errs := checkPoliteness(program, minPoliteness); len(errs) > 0 {
+			for _, e := range errs {
+				stacktraces.Print(e)
+			}
+			os.Exit(1)
+		}
 	}
 
 	typeErrs := vm.Check(program, stdlib.PredefinedNames()...)
@@ -476,4 +513,30 @@ func RunBytecode(filename string) {
 		stacktraces.Print(err)
 		os.Exit(1)
 	}
+}
+
+// checkPoliteness verifies that the program meets the minimum politeness
+// percentage.  It returns one *parser.SyntaxError per impolite statement when
+// the threshold is not met, or nil when the program is sufficiently polite.
+// This check only applies to .abc source files – bytecode execution paths
+// never call this function.
+func checkPoliteness(program *ast.Program, minPercent float64) []error {
+if program.TotalCount == 0 {
+return nil
+}
+
+actual := float64(program.PoliteCount) / float64(program.TotalCount) * 100
+if actual >= minPercent {
+return nil
+}
+
+var errs []error
+for _, line := range program.ImpoliteLines {
+errs = append(errs, &parser.SyntaxError{
+Msg:  "Statement is not polite.",
+Line: line,
+Hint: "Prefix the statement with 'Please', 'Kindly', 'Could you', or 'Would you kindly'.",
+})
+}
+return errs
 }

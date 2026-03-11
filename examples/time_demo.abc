@@ -1,0 +1,53 @@
+# Time Module Example
+# Demonstrates current_time(), elapsed_time(), and the Sleep/Wait statements.
+
+# ─── Wall-clock time ────────────────────────────────────────────────────────
+
+Print "=== Wall Clock ===".
+Declare now to be current_time().
+Print "Current time:".
+Print the value of now.
+
+# ─── Elapsed time (benchmark) ───────────────────────────────────────────────
+
+Print "".
+Print "=== Benchmark ===".
+Declare start to be elapsed_time().
+
+# Do some work …
+Declare total to be 0.
+Declare i to be 1.
+Repeat the following while i is less than or equal to 1000:
+    Set total to be total + i.
+    Set i to be i + 1.
+thats it.
+
+Declare finish to be elapsed_time().
+Declare duration to be finish - start.
+Print "Sum 1..1000 =".
+Print the value of total.
+Print "Time taken (seconds):".
+Print the value of duration.
+
+# ─── Sleep / Wait ───────────────────────────────────────────────────────────
+
+Print "".
+Print "=== Sleep & Wait ===".
+
+# Short-form units
+Print "Sleeping 200ms …".
+Sleep for 200ms.
+Print "Done.".
+
+# Long-form units (more natural English)
+Print "Waiting 500 milliseconds …".
+Wait for 500 milliseconds.
+Print "Done.".
+
+# Natural-language shorthands
+Print "Waiting a second …".
+Wait for a second.
+Print "Done.".
+
+Print "".
+Print "All done!".

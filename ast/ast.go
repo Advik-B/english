@@ -22,6 +22,16 @@ type Expression interface {
 // Program is the root node of the AST
 type Program struct {
 	Statements []Statement
+
+	// PolitenessStats is populated by the parser when it processes statements.
+	// PoliteCount is the number of top-level statements prefixed with a
+	// politeness marker (please / kindly / could you / would you kindly).
+	// TotalCount is the total number of countable top-level statements
+	// (comments are excluded).  ImpoliteLines records the source line of
+	// every impolite statement for use in error reporting.
+	PoliteCount   int
+	TotalCount    int
+	ImpoliteLines []int
 }
 
 func (p *Program) node() {}
@@ -63,6 +73,7 @@ type FunctionDecl struct {
 	Name       string
 	Parameters []string
 	Body       []Statement
+	Line       int
 }
 
 func (fd *FunctionDecl) node()          {}

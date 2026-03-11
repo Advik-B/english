@@ -7,7 +7,7 @@ package ivm_test
 
 import (
 	"english/ivm"
-	"english/astvm/stdlib"
+	"english/stdlib"
 	"fmt"
 	"os"
 	"path/filepath"

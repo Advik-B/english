@@ -13,7 +13,7 @@ import (
 	"english/parser"
 	"english/stacktraces"
 	"english/astvm"
-	"english/astvm/stdlib"
+	"english/stdlib"
 	"fmt"
 	"os"
 	"path/filepath"

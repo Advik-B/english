@@ -4,7 +4,7 @@ import (
 "bytes"
 "english/ivm"
 "english/parser"
-"english/astvm/stdlib"
+"english/stdlib"
 "fmt"
 "io"
 "os"

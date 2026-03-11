@@ -3,7 +3,7 @@ package cmd
 import (
 	"english/parser"
 	"english/astvm"
-	"english/astvm/stdlib"
+	"english/stdlib"
 	"fmt"
 	"io"
 	"os"

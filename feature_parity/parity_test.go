@@ -16,7 +16,7 @@ package feature_parity_test
 import (
 	"bytes"
 	"english/astvm"
-	"english/astvm/stdlib"
+	"english/stdlib"
 	"english/ivm"
 	"english/parser"
 	"io"

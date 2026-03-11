@@ -8,7 +8,7 @@ import (
 	"english/stacktraces"
 	"english/transpiler"
 	"english/astvm"
-	"english/astvm/stdlib"
+	"english/stdlib"
 	"fmt"
 	"os"
 	"path/filepath"

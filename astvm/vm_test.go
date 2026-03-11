@@ -5,7 +5,7 @@ import (
 	"english/ast"
 	"english/parser"
 	"english/astvm"
-	"english/astvm/stdlib"
+	"english/stdlib"
 	"io"
 	"os"
 	"strings"

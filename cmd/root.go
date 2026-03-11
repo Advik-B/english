@@ -102,7 +102,7 @@ var versionCmd = &cobra.Command{
 	Use:   "version",
 	Short: "Print the version number",
 	Run: func(cmd *cobra.Command, args []string) {
-		fmt.Println("English Language Interpreter v1.0.0")
+		fmt.Println("v1.1.0")
 	},
 }
 

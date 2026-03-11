@@ -17,7 +17,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-const Version = "v1.2.0"
+const Version = "v1.2.1"
 
 var rootCmd = &cobra.Command{
 	Use:   "english",

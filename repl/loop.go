@@ -6,6 +6,8 @@ import (
 	"runtime"
 	"strings"
 	"time"
+
+	"github.com/Advik-B/english/highlight"
 )
 
 // Run prints the startup banner and then enters the interactive loop.
@@ -25,12 +27,15 @@ func (r *REPL) Loop() {
 	depth := 0
 
 	for {
-		// Show the appropriate prompt.
+		// Show the appropriate prompt and remember which one was printed so
+		// we can redraw the line with syntax highlighting after input arrives.
+		var prompt string
 		if depth == 0 && len(buffer) == 0 {
-			fmt.Fprint(r.out, PrimaryPrompt)
+			prompt = PrimaryPrompt
 		} else {
-			fmt.Fprint(r.out, ContinuationPrompt)
+			prompt = ContinuationPrompt
 		}
+		fmt.Fprint(r.out, prompt)
 
 		// Read one line of input.
 		line, err := r.in.ReadString('\n')
@@ -47,6 +52,17 @@ func (r *REPL) Loop() {
 
 		line = strings.TrimRight(line, "\r\n")
 		trimmed := strings.TrimSpace(line)
+
+		// When color is enabled, overwrite the just-typed line with a
+		// syntax-highlighted version.  The sequence:
+		//   \033[1A  – move cursor up one line (to the line the user typed on)
+		//   \r       – carriage-return to the beginning of that line
+		//   \033[2K  – erase the entire line
+		// …then we reprint prompt + highlighted code and move to the next line.
+		if r.useColor && line != "" {
+			fmt.Fprintf(r.out, "\033[1A\r\033[2K%s%s\n",
+				prompt, highlight.Highlight(line, true))
+		}
 
 		// ── Special top-level commands (only at the primary prompt) ─────────
 		if depth == 0 && len(buffer) == 0 {

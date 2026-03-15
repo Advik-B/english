@@ -1,4 +1,4 @@
-module english
+module github.com/Advik-B/english
 
 go 1.25.4
 

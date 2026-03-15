@@ -1,7 +1,7 @@
 package parser
 
 import (
-	"english/token"
+	"github.com/Advik-B/english/token"
 	"fmt"
 )
 

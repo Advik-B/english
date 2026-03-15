@@ -1,10 +1,10 @@
 package cmd
 
 import (
-	"english/bytecode"
-	"english/bytecode/disasm"
-	"english/highlight"
-	"english/stacktraces"
+	"github.com/Advik-B/english/bytecode"
+	"github.com/Advik-B/english/bytecode/disasm"
+	"github.com/Advik-B/english/highlight"
+	"github.com/Advik-B/english/stacktraces"
 	"fmt"
 	"os"
 	"path/filepath"

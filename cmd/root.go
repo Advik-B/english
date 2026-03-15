@@ -1,14 +1,14 @@
 package cmd
 
 import (
-	"english/ast"
-	"english/bytecode"
-	"english/ivm"
-	"english/parser"
-	"english/stacktraces"
-	"english/transpiler"
-	"english/astvm"
-	"english/stdlib"
+	"github.com/Advik-B/english/ast"
+	"github.com/Advik-B/english/bytecode"
+	"github.com/Advik-B/english/ivm"
+	"github.com/Advik-B/english/parser"
+	"github.com/Advik-B/english/stacktraces"
+	"github.com/Advik-B/english/transpiler"
+	"github.com/Advik-B/english/astvm"
+	"github.com/Advik-B/english/stdlib"
 	"fmt"
 	"os"
 	"path/filepath"

@@ -1,7 +1,7 @@
 package main
 
 import (
-	"english/cmd"
+	"github.com/Advik-B/english/cmd"
 )
 
 func main() {

@@ -3,7 +3,7 @@
 package stdlib
 
 import (
-	"english/astvm"
+	"github.com/Advik-B/english/astvm"
 	"math"
 )
 

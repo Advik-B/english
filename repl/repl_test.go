@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"english/repl"
+	"github.com/Advik-B/english/repl"
 )
 
 // ── Helpers ──────────────────────────────────────────────────────────────────

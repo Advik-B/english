@@ -2,10 +2,10 @@ package vm
 
 import (
 	"bufio"
-	"english/ast"
-	"english/bytecode"
-	"english/parser"
-	"english/astvm/types"
+	"github.com/Advik-B/english/ast"
+	"github.com/Advik-B/english/bytecode"
+	"github.com/Advik-B/english/parser"
+	"github.com/Advik-B/english/astvm/types"
 	"fmt"
 	"io"
 	"os"

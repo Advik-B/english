@@ -6,8 +6,8 @@ package ivm_test
 // error hierarchy, stdlib functions, encoding, and more.
 
 import (
-	"english/ivm"
-	"english/stdlib"
+	"github.com/Advik-B/english/ivm"
+	"github.com/Advik-B/english/stdlib"
 	"fmt"
 	"os"
 	"path/filepath"

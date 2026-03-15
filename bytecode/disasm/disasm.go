@@ -20,9 +20,9 @@ import (
 	"path/filepath"
 	"strings"
 
-	"english/ast"
-	"english/bytecode"
-	"english/parser"
+	"github.com/Advik-B/english/ast"
+	"github.com/Advik-B/english/bytecode"
+	"github.com/Advik-B/english/parser"
 
 	"github.com/charmbracelet/lipgloss"
 )

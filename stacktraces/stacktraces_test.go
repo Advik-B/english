@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"english/stacktraces"
+	"github.com/Advik-B/english/stacktraces"
 )
 
 // stripANSI removes ANSI escape sequences from s so that tests can check

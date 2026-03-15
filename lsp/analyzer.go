@@ -1,9 +1,9 @@
 package lsp
 
 import (
-	"english/ast"
-	"english/parser"
-	"english/token"
+	"github.com/Advik-B/english/ast"
+	"github.com/Advik-B/english/parser"
+	"github.com/Advik-B/english/token"
 	"fmt"
 	"strings"
 )

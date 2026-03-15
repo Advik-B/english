@@ -2,7 +2,7 @@ package bytecode
 
 import (
 	"bytes"
-	"english/ast"
+	"github.com/Advik-B/english/ast"
 	"testing"
 )
 

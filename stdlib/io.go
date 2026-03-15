@@ -2,7 +2,7 @@ package stdlib
 
 import (
 	"bufio"
-	"english/astvm"
+	"github.com/Advik-B/english/astvm"
 	"fmt"
 	"os"
 	"strings"

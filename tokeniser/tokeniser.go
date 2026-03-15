@@ -6,7 +6,7 @@
 package tokeniser
 
 import (
-	"english/token"
+	"github.com/Advik-B/english/token"
 	"strings"
 	"unicode"
 )

@@ -1,7 +1,7 @@
 package cmd
 
 import (
-	"english/lsp"
+	"github.com/Advik-B/english/lsp"
 	"fmt"
 	"log"
 	"os"

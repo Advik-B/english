@@ -1,8 +1,8 @@
 package vm
 
 import (
-	"english/ast"
-	"english/astvm/types"
+	"github.com/Advik-B/english/ast"
+	"github.com/Advik-B/english/astvm/types"
 	"fmt"
 )
 

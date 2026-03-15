@@ -1,6 +1,6 @@
 package ivm
 
-import "english/ast"
+import "github.com/Advik-B/english/ast"
 
 func (c *Compiler) compileIfStatement(s *ast.IfStatement) error {
 	if err := c.compileExpression(s.Condition); err != nil {

@@ -1,7 +1,7 @@
 package ivm
 
 import (
-	"english/ast"
+	"github.com/Advik-B/english/ast"
 	"fmt"
 )
 

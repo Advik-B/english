@@ -1,9 +1,9 @@
 package transpiler_test
 
 import (
-	ast_pkg "english/ast"
-	"english/parser"
-	"english/transpiler"
+	ast_pkg "github.com/Advik-B/english/ast"
+	"github.com/Advik-B/english/parser"
+	"github.com/Advik-B/english/transpiler"
 	"os"
 	"strings"
 	"testing"

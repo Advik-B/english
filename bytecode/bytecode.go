@@ -7,7 +7,7 @@ package bytecode
 import (
 	"bytes"
 	"encoding/binary"
-	"english/ast"
+	"github.com/Advik-B/english/ast"
 	"fmt"
 	"io"
 	"math"

@@ -18,8 +18,8 @@ import (
 	"regexp"
 	"strings"
 
-	"english/token"
-	"english/tokeniser"
+	"github.com/Advik-B/english/token"
+	"github.com/Advik-B/english/tokeniser"
 
 	"github.com/charmbracelet/lipgloss"
 	"github.com/muesli/termenv"

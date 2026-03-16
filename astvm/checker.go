@@ -1,9 +1,9 @@
 package vm
 
 import (
-	"english/ast"
-	"english/parser"
-	"english/astvm/types"
+	"github.com/Advik-B/english/ast"
+	"github.com/Advik-B/english/parser"
+	"github.com/Advik-B/english/astvm/types"
 	"fmt"
 	"os"
 	"path/filepath"

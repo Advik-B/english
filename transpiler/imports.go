@@ -1,8 +1,8 @@
 package transpiler
 
 import (
-	"english/ast"
-	"english/parser"
+	"github.com/Advik-B/english/ast"
+	"github.com/Advik-B/english/parser"
 	"os"
 )
 

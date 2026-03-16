@@ -10,7 +10,7 @@
 package transpiler
 
 import (
-	"english/ast"
+	"github.com/Advik-B/english/ast"
 	"strings"
 )
 

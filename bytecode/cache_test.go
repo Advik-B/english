@@ -1,7 +1,7 @@
 package bytecode
 
 import (
-	"english/ast"
+	"github.com/Advik-B/english/ast"
 	"os"
 	"path/filepath"
 	"testing"

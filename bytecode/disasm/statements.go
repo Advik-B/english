@@ -10,7 +10,7 @@ import (
 	"fmt"
 	"strings"
 
-	"english/ast"
+	"github.com/Advik-B/english/ast"
 )
 
 // stmt emits one or more disassembly lines for a single AST statement.

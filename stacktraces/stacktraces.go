@@ -6,7 +6,7 @@
 package stacktraces
 
 import (
-	"english/highlight"
+	"github.com/Advik-B/english/highlight"
 	"fmt"
 	"os"
 	"strings"

@@ -2,11 +2,12 @@ package vm
 
 import (
 	"bufio"
-	"english/ast"
-	"english/bytecode"
-	"english/parser"
-	"english/astvm/types"
+	"github.com/Advik-B/english/ast"
+	"github.com/Advik-B/english/bytecode"
+	"github.com/Advik-B/english/parser"
+	"github.com/Advik-B/english/astvm/types"
 	"fmt"
+	"io"
 	"os"
 	"strings"
 )
@@ -17,6 +18,7 @@ type Evaluator struct {
 	callStack   []string
 	builtinFn   BuiltinFunc // injected stdlib evaluator
 	currentLine int         // source line of the statement currently being evaluated
+	out         io.Writer   // destination for Print/output statements (default: os.Stdout)
 }
 
 // NewEvaluator creates a new evaluator with the given environment and optional builtin function.
@@ -25,7 +27,16 @@ func NewEvaluator(env *Environment, builtinFn BuiltinFunc) *Evaluator {
 		env:       env,
 		callStack: []string{"<main>"},
 		builtinFn: builtinFn,
+		out:       os.Stdout,
 	}
+}
+
+// SetOutput redirects all Print and output statements to w instead of os.Stdout.
+// This is used by the REPL so that program output goes to the same writer as
+// prompts and error messages, making the REPL fully testable without OS-level
+// stdout redirection.
+func (ev *Evaluator) SetOutput(w io.Writer) {
+	ev.out = w
 }
 
 func (ev *Evaluator) runtimeError(message string) error {
@@ -445,7 +456,7 @@ func (ev *Evaluator) evalAskExpression(ae *ast.AskExpression) (Value, error) {
 		if err != nil {
 			return nil, err
 		}
-		fmt.Print(ToString(prompt))
+		fmt.Fprint(ev.out, ToString(prompt))
 	}
 
 	// Read a line from stdin
@@ -511,9 +522,9 @@ func (ev *Evaluator) evalOutput(os *ast.OutputStatement) (Value, error) {
 	}
 	output := strings.Join(parts, " ")
 	if os.Newline {
-		fmt.Println(output)
+		fmt.Fprintln(ev.out, output)
 	} else {
-		fmt.Print(output)
+		fmt.Fprint(ev.out, output)
 	}
 	return nil, nil
 }

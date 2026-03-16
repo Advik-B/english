@@ -4,8 +4,8 @@ import (
 	"strings"
 	"testing"
 
-	"english/token"
-	"english/tokeniser"
+	"github.com/Advik-B/english/token"
+	"github.com/Advik-B/english/tokeniser"
 )
 
 // ─── TokenizeForHighlight ─────────────────────────────────────────────────────

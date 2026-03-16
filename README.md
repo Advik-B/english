@@ -2,6 +2,12 @@
 
 > Write code the way you speak. **English** is a fully-featured, Turing-complete programming language where your source code reads like plain English.
 
+Example below:
+
+![a gif containing the rendered contents of demo/repl.cast](demo/repl.gif)
+
+---
+
 ```english
 Declare function greet that takes name and does the following:
     Print "Hello, ", the value of name, "!".

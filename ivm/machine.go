@@ -2,7 +2,7 @@ package ivm
 
 import (
 "bufio"
-"english/astvm/types"
+"github.com/Advik-B/english/astvm/types"
 "fmt"
 "os"
 "strings"

@@ -15,10 +15,10 @@ package feature_parity_test
 
 import (
 	"bytes"
-	"english/astvm"
-	"english/stdlib"
-	"english/ivm"
-	"english/parser"
+	"github.com/Advik-B/english/astvm"
+	"github.com/Advik-B/english/stdlib"
+	"github.com/Advik-B/english/ivm"
+	"github.com/Advik-B/english/parser"
 	"io"
 	"os"
 	"strings"

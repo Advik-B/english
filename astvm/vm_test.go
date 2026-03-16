@@ -2,10 +2,10 @@ package vm_test
 
 import (
 	"bytes"
-	"english/ast"
-	"english/parser"
-	"english/astvm"
-	"english/stdlib"
+	"github.com/Advik-B/english/ast"
+	"github.com/Advik-B/english/parser"
+	"github.com/Advik-B/english/astvm"
+	"github.com/Advik-B/english/stdlib"
 	"io"
 	"os"
 	"strings"

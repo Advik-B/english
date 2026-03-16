@@ -1,6 +1,6 @@
 package ivm
 
-import "english/ast"
+import "github.com/Advik-B/english/ast"
 
 func (c *Compiler) compileStructDecl(s *ast.StructDecl) error {
 	sd := &StructDef{Name: s.Name}

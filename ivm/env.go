@@ -1,7 +1,7 @@
 package ivm
 
 import (
-	"english/astvm/types"
+	"github.com/Advik-B/english/astvm/types"
 	"fmt"
 )
 

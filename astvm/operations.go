@@ -1,7 +1,7 @@
 package vm
 
 import (
-	"english/astvm/types"
+	"github.com/Advik-B/english/astvm/types"
 	"errors"
 	"fmt"
 )

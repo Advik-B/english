@@ -1,8 +1,8 @@
 package stdlib
 
 import (
-	"english/astvm"
-	"english/astvm/types"
+	"github.com/Advik-B/english/astvm"
+	"github.com/Advik-B/english/astvm/types"
 	"fmt"
 )
 

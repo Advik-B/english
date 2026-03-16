@@ -2,9 +2,9 @@ package ivm_test
 
 import (
 "bytes"
-"english/ivm"
-"english/parser"
-"english/stdlib"
+"github.com/Advik-B/english/ivm"
+"github.com/Advik-B/english/parser"
+"github.com/Advik-B/english/stdlib"
 "fmt"
 "io"
 "os"

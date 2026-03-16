@@ -9,11 +9,11 @@ package cmd
 // working directly with the instruction representation used by the ivm VM.
 
 import (
-	"english/ivm"
-	"english/parser"
-	"english/stacktraces"
-	"english/astvm"
-	"english/stdlib"
+	"github.com/Advik-B/english/ivm"
+	"github.com/Advik-B/english/parser"
+	"github.com/Advik-B/english/stacktraces"
+	"github.com/Advik-B/english/astvm"
+	"github.com/Advik-B/english/stdlib"
 	"fmt"
 	"os"
 	"path/filepath"

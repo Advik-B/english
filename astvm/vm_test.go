@@ -703,6 +703,82 @@ func TestEvaluatorListOperations(t *testing.T) {
 	}
 }
 
+func TestEvaluatorRangeLiteral(t *testing.T) {
+	tests := []struct {
+		code     string
+		varName  string
+		expected []interface{}
+	}{
+		{
+			code:     `Declare r to be [1 .. 5].`,
+			varName:  "r",
+			expected: []interface{}{float64(1), float64(2), float64(3), float64(4), float64(5)},
+		},
+		{
+			code:     `Let myRange be a range from 1 to 3.`,
+			varName:  "myRange",
+			expected: []interface{}{float64(1), float64(2), float64(3)},
+		},
+		{
+			code:     `Declare desc to be [5 .. 1].`,
+			varName:  "desc",
+			expected: []interface{}{float64(5), float64(4), float64(3), float64(2), float64(1)},
+		},
+	}
+
+	for _, test := range tests {
+		lexer := parser.NewLexer(test.code)
+		tokens := lexer.TokenizeAll()
+		p := parser.NewParser(tokens)
+		program, err := p.Parse()
+		if err != nil {
+			t.Fatalf("Parse error for %q: %v", test.code, err)
+		}
+
+		env := vm.NewEnvironment()
+		stdlib.Register(env)
+		evaluator := vm.NewEvaluator(env, stdlib.Eval)
+		_, err = evaluator.Eval(program)
+		if err != nil {
+			t.Fatalf("Eval error for %q: %v", test.code, err)
+		}
+
+		val, ok := env.Get(test.varName)
+		if !ok {
+			t.Fatalf("Variable %q not found", test.varName)
+		}
+
+		result, ok := val.([]interface{})
+		if !ok {
+			t.Fatalf("Expected []interface{}, got %T", val)
+		}
+
+		if len(result) != len(test.expected) {
+			t.Errorf("Expected %d elements, got %d", len(test.expected), len(result))
+		}
+
+		for i, v := range result {
+			if v != test.expected[i] {
+				t.Errorf("Element %d: expected %v, got %v", i, test.expected[i], v)
+			}
+		}
+	}
+}
+
+func TestEvaluatorRangeInLoop(t *testing.T) {
+	code := `For each n in [1 .. 3], do the following:
+    Print n.
+thats it.`
+
+	output := captureOutput(func() {
+		evaluate(code)
+	})
+	expected := "1\n2\n3\n"
+	if output != expected {
+		t.Errorf("Expected %q, got %q", expected, output)
+	}
+}
+
 func TestEvaluatorStringConcatenation(t *testing.T) {
 	code := `Declare x to be "Hello" + " World".
 Print the value of x.`

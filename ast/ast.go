@@ -171,6 +171,15 @@ type ListLiteral struct {
 func (ll *ListLiteral) node()           {}
 func (ll *ListLiteral) expressionNode() {}
 
+// RangeLiteral represents a range expression like [1 .. 30] or a range from 1 to 30
+type RangeLiteral struct {
+	Start Expression
+	End   Expression
+}
+
+func (rl *RangeLiteral) node()           {}
+func (rl *RangeLiteral) expressionNode() {}
+
 // Identifier represents a variable reference
 type Identifier struct {
 	Name string

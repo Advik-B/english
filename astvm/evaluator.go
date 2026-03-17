@@ -138,6 +138,8 @@ func (ev *Evaluator) Eval(node interface{}) (Value, error) {
 		return node.Value, nil
 	case *ast.ListLiteral:
 		return ev.evalListLiteral(node)
+	case *ast.RangeLiteral:
+		return ev.evalRangeLiteral(node)
 	case *ast.Identifier:
 		return ev.evalIdentifier(node)
 	case *ast.BinaryExpression:
@@ -775,6 +777,41 @@ func (ev *Evaluator) evalListLiteral(ll *ast.ListLiteral) (Value, error) {
 			return nil, err
 		}
 		result = append(result, val)
+	}
+	return result, nil
+}
+
+func (ev *Evaluator) evalRangeLiteral(rl *ast.RangeLiteral) (Value, error) {
+	startVal, err := ev.Eval(rl.Start)
+	if err != nil {
+		return nil, err
+	}
+	endVal, err := ev.Eval(rl.End)
+	if err != nil {
+		return nil, err
+	}
+
+	start, err := ToNumber(startVal)
+	if err != nil {
+		return nil, ev.runtimeError(fmt.Sprintf("range start must be a number, got %T", startVal))
+	}
+	end, err := ToNumber(endVal)
+	if err != nil {
+		return nil, ev.runtimeError(fmt.Sprintf("range end must be a number, got %T", endVal))
+	}
+
+	// Generate the range as a list
+	var result []interface{}
+	if start <= end {
+		// Ascending range
+		for i := start; i <= end; i++ {
+			result = append(result, i)
+		}
+	} else {
+		// Descending range
+		for i := start; i >= end; i-- {
+			result = append(result, i)
+		}
 	}
 	return result, nil
 }

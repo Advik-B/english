@@ -379,6 +379,28 @@ elems[i] = m.pop()
 }
 m.push(elems)
 
+case OP_BUILD_RANGE:
+endVal := m.pop()
+startVal := m.pop()
+start, ok1 := startVal.(float64)
+end, ok2 := endVal.(float64)
+if !ok1 || !ok2 {
+return nil, false, m.runtimeErr("BUILD_RANGE: start and end must be numbers")
+}
+var elems []interface{}
+if start <= end {
+// Ascending range
+for i := start; i <= end; i++ {
+elems = append(elems, i)
+}
+} else {
+// Descending range
+for i := start; i >= end; i-- {
+elems = append(elems, i)
+}
+}
+m.push(elems)
+
 case OP_BUILD_ARRAY:
 count := int(operand)
 typeName, ok := m.pop().(string)

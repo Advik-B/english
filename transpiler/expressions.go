@@ -39,6 +39,8 @@ func (t *Transpiler) transpileExpr(expr ast.Expression) string {
 		return sanitizeIdent(e.Name)
 	case *ast.ListLiteral:
 		return t.transpileListLit(e.Elements)
+	case *ast.RangeLiteral:
+		return t.transpileRangeLit(e)
 	case *ast.ArrayLiteral:
 		return t.transpileListLit(e.Elements)
 	case *ast.LookupTableLiteral:
@@ -100,6 +102,25 @@ func (t *Transpiler) transpileListLit(elements []ast.Expression) string {
 		parts[i] = t.transpileExpr(el)
 	}
 	return "[" + strings.Join(parts, ", ") + "]"
+}
+
+func (t *Transpiler) transpileRangeLit(e *ast.RangeLiteral) string {
+	// Transpile range literals to Python list(range(...))
+	// Python's range is exclusive on the end, but English ranges are inclusive
+	// So we need to add 1 to the end value
+	start := t.transpileExpr(e.Start)
+	end := t.transpileExpr(e.End)
+
+	// Wrap in maybeInt to convert floats to ints for range()
+	start = maybeInt(start)
+	end = maybeInt(end)
+
+	// Check if we need ascending or descending range
+	// We'll use a conditional expression to handle both cases
+	// list(range(start, end+1)) for ascending
+	// list(range(start, end-1, -1)) for descending
+	return fmt.Sprintf("list(range(%s, %s + 1 if %s <= %s else %s - 1, 1 if %s <= %s else -1))",
+		start, end, start, end, end, start, end)
 }
 
 func (t *Transpiler) transpileBinaryExpr(e *ast.BinaryExpression) string {

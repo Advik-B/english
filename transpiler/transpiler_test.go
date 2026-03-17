@@ -277,6 +277,29 @@ func TestListLiteral(t *testing.T) {
 	assertContainsLine(t, out, "nums = [1, 2, 3]")
 }
 
+func TestRangeLiteralProgrammerStyle(t *testing.T) {
+	out := transpile(t, `Declare nums to be [1 .. 5].`)
+	assertContains(t, out, "list(range(1, 5 + 1 if 1 <= 5 else 5 - 1, 1 if 1 <= 5 else -1))")
+}
+
+func TestRangeLiteralNaturalEnglish(t *testing.T) {
+	out := transpile(t, `Let myRange be a range from 10 to 15.`)
+	assertContains(t, out, "list(range(10, 15 + 1 if 10 <= 15 else 15 - 1, 1 if 10 <= 15 else -1))")
+}
+
+func TestRangeLiteralDescending(t *testing.T) {
+	out := transpile(t, `Declare countdown to be [10 .. 5].`)
+	assertContains(t, out, "list(range(10, 5 + 1 if 10 <= 5 else 5 - 1, 1 if 10 <= 5 else -1))")
+}
+
+func TestRangeLiteralInLoop(t *testing.T) {
+	out := transpile(t, `For each n in [1 .. 3], do the following:
+    Print n.
+thats it.`)
+	assertContains(t, out, "for n in list(range(1, 3 + 1 if 1 <= 3 else 3 - 1, 1 if 1 <= 3 else -1)):")
+	assertContains(t, out, "print(n)")
+}
+
 func TestIndexAccess(t *testing.T) {
 	// Integer-literal indices must not be wrapped in int().
 	out := transpile(t, `Declare nums to be [10, 20, 30].

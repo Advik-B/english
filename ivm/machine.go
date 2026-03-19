@@ -387,19 +387,8 @@ end, ok2 := endVal.(float64)
 if !ok1 || !ok2 {
 return nil, false, m.runtimeErr("BUILD_RANGE: start and end must be numbers")
 }
-var elems []interface{}
-if start <= end {
-// Ascending range
-for i := start; i <= end; i++ {
-elems = append(elems, i)
-}
-} else {
-// Descending range
-for i := start; i >= end; i-- {
-elems = append(elems, i)
-}
-}
-m.push(elems)
+// Create a RangeValue instead of generating the full slice
+m.push(types.NewRange(start, end))
 
 case OP_BUILD_ARRAY:
 count := int(operand)

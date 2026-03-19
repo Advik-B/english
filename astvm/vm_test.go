@@ -5,6 +5,7 @@ import (
 	"github.com/Advik-B/english/ast"
 	"github.com/Advik-B/english/parser"
 	"github.com/Advik-B/english/astvm"
+	"github.com/Advik-B/english/astvm/types"
 	"github.com/Advik-B/english/stdlib"
 	"io"
 	"os"
@@ -748,11 +749,13 @@ func TestEvaluatorRangeLiteral(t *testing.T) {
 			t.Fatalf("Variable %q not found", test.varName)
 		}
 
-		result, ok := val.([]interface{})
+		rangeVal, ok := val.(*types.RangeValue)
 		if !ok {
-			t.Fatalf("Expected []interface{}, got %T", val)
+			t.Fatalf("Expected *RangeValue, got %T", val)
 		}
 
+		// Convert to slice for comparison
+		result := rangeVal.ToSlice()
 		if len(result) != len(test.expected) {
 			t.Errorf("Expected %d elements, got %d", len(test.expected), len(result))
 		}
@@ -762,6 +765,85 @@ func TestEvaluatorRangeLiteral(t *testing.T) {
 				t.Errorf("Element %d: expected %v, got %v", i, test.expected[i], v)
 			}
 		}
+	}
+}
+
+func TestRangeImmutability(t *testing.T) {
+	// Test that trying to assign to a range index results in an error
+	code := `Declare r to be [1 .. 10].
+Set the item at position 0 in r to be 99.`
+
+	lexer := parser.NewLexer(code)
+	tokens := lexer.TokenizeAll()
+	p := parser.NewParser(tokens)
+	program, err := p.Parse()
+	if err != nil {
+		t.Fatalf("Parse error: %v", err)
+	}
+
+	env := vm.NewEnvironment()
+	stdlib.Register(env)
+	evaluator := vm.NewEvaluator(env, stdlib.Eval)
+	_, err = evaluator.Eval(program)
+
+	if err == nil {
+		t.Fatal("Expected error when trying to modify a range, but got nil")
+	}
+
+	if !strings.Contains(err.Error(), "cannot modify a range") {
+		t.Errorf("Expected error message to contain 'cannot modify a range', got: %v", err)
+	}
+}
+
+func TestRangeLazyEvaluation(t *testing.T) {
+	// Test that large ranges use lazy evaluation
+	// A range with more than 20 elements should still be fast to create
+	code := `Declare bigRange to be [1 .. 1000].
+Declare first to be the item at position 0 in bigRange.
+Declare middle to be the item at position 500 in bigRange.
+Declare last to be the item at position 999 in bigRange.`
+
+	lexer := parser.NewLexer(code)
+	tokens := lexer.TokenizeAll()
+	p := parser.NewParser(tokens)
+	program, err := p.Parse()
+	if err != nil {
+		t.Fatalf("Parse error: %v", err)
+	}
+
+	env := vm.NewEnvironment()
+	stdlib.Register(env)
+	evaluator := vm.NewEvaluator(env, stdlib.Eval)
+	_, err = evaluator.Eval(program)
+	if err != nil {
+		t.Fatalf("Eval error: %v", err)
+	}
+
+	// Verify the values are correct
+	first, _ := env.Get("first")
+	if first != float64(1) {
+		t.Errorf("Expected first element to be 1, got %v", first)
+	}
+
+	middle, _ := env.Get("middle")
+	if middle != float64(501) {
+		t.Errorf("Expected middle element to be 501, got %v", middle)
+	}
+
+	last, _ := env.Get("last")
+	if last != float64(1000) {
+		t.Errorf("Expected last element to be 1000, got %v", last)
+	}
+
+	// Verify the range itself is still a RangeValue (not expanded to a full slice)
+	bigRange, _ := env.Get("bigRange")
+	rangeVal, ok := bigRange.(*types.RangeValue)
+	if !ok {
+		t.Fatalf("Expected bigRange to be *RangeValue, got %T", bigRange)
+	}
+
+	if rangeVal.Length() != 1000 {
+		t.Errorf("Expected range length to be 1000, got %d", rangeVal.Length())
 	}
 }
 

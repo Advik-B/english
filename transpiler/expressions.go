@@ -105,9 +105,10 @@ func (t *Transpiler) transpileListLit(elements []ast.Expression) string {
 }
 
 func (t *Transpiler) transpileRangeLit(e *ast.RangeLiteral) string {
-	// Transpile range literals to Python list(range(...))
+	// Transpile range literals to Python range(...)
 	// Python's range is exclusive on the end, but English ranges are inclusive
-	// So we need to add 1 to the end value
+	// So we need to add 1 to the end value for ascending ranges
+	// For descending ranges, we need to subtract 1 from the end value
 	start := t.transpileExpr(e.Start)
 	end := t.transpileExpr(e.End)
 
@@ -115,11 +116,10 @@ func (t *Transpiler) transpileRangeLit(e *ast.RangeLiteral) string {
 	start = maybeInt(start)
 	end = maybeInt(end)
 
-	// Check if we need ascending or descending range
-	// We'll use a conditional expression to handle both cases
-	// list(range(start, end+1)) for ascending
-	// list(range(start, end-1, -1)) for descending
-	return fmt.Sprintf("list(range(%s, %s + 1 if %s <= %s else %s - 1, 1 if %s <= %s else -1))",
+	// Use a conditional expression to handle both ascending and descending ranges
+	// range(start, end+1) for ascending
+	// range(start, end-1, -1) for descending
+	return fmt.Sprintf("range(%s, %s + 1 if %s <= %s else %s - 1, 1 if %s <= %s else -1)",
 		start, end, start, end, end, start, end)
 }
 

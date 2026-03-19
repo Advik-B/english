@@ -45,3 +45,97 @@ func (lt *LookupTableValue) Delete(serialKey string) bool {
 	lt.KeyOrder = newOrder
 	return true
 }
+
+// RangeValue represents an immutable range with lazy evaluation.
+// For ranges with more than 20 elements, values are generated on-demand.
+type RangeValue struct {
+	Start     float64
+	End       float64
+	Ascending bool
+	cache     []interface{} // cached elements (up to 20 at a time)
+	cachePos  int           // position in the range where cache starts
+}
+
+// NewRange creates a new RangeValue.
+func NewRange(start, end float64) *RangeValue {
+	return &RangeValue{
+		Start:     start,
+		End:       end,
+		Ascending: start <= end,
+		cache:     nil,
+		cachePos:  0,
+	}
+}
+
+// Length returns the total number of elements in the range.
+func (r *RangeValue) Length() int {
+	if r.Ascending {
+		return int(r.End - r.Start + 1)
+	}
+	return int(r.Start - r.End + 1)
+}
+
+// Get returns the element at the given index (0-based).
+// Implements lazy evaluation by caching 20 elements at a time.
+func (r *RangeValue) Get(index int) (interface{}, bool) {
+	length := r.Length()
+	if index < 0 || index >= length {
+		return nil, false
+	}
+
+	// For small ranges (<=20 elements), generate all at once
+	if length <= 20 {
+		if r.cache == nil {
+			r.cache = r.generateChunk(0, length)
+			r.cachePos = 0
+		}
+		return r.cache[index], true
+	}
+
+	// For large ranges, use chunked lazy evaluation
+	chunkStart := (index / 20) * 20
+	if r.cache == nil || r.cachePos != chunkStart {
+		chunkSize := 20
+		if chunkStart+chunkSize > length {
+			chunkSize = length - chunkStart
+		}
+		r.cache = r.generateChunk(chunkStart, chunkSize)
+		r.cachePos = chunkStart
+	}
+
+	return r.cache[index-r.cachePos], true
+}
+
+// generateChunk generates a chunk of elements starting at offset with the given size.
+func (r *RangeValue) generateChunk(offset, size int) []interface{} {
+	result := make([]interface{}, size)
+	if r.Ascending {
+		start := r.Start + float64(offset)
+		for i := 0; i < size; i++ {
+			result[i] = start + float64(i)
+		}
+	} else {
+		start := r.Start - float64(offset)
+		for i := 0; i < size; i++ {
+			result[i] = start - float64(i)
+		}
+	}
+	return result
+}
+
+// ToSlice converts the entire range to a slice (for iteration).
+// This is used when the range is small or when full materialization is needed.
+func (r *RangeValue) ToSlice() []interface{} {
+	length := r.Length()
+	result := make([]interface{}, length)
+	if r.Ascending {
+		for i := 0; i < length; i++ {
+			result[i] = r.Start + float64(i)
+		}
+	} else {
+		for i := 0; i < length; i++ {
+			result[i] = r.Start - float64(i)
+		}
+	}
+	return result
+}

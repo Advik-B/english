@@ -99,3 +99,6 @@ type ArrayValue = types.ArrayValue
 
 // LookupTableValue is re-exported from vm/types for convenience within vm/.
 type LookupTableValue = types.LookupTableValue
+
+// RangeValue is re-exported from vm/types for convenience within vm/.
+type RangeValue = types.RangeValue

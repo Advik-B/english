@@ -383,6 +383,8 @@ func (ev *Evaluator) evalIndexAssignment(ia *ast.IndexAssignment) (Value, error)
 			}
 		}
 		items.Elements[idx] = value
+	case *RangeValue:
+		return nil, ev.runtimeError("cannot modify a range")
 	default:
 		return nil, ev.runtimeError(fmt.Sprintf("cannot index into %s", typeKindName(inferTypeKind(list))))
 	}
@@ -416,6 +418,12 @@ func (ev *Evaluator) evalIndexExpression(ie *ast.IndexExpression) (Value, error)
 			return nil, ev.runtimeError(fmt.Sprintf("index %d out of range for array of length %d", idx, len(items.Elements)))
 		}
 		return items.Elements[idx], nil
+	case *RangeValue:
+		val, ok := items.Get(idx)
+		if !ok {
+			return nil, ev.runtimeError(fmt.Sprintf("index %d out of range for range of length %d", idx, items.Length()))
+		}
+		return val, nil
 	default:
 		return nil, ev.runtimeError(fmt.Sprintf("TypeError: cannot index into %s", typeKindName(inferTypeKind(list))))
 	}
@@ -434,6 +442,8 @@ func (ev *Evaluator) evalLengthExpression(le *ast.LengthExpression) (Value, erro
 		return float64(len(v.Elements)), nil
 	case *LookupTableValue:
 		return float64(len(v.Entries)), nil
+	case *RangeValue:
+		return float64(v.Length()), nil
 	case string:
 		return float64(len(v)), nil
 	default:
@@ -738,6 +748,29 @@ func (ev *Evaluator) evalForEachLoop(fel *ast.ForEachLoop) (Value, error) {
 			}
 			result = val
 		}
+	case *RangeValue:
+		// For ranges, we iterate using ToSlice() to materialize the values
+		// This ensures lazy evaluation is respected while still allowing iteration
+		for _, item := range col.ToSlice() {
+			childEnv := oldEnv.NewChild()
+			ev.env = childEnv
+			ev.env.Define(fel.Item, item, false)
+			val, err := ev.evalStatements(fel.Body)
+			ev.env = oldEnv
+			if err != nil {
+				return nil, err
+			}
+			if _, ok := val.(*ReturnValue); ok {
+				return val, nil
+			}
+			if _, ok := val.(*BreakValue); ok {
+				break
+			}
+			if _, ok := val.(*ContinueValue); ok {
+				continue
+			}
+			result = val
+		}
 	default:
 		return nil, fmt.Errorf("TypeError: 'for each' requires list, array, or lookup table; got %s",
 			typeKindName(inferTypeKind(list)))
@@ -800,20 +833,8 @@ func (ev *Evaluator) evalRangeLiteral(rl *ast.RangeLiteral) (Value, error) {
 		return nil, ev.runtimeError(fmt.Sprintf("range end must be a number, got %T", endVal))
 	}
 
-	// Generate the range as a list
-	var result []interface{}
-	if start <= end {
-		// Ascending range
-		for i := start; i <= end; i++ {
-			result = append(result, i)
-		}
-	} else {
-		// Descending range
-		for i := start; i >= end; i-- {
-			result = append(result, i)
-		}
-	}
-	return result, nil
+	// Return a RangeValue instead of generating the full slice
+	return types.NewRange(start, end), nil
 }
 
 func (ev *Evaluator) evalIdentifier(id *ast.Identifier) (Value, error) {

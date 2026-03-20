@@ -19,6 +19,7 @@ import (
 	"io"
 
 	vm "github.com/Advik-B/english/astvm"
+	"github.com/Advik-B/english/help"
 	"github.com/Advik-B/english/stdlib"
 )
 
@@ -36,11 +37,12 @@ const (
 
 // REPL is an interactive Read-Eval-Print Loop for the English language.
 type REPL struct {
-	env       *vm.Environment
-	evaluator *vm.Evaluator
-	in        *bufio.Reader
-	out       io.Writer
-	useColor  bool
+	env          *vm.Environment
+	evaluator    *vm.Evaluator
+	in           *bufio.Reader
+	out          io.Writer
+	useColor     bool
+	helpRegistry *help.Registry
 }
 
 // New creates a REPL that reads from in and writes all output (prompts,
@@ -54,10 +56,11 @@ func New(in io.Reader, out io.Writer, useColor bool) *REPL {
 	ev := vm.NewEvaluator(env, stdlib.Eval)
 	ev.SetOutput(out)
 	return &REPL{
-		env:       env,
-		evaluator: ev,
-		in:        bufio.NewReader(in),
-		out:       out,
-		useColor:  useColor,
+		env:          env,
+		evaluator:    ev,
+		in:           bufio.NewReader(in),
+		out:          out,
+		useColor:     useColor,
+		helpRegistry: help.NewRegistry(),
 	}
 }

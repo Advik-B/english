@@ -75,6 +75,13 @@ func (r *REPL) Loop() {
 			case "":
 				continue
 			}
+
+			// Handle "help <topic>" for fuzzy search
+			if strings.HasPrefix(trimmed, "help ") {
+				topic := strings.TrimSpace(strings.TrimPrefix(trimmed, "help"))
+				r.printHelp(topic)
+				continue
+			}
 		}
 
 		// ── Ignore blank lines outside of a block ────────────────────────────

@@ -4,6 +4,7 @@ import (
 	"github.com/Advik-B/english/ast"
 	"github.com/Advik-B/english/bytecode"
 	"github.com/Advik-B/english/help"
+	"github.com/Advik-B/english/highlight"
 	"github.com/Advik-B/english/ivm"
 	"github.com/Advik-B/english/parser"
 	"github.com/Advik-B/english/stacktraces"
@@ -197,8 +198,11 @@ func printDetailedHelp(entry *help.HelpEntry) {
 	if len(entry.Examples) > 0 {
 		fmt.Println()
 		fmt.Println("Examples:")
+		useColor := stacktraces.HasColor()
 		for _, example := range entry.Examples {
-			fmt.Printf("  %s\n", example)
+			// Apply syntax highlighting to examples
+			highlighted := highlight.Highlight(example, useColor)
+			fmt.Printf("  %s\n", highlighted)
 		}
 	}
 

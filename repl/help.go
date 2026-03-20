@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/Advik-B/english/help"
+	"github.com/Advik-B/english/highlight"
 )
 
 // printHelp writes help information to the REPL output writer.
@@ -104,7 +105,9 @@ func (r *REPL) printDetailedHelp(entry *help.HelpEntry) {
 		fmt.Fprintln(r.out, "")
 		fmt.Fprintln(r.out, "Examples:")
 		for _, example := range entry.Examples {
-			fmt.Fprintf(r.out, "  %s\n", example)
+			// Apply syntax highlighting to examples
+			highlighted := highlight.Highlight(example, r.useColor)
+			fmt.Fprintf(r.out, "  %s\n", highlighted)
 		}
 	}
 

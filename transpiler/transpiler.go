@@ -342,6 +342,9 @@ func (t *Transpiler) scanExpr(expr ast.Expression) {
 	case *ast.RangeLiteral:
 		t.scanExpr(e.Start)
 		t.scanExpr(e.End)
+		if e.Step != nil {
+			t.scanExpr(e.Step)
+		}
 	case *ast.ArrayLiteral:
 		for _, el := range e.Elements {
 			t.scanExpr(el)

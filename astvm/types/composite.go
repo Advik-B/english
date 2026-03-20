@@ -51,17 +51,38 @@ func (lt *LookupTableValue) Delete(serialKey string) bool {
 type RangeValue struct {
 	Start     float64
 	End       float64
+	Step      float64 // custom step value, default is 1 or -1
 	Ascending bool
 	cache     []interface{} // cached elements (up to 20 at a time)
 	cachePos  int           // position in the range where cache starts
 }
 
-// NewRange creates a new RangeValue.
+// NewRange creates a new RangeValue with default step (1 or -1 based on direction).
 func NewRange(start, end float64) *RangeValue {
+	step := 1.0
+	ascending := start <= end
+	if !ascending {
+		step = -1.0
+	}
 	return &RangeValue{
 		Start:     start,
 		End:       end,
-		Ascending: start <= end,
+		Step:      step,
+		Ascending: ascending,
+		cache:     nil,
+		cachePos:  0,
+	}
+}
+
+// NewRangeWithStep creates a new RangeValue with a custom step value.
+func NewRangeWithStep(start, end, step float64) *RangeValue {
+	// Determine direction based on step sign
+	ascending := step > 0
+	return &RangeValue{
+		Start:     start,
+		End:       end,
+		Step:      step,
+		Ascending: ascending,
 		cache:     nil,
 		cachePos:  0,
 	}
@@ -69,10 +90,31 @@ func NewRange(start, end float64) *RangeValue {
 
 // Length returns the total number of elements in the range.
 func (r *RangeValue) Length() int {
-	if r.Ascending {
-		return int(r.End - r.Start + 1)
+	if r.Step == 0 {
+		return 0 // avoid infinite loop
 	}
-	return int(r.Start - r.End + 1)
+
+	if r.Ascending {
+		if r.End < r.Start {
+			return 0
+		}
+		// For ascending ranges: count = floor((end - start) / step) + 1
+		count := int((r.End-r.Start)/r.Step) + 1
+		if count < 0 {
+			return 0
+		}
+		return count
+	} else {
+		if r.End > r.Start {
+			return 0
+		}
+		// For descending ranges: count = floor((start - end) / abs(step)) + 1
+		count := int((r.Start-r.End)/(-r.Step)) + 1
+		if count < 0 {
+			return 0
+		}
+		return count
+	}
 }
 
 // Get returns the element at the given index (0-based).
@@ -109,16 +151,9 @@ func (r *RangeValue) Get(index int) (interface{}, bool) {
 // generateChunk generates a chunk of elements starting at offset with the given size.
 func (r *RangeValue) generateChunk(offset, size int) []interface{} {
 	result := make([]interface{}, size)
-	if r.Ascending {
-		start := r.Start + float64(offset)
-		for i := 0; i < size; i++ {
-			result[i] = start + float64(i)
-		}
-	} else {
-		start := r.Start - float64(offset)
-		for i := 0; i < size; i++ {
-			result[i] = start - float64(i)
-		}
+	startVal := r.Start + float64(offset)*r.Step
+	for i := 0; i < size; i++ {
+		result[i] = startVal + float64(i)*r.Step
 	}
 	return result
 }
@@ -128,14 +163,8 @@ func (r *RangeValue) generateChunk(offset, size int) []interface{} {
 func (r *RangeValue) ToSlice() []interface{} {
 	length := r.Length()
 	result := make([]interface{}, length)
-	if r.Ascending {
-		for i := 0; i < length; i++ {
-			result[i] = r.Start + float64(i)
-		}
-	} else {
-		for i := 0; i < length; i++ {
-			result[i] = r.Start - float64(i)
-		}
+	for i := 0; i < length; i++ {
+		result[i] = r.Start + float64(i)*r.Step
 	}
 	return result
 }

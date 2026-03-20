@@ -833,7 +833,23 @@ func (ev *Evaluator) evalRangeLiteral(rl *ast.RangeLiteral) (Value, error) {
 		return nil, ev.runtimeError(fmt.Sprintf("range end must be a number, got %T", endVal))
 	}
 
-	// Return a RangeValue instead of generating the full slice
+	// Check if a custom step is provided
+	if rl.Step != nil {
+		stepVal, err := ev.Eval(rl.Step)
+		if err != nil {
+			return nil, err
+		}
+		step, err := ToNumber(stepVal)
+		if err != nil {
+			return nil, ev.runtimeError(fmt.Sprintf("range step must be a number, got %T", stepVal))
+		}
+		if step == 0 {
+			return nil, ev.runtimeError("range step cannot be zero")
+		}
+		return types.NewRangeWithStep(start, end, step), nil
+	}
+
+	// Return a RangeValue with default step
 	return types.NewRange(start, end), nil
 }
 

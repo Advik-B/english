@@ -725,6 +725,26 @@ func TestEvaluatorRangeLiteral(t *testing.T) {
 			varName:  "desc",
 			expected: []interface{}{float64(5), float64(4), float64(3), float64(2), float64(1)},
 		},
+		{
+			code:     `Declare evens to be [0 .. 10 by 2].`,
+			varName:  "evens",
+			expected: []interface{}{float64(0), float64(2), float64(4), float64(6), float64(8), float64(10)},
+		},
+		{
+			code:     `Let odds be a range from 1 to 9 by 2.`,
+			varName:  "odds",
+			expected: []interface{}{float64(1), float64(3), float64(5), float64(7), float64(9)},
+		},
+		{
+			code:     `Declare countdown to be [10 .. 0 by -2].`,
+			varName:  "countdown",
+			expected: []interface{}{float64(10), float64(8), float64(6), float64(4), float64(2), float64(0)},
+		},
+		{
+			code:     `Let multiples be a range from 5 to 25 by 5.`,
+			varName:  "multiples",
+			expected: []interface{}{float64(5), float64(10), float64(15), float64(20), float64(25)},
+		},
 	}
 
 	for _, test := range tests {

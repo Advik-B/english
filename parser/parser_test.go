@@ -844,6 +844,10 @@ func TestParserRangeLiteral(t *testing.T) {
 		{"Let r be [0 .. 100].", "let statement with range"},
 		{"Declare r to be a range from 5 to 20.", "natural English range"},
 		{"Let myRange be a range from 1 to 30.", "natural English with let"},
+		{"Declare evens to be [0 .. 10 by 2].", "programmer-style range with step"},
+		{"Let odds be a range from 1 to 9 by 2.", "natural English range with step"},
+		{"Declare countdown to be [10 .. 0 by -2].", "programmer-style descending range with step"},
+		{"Let multiples be a range from 5 to 25 by 5.", "natural English range with custom step"},
 	}
 
 	for _, test := range tests {

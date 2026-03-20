@@ -349,7 +349,16 @@ func (c *Compiler) compileExpression(expr ast.Expression) error {
 		if err := c.compileExpression(e.End); err != nil {
 			return err
 		}
-		c.chunk.Emit(OP_BUILD_RANGE, 0)
+
+		// Check if a custom step is provided
+		if e.Step != nil {
+			if err := c.compileExpression(e.Step); err != nil {
+				return err
+			}
+			c.chunk.Emit(OP_BUILD_RANGE, 1) // operand=1 indicates custom step
+		} else {
+			c.chunk.Emit(OP_BUILD_RANGE, 0) // operand=0 indicates default step
+		}
 
 	case *ast.ArrayLiteral:
 		for _, elem := range e.Elements {

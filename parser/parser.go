@@ -2278,18 +2278,29 @@ func (p *Parser) parseList() (ast.Expression, error) {
 		return nil, err
 	}
 
-	// Check if it's a range [start .. end]
+	// Check if it's a range [start .. end] or [start .. end by step]
 	if p.curToken.Type == token.DOTDOT {
 		p.nextToken() // consume ".."
 		endExpr, err := p.parseExpression()
 		if err != nil {
 			return nil, err
 		}
+
+		// Check for optional "by step" clause
+		var stepExpr ast.Expression
+		if p.curToken.Type == token.BY {
+			p.nextToken() // consume "by"
+			stepExpr, err = p.parseExpression()
+			if err != nil {
+				return nil, err
+			}
+		}
+
 		if err := p.expectToken(token.RBRACKET); err != nil {
 			return nil, err
 		}
 		p.nextToken()
-		return &ast.RangeLiteral{Start: firstExpr, End: endExpr}, nil
+		return &ast.RangeLiteral{Start: firstExpr, End: endExpr, Step: stepExpr}, nil
 	}
 
 	// Otherwise it's a regular list
@@ -2314,7 +2325,7 @@ func (p *Parser) parseList() (ast.Expression, error) {
 }
 
 func (p *Parser) parseRangeExpression() (ast.Expression, error) {
-	// Expects: RANGE FROM <expr> TO <expr>
+	// Expects: RANGE FROM <expr> TO <expr> [BY <expr>]
 	if err := p.expectToken(token.RANGE); err != nil {
 		return nil, err
 	}
@@ -2340,7 +2351,17 @@ func (p *Parser) parseRangeExpression() (ast.Expression, error) {
 		return nil, err
 	}
 
-	return &ast.RangeLiteral{Start: startExpr, End: endExpr}, nil
+	// Check for optional "by step" or "stepping by step" clause
+	var stepExpr ast.Expression
+	if p.curToken.Type == token.BY {
+		p.nextToken() // consume "by"
+		stepExpr, err = p.parseExpression()
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return &ast.RangeLiteral{Start: startExpr, End: endExpr, Step: stepExpr}, nil
 }
 
 func (p *Parser) parseFunctionArguments() ([]ast.Expression, error) {

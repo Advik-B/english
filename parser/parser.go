@@ -1890,6 +1890,10 @@ func (p *Parser) parsePrimary() (ast.Expression, error) {
 				// "an array of [elements]" or "an array of number [elements]"
 				return p.parseArrayLiteral()
 			}
+			if p.curToken.Type == token.RANGE {
+				// "a range from X to Y"
+				return p.parseRangeExpression()
+			}
 			// Not a special phrase, treat "a"/"an" as identifier
 			return &ast.Identifier{Name: name}, nil
 		}
@@ -2262,21 +2266,54 @@ func (p *Parser) parseList() (ast.Expression, error) {
 	}
 	p.nextToken()
 
-	var elements []ast.Expression
+	// Empty list
+	if p.curToken.Type == token.RBRACKET {
+		p.nextToken()
+		return &ast.ListLiteral{Elements: []ast.Expression{}}, nil
+	}
 
-	if p.curToken.Type != token.RBRACKET {
-		for {
-			elem, err := p.parseExpression()
+	// Parse first expression
+	firstExpr, err := p.parseExpression()
+	if err != nil {
+		return nil, err
+	}
+
+	// Check if it's a range [start .. end] or [start .. end by step]
+	if p.curToken.Type == token.DOTDOT {
+		p.nextToken() // consume ".."
+		endExpr, err := p.parseExpression()
+		if err != nil {
+			return nil, err
+		}
+
+		// Check for optional "by step" clause
+		var stepExpr ast.Expression
+		if p.curToken.Type == token.BY {
+			p.nextToken() // consume "by"
+			stepExpr, err = p.parseExpression()
 			if err != nil {
 				return nil, err
 			}
-			elements = append(elements, elem)
-
-			if p.curToken.Type != token.COMMA {
-				break
-			}
-			p.nextToken()
 		}
+
+		if err := p.expectToken(token.RBRACKET); err != nil {
+			return nil, err
+		}
+		p.nextToken()
+		return &ast.RangeLiteral{Start: firstExpr, End: endExpr, Step: stepExpr}, nil
+	}
+
+	// Otherwise it's a regular list
+	var elements []ast.Expression
+	elements = append(elements, firstExpr)
+
+	for p.curToken.Type == token.COMMA {
+		p.nextToken()
+		elem, err := p.parseExpression()
+		if err != nil {
+			return nil, err
+		}
+		elements = append(elements, elem)
 	}
 
 	if err := p.expectToken(token.RBRACKET); err != nil {
@@ -2285,6 +2322,46 @@ func (p *Parser) parseList() (ast.Expression, error) {
 	p.nextToken()
 
 	return &ast.ListLiteral{Elements: elements}, nil
+}
+
+func (p *Parser) parseRangeExpression() (ast.Expression, error) {
+	// Expects: RANGE FROM <expr> TO <expr> [BY <expr>]
+	if err := p.expectToken(token.RANGE); err != nil {
+		return nil, err
+	}
+	p.nextToken() // consume RANGE
+
+	if err := p.expectToken(token.FROM); err != nil {
+		return nil, err
+	}
+	p.nextToken() // consume FROM
+
+	startExpr, err := p.parseExpression()
+	if err != nil {
+		return nil, err
+	}
+
+	if err := p.expectToken(token.TO); err != nil {
+		return nil, err
+	}
+	p.nextToken() // consume TO
+
+	endExpr, err := p.parseExpression()
+	if err != nil {
+		return nil, err
+	}
+
+	// Check for optional "by step" or "stepping by step" clause
+	var stepExpr ast.Expression
+	if p.curToken.Type == token.BY {
+		p.nextToken() // consume "by"
+		stepExpr, err = p.parseExpression()
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return &ast.RangeLiteral{Start: startExpr, End: endExpr, Step: stepExpr}, nil
 }
 
 func (p *Parser) parseFunctionArguments() ([]ast.Expression, error) {

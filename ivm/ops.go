@@ -218,6 +218,17 @@ func doIndexGet(container, index interface{}) (interface{}, error) {
 			return nil, fmt.Errorf("index %d out of range for array of length %d", i, len(c.Elements))
 		}
 		return c.Elements[i], nil
+	case *types.RangeValue:
+		idx, err := ivmToFloat(index, "index")
+		if err != nil {
+			return nil, err
+		}
+		i := int(idx)
+		val, ok := c.Get(i)
+		if !ok {
+			return nil, fmt.Errorf("index %d out of range for range of length %d", i, c.Length())
+		}
+		return val, nil
 	case string:
 		idx, err := ivmToFloat(index, "index")
 		if err != nil {
@@ -280,6 +291,8 @@ func doIndexSet(container, index, value interface{}) error {
 		}
 		c.Elements[i] = value
 		return nil
+	case *types.RangeValue:
+		return fmt.Errorf("cannot modify a range")
 	default:
 		return fmt.Errorf("cannot assign to index of %s", ivmGetTypeName(container))
 	}
@@ -291,6 +304,8 @@ func doLength(val interface{}) (float64, error) {
 		return float64(len(v)), nil
 	case *types.ArrayValue:
 		return float64(len(v.Elements)), nil
+	case *types.RangeValue:
+		return float64(v.Length()), nil
 	case string:
 		return float64(len([]rune(v))), nil
 	case *types.LookupTableValue:
@@ -339,6 +354,8 @@ func ivmGetTypeName(v interface{}) string {
 	case *types.ArrayValue:
 		elemTypeInfo := &types.TypeInfo{Kind: val.ElementType}
 		return fmt.Sprintf("array of %s", elemTypeInfo.String())
+	case *types.RangeValue:
+		return "range"
 	case *types.LookupTableValue:
 		return "lookup table"
 	case *types.ErrorValue:

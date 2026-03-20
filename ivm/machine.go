@@ -379,6 +379,35 @@ elems[i] = m.pop()
 }
 m.push(elems)
 
+case OP_BUILD_RANGE:
+	hasCustomStep := operand == 1
+	var stepVal interface{}
+	if hasCustomStep {
+		stepVal = m.pop()
+	}
+	endVal := m.pop()
+	startVal := m.pop()
+	start, ok1 := startVal.(float64)
+	end, ok2 := endVal.(float64)
+	if !ok1 || !ok2 {
+		return nil, false, m.runtimeErr("BUILD_RANGE: start and end must be numbers")
+	}
+
+	// Check if a custom step is provided
+	if hasCustomStep {
+		step, ok3 := stepVal.(float64)
+		if !ok3 {
+			return nil, false, m.runtimeErr("BUILD_RANGE: step must be a number")
+		}
+		if step == 0 {
+			return nil, false, m.runtimeErr("BUILD_RANGE: step cannot be zero")
+		}
+		m.push(types.NewRangeWithStep(start, end, step))
+	} else {
+		// Create a RangeValue with default step
+		m.push(types.NewRange(start, end))
+	}
+
 case OP_BUILD_ARRAY:
 count := int(operand)
 typeName, ok := m.pop().(string)

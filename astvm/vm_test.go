@@ -5,6 +5,7 @@ import (
 	"github.com/Advik-B/english/ast"
 	"github.com/Advik-B/english/parser"
 	"github.com/Advik-B/english/astvm"
+	"github.com/Advik-B/english/astvm/types"
 	"github.com/Advik-B/english/stdlib"
 	"io"
 	"os"
@@ -700,6 +701,183 @@ func TestEvaluatorListOperations(t *testing.T) {
 	_, err := evaluate(code)
 	if err != nil {
 		t.Fatalf("Evaluation error: %v", err)
+	}
+}
+
+func TestEvaluatorRangeLiteral(t *testing.T) {
+	tests := []struct {
+		code     string
+		varName  string
+		expected []interface{}
+	}{
+		{
+			code:     `Declare r to be [1 .. 5].`,
+			varName:  "r",
+			expected: []interface{}{float64(1), float64(2), float64(3), float64(4), float64(5)},
+		},
+		{
+			code:     `Let myRange be a range from 1 to 3.`,
+			varName:  "myRange",
+			expected: []interface{}{float64(1), float64(2), float64(3)},
+		},
+		{
+			code:     `Declare desc to be [5 .. 1].`,
+			varName:  "desc",
+			expected: []interface{}{float64(5), float64(4), float64(3), float64(2), float64(1)},
+		},
+		{
+			code:     `Declare evens to be [0 .. 10 by 2].`,
+			varName:  "evens",
+			expected: []interface{}{float64(0), float64(2), float64(4), float64(6), float64(8), float64(10)},
+		},
+		{
+			code:     `Let odds be a range from 1 to 9 by 2.`,
+			varName:  "odds",
+			expected: []interface{}{float64(1), float64(3), float64(5), float64(7), float64(9)},
+		},
+		{
+			code:     `Declare countdown to be [10 .. 0 by -2].`,
+			varName:  "countdown",
+			expected: []interface{}{float64(10), float64(8), float64(6), float64(4), float64(2), float64(0)},
+		},
+		{
+			code:     `Let multiples be a range from 5 to 25 by 5.`,
+			varName:  "multiples",
+			expected: []interface{}{float64(5), float64(10), float64(15), float64(20), float64(25)},
+		},
+	}
+
+	for _, test := range tests {
+		lexer := parser.NewLexer(test.code)
+		tokens := lexer.TokenizeAll()
+		p := parser.NewParser(tokens)
+		program, err := p.Parse()
+		if err != nil {
+			t.Fatalf("Parse error for %q: %v", test.code, err)
+		}
+
+		env := vm.NewEnvironment()
+		stdlib.Register(env)
+		evaluator := vm.NewEvaluator(env, stdlib.Eval)
+		_, err = evaluator.Eval(program)
+		if err != nil {
+			t.Fatalf("Eval error for %q: %v", test.code, err)
+		}
+
+		val, ok := env.Get(test.varName)
+		if !ok {
+			t.Fatalf("Variable %q not found", test.varName)
+		}
+
+		rangeVal, ok := val.(*types.RangeValue)
+		if !ok {
+			t.Fatalf("Expected *RangeValue, got %T", val)
+		}
+
+		// Convert to slice for comparison
+		result := rangeVal.ToSlice()
+		if len(result) != len(test.expected) {
+			t.Errorf("Expected %d elements, got %d", len(test.expected), len(result))
+		}
+
+		for i, v := range result {
+			if v != test.expected[i] {
+				t.Errorf("Element %d: expected %v, got %v", i, test.expected[i], v)
+			}
+		}
+	}
+}
+
+func TestRangeImmutability(t *testing.T) {
+	// Test that trying to assign to a range index results in an error
+	code := `Declare r to be [1 .. 10].
+Set the item at position 0 in r to be 99.`
+
+	lexer := parser.NewLexer(code)
+	tokens := lexer.TokenizeAll()
+	p := parser.NewParser(tokens)
+	program, err := p.Parse()
+	if err != nil {
+		t.Fatalf("Parse error: %v", err)
+	}
+
+	env := vm.NewEnvironment()
+	stdlib.Register(env)
+	evaluator := vm.NewEvaluator(env, stdlib.Eval)
+	_, err = evaluator.Eval(program)
+
+	if err == nil {
+		t.Fatal("Expected error when trying to modify a range, but got nil")
+	}
+
+	if !strings.Contains(err.Error(), "cannot modify a range") {
+		t.Errorf("Expected error message to contain 'cannot modify a range', got: %v", err)
+	}
+}
+
+func TestRangeLazyEvaluation(t *testing.T) {
+	// Test that large ranges use lazy evaluation
+	// A range with more than 20 elements should still be fast to create
+	code := `Declare bigRange to be [1 .. 1000].
+Declare first to be the item at position 0 in bigRange.
+Declare middle to be the item at position 500 in bigRange.
+Declare last to be the item at position 999 in bigRange.`
+
+	lexer := parser.NewLexer(code)
+	tokens := lexer.TokenizeAll()
+	p := parser.NewParser(tokens)
+	program, err := p.Parse()
+	if err != nil {
+		t.Fatalf("Parse error: %v", err)
+	}
+
+	env := vm.NewEnvironment()
+	stdlib.Register(env)
+	evaluator := vm.NewEvaluator(env, stdlib.Eval)
+	_, err = evaluator.Eval(program)
+	if err != nil {
+		t.Fatalf("Eval error: %v", err)
+	}
+
+	// Verify the values are correct
+	first, _ := env.Get("first")
+	if first != float64(1) {
+		t.Errorf("Expected first element to be 1, got %v", first)
+	}
+
+	middle, _ := env.Get("middle")
+	if middle != float64(501) {
+		t.Errorf("Expected middle element to be 501, got %v", middle)
+	}
+
+	last, _ := env.Get("last")
+	if last != float64(1000) {
+		t.Errorf("Expected last element to be 1000, got %v", last)
+	}
+
+	// Verify the range itself is still a RangeValue (not expanded to a full slice)
+	bigRange, _ := env.Get("bigRange")
+	rangeVal, ok := bigRange.(*types.RangeValue)
+	if !ok {
+		t.Fatalf("Expected bigRange to be *RangeValue, got %T", bigRange)
+	}
+
+	if rangeVal.Length() != 1000 {
+		t.Errorf("Expected range length to be 1000, got %d", rangeVal.Length())
+	}
+}
+
+func TestEvaluatorRangeInLoop(t *testing.T) {
+	code := `For each n in [1 .. 3], do the following:
+    Print n.
+thats it.`
+
+	output := captureOutput(func() {
+		evaluate(code)
+	})
+	expected := "1\n2\n3\n"
+	if output != expected {
+		t.Errorf("Expected %q, got %q", expected, output)
 	}
 }
 

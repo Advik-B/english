@@ -138,6 +138,8 @@ func (ev *Evaluator) Eval(node interface{}) (Value, error) {
 		return node.Value, nil
 	case *ast.ListLiteral:
 		return ev.evalListLiteral(node)
+	case *ast.RangeLiteral:
+		return ev.evalRangeLiteral(node)
 	case *ast.Identifier:
 		return ev.evalIdentifier(node)
 	case *ast.BinaryExpression:
@@ -381,6 +383,8 @@ func (ev *Evaluator) evalIndexAssignment(ia *ast.IndexAssignment) (Value, error)
 			}
 		}
 		items.Elements[idx] = value
+	case *RangeValue:
+		return nil, ev.runtimeError("cannot modify a range")
 	default:
 		return nil, ev.runtimeError(fmt.Sprintf("cannot index into %s", typeKindName(inferTypeKind(list))))
 	}
@@ -414,6 +418,12 @@ func (ev *Evaluator) evalIndexExpression(ie *ast.IndexExpression) (Value, error)
 			return nil, ev.runtimeError(fmt.Sprintf("index %d out of range for array of length %d", idx, len(items.Elements)))
 		}
 		return items.Elements[idx], nil
+	case *RangeValue:
+		val, ok := items.Get(idx)
+		if !ok {
+			return nil, ev.runtimeError(fmt.Sprintf("index %d out of range for range of length %d", idx, items.Length()))
+		}
+		return val, nil
 	default:
 		return nil, ev.runtimeError(fmt.Sprintf("TypeError: cannot index into %s", typeKindName(inferTypeKind(list))))
 	}
@@ -432,6 +442,8 @@ func (ev *Evaluator) evalLengthExpression(le *ast.LengthExpression) (Value, erro
 		return float64(len(v.Elements)), nil
 	case *LookupTableValue:
 		return float64(len(v.Entries)), nil
+	case *RangeValue:
+		return float64(v.Length()), nil
 	case string:
 		return float64(len(v)), nil
 	default:
@@ -736,6 +748,29 @@ func (ev *Evaluator) evalForEachLoop(fel *ast.ForEachLoop) (Value, error) {
 			}
 			result = val
 		}
+	case *RangeValue:
+		// For ranges, we iterate using ToSlice() to materialize the values
+		// This ensures lazy evaluation is respected while still allowing iteration
+		for _, item := range col.ToSlice() {
+			childEnv := oldEnv.NewChild()
+			ev.env = childEnv
+			ev.env.Define(fel.Item, item, false)
+			val, err := ev.evalStatements(fel.Body)
+			ev.env = oldEnv
+			if err != nil {
+				return nil, err
+			}
+			if _, ok := val.(*ReturnValue); ok {
+				return val, nil
+			}
+			if _, ok := val.(*BreakValue); ok {
+				break
+			}
+			if _, ok := val.(*ContinueValue); ok {
+				continue
+			}
+			result = val
+		}
 	default:
 		return nil, fmt.Errorf("TypeError: 'for each' requires list, array, or lookup table; got %s",
 			typeKindName(inferTypeKind(list)))
@@ -777,6 +812,45 @@ func (ev *Evaluator) evalListLiteral(ll *ast.ListLiteral) (Value, error) {
 		result = append(result, val)
 	}
 	return result, nil
+}
+
+func (ev *Evaluator) evalRangeLiteral(rl *ast.RangeLiteral) (Value, error) {
+	startVal, err := ev.Eval(rl.Start)
+	if err != nil {
+		return nil, err
+	}
+	endVal, err := ev.Eval(rl.End)
+	if err != nil {
+		return nil, err
+	}
+
+	start, err := ToNumber(startVal)
+	if err != nil {
+		return nil, ev.runtimeError(fmt.Sprintf("range start must be a number, got %T", startVal))
+	}
+	end, err := ToNumber(endVal)
+	if err != nil {
+		return nil, ev.runtimeError(fmt.Sprintf("range end must be a number, got %T", endVal))
+	}
+
+	// Check if a custom step is provided
+	if rl.Step != nil {
+		stepVal, err := ev.Eval(rl.Step)
+		if err != nil {
+			return nil, err
+		}
+		step, err := ToNumber(stepVal)
+		if err != nil {
+			return nil, ev.runtimeError(fmt.Sprintf("range step must be a number, got %T", stepVal))
+		}
+		if step == 0 {
+			return nil, ev.runtimeError("range step cannot be zero")
+		}
+		return types.NewRangeWithStep(start, end, step), nil
+	}
+
+	// Return a RangeValue with default step
+	return types.NewRange(start, end), nil
 }
 
 func (ev *Evaluator) evalIdentifier(id *ast.Identifier) (Value, error) {

@@ -835,6 +835,70 @@ func TestParserListLiteral(t *testing.T) {
 	}
 }
 
+func TestParserRangeLiteral(t *testing.T) {
+	tests := []struct {
+		input       string
+		description string
+	}{
+		{"Declare x to be [1 .. 10].", "programmer-style range"},
+		{"Let r be [0 .. 100].", "let statement with range"},
+		{"Declare r to be a range from 5 to 20.", "natural English range"},
+		{"Let myRange be a range from 1 to 30.", "natural English with let"},
+		{"Declare evens to be [0 .. 10 by 2].", "programmer-style range with step"},
+		{"Let odds be a range from 1 to 9 by 2.", "natural English range with step"},
+		{"Declare countdown to be [10 .. 0 by -2].", "programmer-style descending range with step"},
+		{"Let multiples be a range from 5 to 25 by 5.", "natural English range with custom step"},
+	}
+
+	for _, test := range tests {
+		program, err := parse(test.input)
+		if err != nil {
+			t.Errorf("Input %q (%s): parse error: %v", test.input, test.description, err)
+			continue
+		}
+
+		varDecl, ok := program.Statements[0].(*ast.VariableDecl)
+		if !ok {
+			t.Errorf("Input %q (%s): expected VariableDecl, got %T", test.input, test.description, program.Statements[0])
+			continue
+		}
+
+		_, ok = varDecl.Value.(*ast.RangeLiteral)
+		if !ok {
+			t.Errorf("Input %q (%s): expected RangeLiteral, got %T", test.input, test.description, varDecl.Value)
+			continue
+		}
+	}
+}
+
+func TestLexerDotDotOperator(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected []token.Type
+	}{
+		{"..", []token.Type{token.DOTDOT, token.EOF}},
+		{"[1 .. 10]", []token.Type{token.LBRACKET, token.NUMBER, token.DOTDOT, token.NUMBER, token.RBRACKET, token.EOF}},
+		{"...", []token.Type{token.DOTDOT, token.PERIOD, token.EOF}},
+	}
+
+	for _, test := range tests {
+		lexer := NewLexer(test.input)
+		tokens := lexer.TokenizeAll()
+		if len(tokens) != len(test.expected) {
+			t.Errorf("Input %q: got %d tokens, want %d", test.input, len(tokens), len(test.expected))
+			for i, tok := range tokens {
+				t.Logf("  Token %d: %v (%q)", i, tok.Type, tok.Value)
+			}
+			continue
+		}
+		for i, tok := range tokens {
+			if tok.Type != test.expected[i] {
+				t.Errorf("Input %q, token %d: got %v, want %v", test.input, i, tok.Type, test.expected[i])
+			}
+		}
+	}
+}
+
 func TestParserFunctionCallResult(t *testing.T) {
 	input := "Set result to be the result of calling add with 5 and 10."
 	program, err := parse(input)

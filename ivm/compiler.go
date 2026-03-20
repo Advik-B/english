@@ -341,6 +341,25 @@ func (c *Compiler) compileExpression(expr ast.Expression) error {
 		}
 		c.chunk.Emit(OP_BUILD_LIST, uint32(len(e.Elements)))
 
+	case *ast.RangeLiteral:
+		// Compile start and end expressions
+		if err := c.compileExpression(e.Start); err != nil {
+			return err
+		}
+		if err := c.compileExpression(e.End); err != nil {
+			return err
+		}
+
+		// Check if a custom step is provided
+		if e.Step != nil {
+			if err := c.compileExpression(e.Step); err != nil {
+				return err
+			}
+			c.chunk.Emit(OP_BUILD_RANGE, 1) // operand=1 indicates custom step
+		} else {
+			c.chunk.Emit(OP_BUILD_RANGE, 0) // operand=0 indicates default step
+		}
+
 	case *ast.ArrayLiteral:
 		for _, elem := range e.Elements {
 			if err := c.compileExpression(elem); err != nil {

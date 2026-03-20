@@ -108,6 +108,7 @@ const (
 	TABLE
 	HAS
 	ENTRY
+	RANGE
 
 	// PLEASE is emitted for politeness prefixes: "please", "kindly",
 	// "could you", and "would you kindly". When --minimum-politeness is
@@ -138,6 +139,7 @@ const (
 	STAR
 	SLASH
 	ASSIGN
+	DOTDOT // ".." range operator
 
 	// Comparison operators (multi-word)
 	IS_EQUAL_TO
@@ -358,6 +360,8 @@ func (t Type) String() string {
 		return "HAS"
 	case ENTRY:
 		return "ENTRY"
+	case RANGE:
+		return "RANGE"
 	case PLEASE:
 		return "PLEASE"
 	case SLEEP:
@@ -388,6 +392,8 @@ func (t Type) String() string {
 		return "SLASH"
 	case ASSIGN:
 		return "ASSIGN"
+	case DOTDOT:
+		return "DOTDOT"
 	case IS_EQUAL_TO:
 		return "IS_EQUAL_TO"
 	case IS_LESS_THAN:

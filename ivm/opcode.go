@@ -41,6 +41,7 @@ const (
 
 	// ── Collections ───────────────────────────────────────────────────────
 	OP_BUILD_LIST   // build list; operand = element count
+	OP_BUILD_RANGE  // build range; pop end, pop start; push list
 	OP_BUILD_ARRAY  // build typed array; operand = element count; pop type name string after elements
 	OP_BUILD_LOOKUP // push empty lookup table
 	OP_INDEX_GET    // pop index, pop list; push list[index]
@@ -184,6 +185,8 @@ func OpName(op Opcode) string {
 		return "PRINT"
 	case OP_BUILD_LIST:
 		return "BUILD_LIST"
+	case OP_BUILD_RANGE:
+		return "BUILD_RANGE"
 	case OP_BUILD_ARRAY:
 		return "BUILD_ARRAY"
 	case OP_BUILD_LOOKUP:

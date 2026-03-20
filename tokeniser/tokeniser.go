@@ -260,6 +260,7 @@ var keywords = map[string]token.Type{
 	"table":      token.TABLE,
 	"has":        token.HAS,
 	"entry":      token.ENTRY,
+	"range":      token.RANGE,
 	// Politeness prefixes – consumed by the parser before any statement.
 	"please": token.PLEASE,
 	"kindly": token.PLEASE,
@@ -309,8 +310,15 @@ func (l *Lexer) NextToken() token.Token {
 
 	switch l.ch {
 	case '.':
-		tok = token.Token{Type: token.PERIOD, Value: ".", Line: line, Col: col, Pos: pos}
-		l.readChar()
+		// Check for ".." range operator
+		if l.peekChar() == '.' {
+			tok = token.Token{Type: token.DOTDOT, Value: "..", Line: line, Col: col, Pos: pos}
+			l.readChar() // consume first '.'
+			l.readChar() // consume second '.'
+		} else {
+			tok = token.Token{Type: token.PERIOD, Value: ".", Line: line, Col: col, Pos: pos}
+			l.readChar()
+		}
 	case ',':
 		tok = token.Token{Type: token.COMMA, Value: ",", Line: line, Col: col, Pos: pos}
 		l.readChar()

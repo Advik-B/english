@@ -11,6 +11,7 @@ import (
 	"github.com/Advik-B/english/transpiler"
 	"github.com/Advik-B/english/astvm"
 	"github.com/Advik-B/english/stdlib"
+	"github.com/Advik-B/english/version"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -18,8 +19,6 @@ import (
 
 	"github.com/spf13/cobra"
 )
-
-const Version = "v1.2.1"
 
 var rootCmd = &cobra.Command{
 	Use:   "english",
@@ -112,9 +111,10 @@ Python file.`,
 
 var versionCmd = &cobra.Command{
 	Use:   "version",
-	Short: "Print the version number",
+	Short: "Print the version number and check for updates",
 	Run: func(cmd *cobra.Command, args []string) {
-		fmt.Println(Version)
+		fmt.Println(version.Version)
+		CheckForUpdates()
 	},
 }
 
@@ -231,6 +231,7 @@ func init() {
 	rootCmd.AddCommand(transpileCmd)
 	rootCmd.AddCommand(versionCmd)
 	rootCmd.AddCommand(helpTopicCmd)
+	rootCmd.AddCommand(updatesCmd)
 
 	compileCmd.Flags().StringP("output", "o", "", "Output file name (default: input file with .101 extension)")
 	compileCmd.Flags().Bool("strip", false, "Omit the source trailer (smaller file; 'transpile' will use opcode decompiler)")

@@ -24,8 +24,8 @@ import (
 )
 
 // Version is the language version string shown in the REPL banner.
-// cmd/repl.go overrides this with the value of cmd.Version at startup.
-var Version = "1.2.1"
+// cmd/repl.go overrides this with the value of version.Version at startup.
+var Version = "1.2.25"
 
 const (
 	// PrimaryPrompt is displayed when the REPL is ready for a new statement.

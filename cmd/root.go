@@ -3,6 +3,8 @@ package cmd
 import (
 	"github.com/Advik-B/english/ast"
 	"github.com/Advik-B/english/bytecode"
+	"github.com/Advik-B/english/help"
+	"github.com/Advik-B/english/highlight"
 	"github.com/Advik-B/english/ivm"
 	"github.com/Advik-B/english/parser"
 	"github.com/Advik-B/english/stacktraces"
@@ -116,6 +118,105 @@ var versionCmd = &cobra.Command{
 	},
 }
 
+var helpTopicCmd = &cobra.Command{
+	Use:   "help-topic [topic]",
+	Short: "Search and display help for English language features",
+	Long: `Search for help topics using fuzzy matching. Provides detailed information
+about language keywords, functions, operators, and concepts.
+
+Examples:
+  english help-topic print
+  english help-topic loop
+  english help-topic if`,
+	Run: func(cmd *cobra.Command, args []string) {
+		registry := help.NewRegistry()
+
+		if len(args) == 0 {
+			// Show all categories
+			fmt.Println("English Language Help")
+			fmt.Println(strings.Repeat("─", 50))
+			fmt.Println("\nAvailable categories:")
+			categories := registry.AllCategories()
+			for _, cat := range categories {
+				entries := registry.EntriesByCategory(cat)
+				fmt.Printf("  %s (%d topics)\n", cat, len(entries))
+			}
+			fmt.Println("\nUsage: english help-topic <search-term>")
+			fmt.Println("Examples: english help-topic print")
+			fmt.Println("          english help-topic loop")
+			return
+		}
+
+		// Search for the topic
+		query := strings.Join(args, " ")
+		results := registry.Search(query)
+
+		if len(results) == 0 {
+			fmt.Printf("No help topics found for '%s'.\n", query)
+			return
+		}
+
+		// Show the best match in detail if it's a very good match
+		if results[0].Score >= 700 {
+			printDetailedHelp(results[0].Entry)
+			// Show other related topics if available
+			if len(results) > 1 && len(results) <= 5 {
+				fmt.Println("\nRelated topics:")
+				for i := 1; i < len(results) && i < 5; i++ {
+					fmt.Printf("  - %s: %s\n",
+						results[i].Entry.Name,
+						results[i].Entry.Description)
+				}
+			}
+		} else {
+			// Show multiple search results
+			fmt.Printf("Search results for '%s':\n", query)
+			limit := 10
+			if len(results) < limit {
+				limit = len(results)
+			}
+			for i := 0; i < limit; i++ {
+				entry := results[i].Entry
+				fmt.Printf("  %s [%s]\n", entry.Name, entry.Category)
+				fmt.Printf("    %s\n", entry.Description)
+			}
+			fmt.Println("\nUse 'english help-topic <topic>' for detailed information.")
+		}
+	},
+}
+
+func printDetailedHelp(entry *help.HelpEntry) {
+	fmt.Printf("%s [%s]\n", entry.Name, entry.Category)
+	fmt.Println(strings.Repeat("─", 50))
+	fmt.Println(entry.Description)
+
+	if entry.LongDesc != "" {
+		fmt.Println()
+		fmt.Println(entry.LongDesc)
+	}
+
+	if len(entry.Examples) > 0 {
+		fmt.Println()
+		fmt.Println("Examples:")
+		useColor := stacktraces.HasColor()
+		for _, example := range entry.Examples {
+			// Apply syntax highlighting to examples
+			highlighted := highlight.Highlight(example, useColor)
+			fmt.Printf("  %s\n", highlighted)
+		}
+	}
+
+	if len(entry.Aliases) > 0 {
+		fmt.Println()
+		fmt.Printf("Aliases: %s\n", strings.Join(entry.Aliases, ", "))
+	}
+
+	if len(entry.SeeAlso) > 0 {
+		fmt.Println()
+		fmt.Printf("See also: %s\n", strings.Join(entry.SeeAlso, ", "))
+	}
+}
+
 func Execute() {
 	if err := rootCmd.Execute(); err != nil {
 		fmt.Fprintln(os.Stderr, err)
@@ -129,6 +230,7 @@ func init() {
 	rootCmd.AddCommand(compileCmd)
 	rootCmd.AddCommand(transpileCmd)
 	rootCmd.AddCommand(versionCmd)
+	rootCmd.AddCommand(helpTopicCmd)
 
 	compileCmd.Flags().StringP("output", "o", "", "Output file name (default: input file with .101 extension)")
 	compileCmd.Flags().Bool("strip", false, "Omit the source trailer (smaller file; 'transpile' will use opcode decompiler)")

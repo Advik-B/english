@@ -11,6 +11,7 @@ import (
 	"github.com/Advik-B/english/transpiler"
 	"github.com/Advik-B/english/astvm"
 	"github.com/Advik-B/english/stdlib"
+	"github.com/Advik-B/english/version"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -18,8 +19,6 @@ import (
 
 	"github.com/spf13/cobra"
 )
-
-const Version = "v1.2.1"
 
 var rootCmd = &cobra.Command{
 	Use:   "english",

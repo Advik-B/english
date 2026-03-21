@@ -11,7 +11,7 @@ major.minor.commits-since-last-minor-increment
 | Part | When to increment |
 |------|-------------------|
 | `major` | A change that **breaks** existing programs or behaviour |
-| `minor` | A new **feature** is added |
+| `minor` | A new **feature** is added (you can roughtly equate this to every new pull request) |
 | `commits-since-last-minor-increment` | Automatically derived — the number of git commits made since `minor` was last incremented |
 
 ## Usage

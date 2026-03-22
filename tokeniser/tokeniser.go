@@ -591,13 +591,22 @@ func TokenizeForHighlight(source string) []token.Token {
 	for {
 		tok := l.NextToken()
 		end := l.Offset()
+		// Clamp end to not exceed source length to prevent slice bounds panic
+		if end > len(source) {
+			end = len(source)
+		}
+		// Clamp tok.Pos to not exceed source length
+		tokPos := tok.Pos
+		if tokPos > len(source) {
+			tokPos = len(source)
+		}
 
 		// Emit a WHITESPACE token for any horizontal whitespace skipped before
 		// this token (l.skipWhitespace consumed it without emitting anything).
-		if tok.Pos > cursor {
+		if tokPos > cursor {
 			tokens = append(tokens, token.Token{
 				Type:  token.WHITESPACE,
-				Value: source[cursor:tok.Pos],
+				Value: source[cursor:tokPos],
 				Pos:   cursor,
 			})
 		}
@@ -610,7 +619,7 @@ func TokenizeForHighlight(source string) []token.Token {
 		// can render strings with their quotes, comments with their '#', and
 		// comparison operators with their original spacing and casing.
 		rawTok := tok
-		rawTok.Value = source[tok.Pos:end]
+		rawTok.Value = source[tokPos:end]
 		tokens = append(tokens, rawTok)
 		cursor = end
 	}

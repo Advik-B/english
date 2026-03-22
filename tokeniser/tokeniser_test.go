@@ -153,3 +153,40 @@ func TestNewLexer_TokenizeAll_BasicDeclaration(t *testing.T) {
 		}
 	}
 }
+
+// TestTokenizeForHighlight_UnterminatedString verifies that unterminated
+// strings don't cause a panic due to slice bounds errors.
+// This is a regression test for the bug where the lexer position could
+// exceed the source string length.
+func TestTokenizeForHighlight_UnterminatedString(t *testing.T) {
+	cases := []string{
+		`print rt's casefold'.`,  // From bug report
+		`'`,                        // Single quote at end
+		`"`,                        // Double quote at end
+		`'hello`,                   // Unterminated single-quoted string
+		`"hello`,                   // Unterminated double-quoted string
+		`x'`,                       // Single char followed by quote
+		`''`,                       // Two quotes
+	}
+
+	for _, src := range cases {
+		t.Run(src, func(t *testing.T) {
+			// Should not panic
+			toks := tokeniser.TokenizeForHighlight(src)
+			// Verify we got some tokens
+			if len(toks) == 0 {
+				t.Errorf("expected at least one token for %q", src)
+			}
+			// Verify reconstruction doesn't panic and doesn't exceed source length
+			var sb strings.Builder
+			for _, tok := range toks {
+				sb.WriteString(tok.Value)
+			}
+			got := sb.String()
+			if len(got) > len(src) {
+				t.Errorf("reconstruction longer than source\nsrc: %q (len=%d)\ngot: %q (len=%d)",
+					src, len(src), got, len(got))
+			}
+		})
+	}
+}

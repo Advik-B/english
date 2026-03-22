@@ -35,7 +35,8 @@ func (r *REPL) Loop() {
 		} else {
 			prompt = ContinuationPrompt
 		}
-		fmt.Fprint(r.out, prompt)
+		coloredPrompt := highlight.Prompt(prompt, r.useColor)
+		fmt.Fprint(r.out, coloredPrompt)
 
 		// Read one line of input.
 		line, err := r.in.ReadString('\n')
@@ -61,7 +62,7 @@ func (r *REPL) Loop() {
 		// …then we reprint prompt + highlighted code and move to the next line.
 		if r.useColor && line != "" {
 			fmt.Fprintf(r.out, "\033[1A\r\033[2K%s%s\n",
-				prompt, highlight.Highlight(line, true))
+				coloredPrompt, highlight.Highlight(line, true))
 		}
 
 		// ── Special top-level commands (only at the primary prompt) ─────────

@@ -75,6 +75,9 @@ var (
 
 	// Invalid / remainder after a syntax error
 	styleInvalid = colorRenderer.NewStyle().Foreground(lipgloss.Color("#44475A")) // dim
+
+	// REPL prompts (>>> / ...)
+	stylePrompt = colorRenderer.NewStyle().Foreground(lipgloss.Color("#8BE9FD")).Bold(true) // bright cyan
 )
 
 // ─── Token-kind mapping ───────────────────────────────────────────────────────
@@ -263,6 +266,14 @@ func Highlight(source string, useColor bool) string {
 		return source
 	}
 	return render(tokenize(source), true)
+}
+
+// Prompt returns a colorized REPL prompt when useColor is true.
+func Prompt(text string, useColor bool) string {
+	if !useColor {
+		return text
+	}
+	return stylePrompt.Render(text)
 }
 
 // ─── Inline snippet highlighter ──────────────────────────────────────────────

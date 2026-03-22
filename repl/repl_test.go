@@ -2,6 +2,7 @@ package repl_test
 
 import (
 	"bytes"
+	"regexp"
 	"strings"
 	"testing"
 
@@ -29,6 +30,16 @@ func runWithBanner(input string) string {
 	r.Run()
 	return out.String()
 }
+
+func runLoopWithColor(input string) string {
+	in := strings.NewReader(input)
+	var out bytes.Buffer
+	r := repl.New(in, &out, true)
+	r.Loop()
+	return out.String()
+}
+
+var ansiRe = regexp.MustCompile(`\x1b\[[0-9;]*m`)
 
 // assertContains fails the test if output does not contain each of the
 // expected substrings.
@@ -67,6 +78,14 @@ func TestContinuationPromptShownInBlock(t *testing.T) {
 	)
 	out := runLoop(input)
 	assertContains(t, out, repl.ContinuationPrompt)
+}
+
+func TestPrimaryPromptColorizedWhenEnabled(t *testing.T) {
+	out := runLoopWithColor("Print \"hi\".\n")
+	if !ansiRe.MatchString(out) {
+		t.Fatalf("expected ANSI color sequences in output when color is enabled\nfull output:\n%s", out)
+	}
+	assertContains(t, ansiRe.ReplaceAllString(out, ""), repl.PrimaryPrompt)
 }
 
 // ── Banner ───────────────────────────────────────────────────────────────────

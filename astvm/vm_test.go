@@ -713,37 +713,37 @@ func TestEvaluatorRangeLiteral(t *testing.T) {
 		{
 			code:     `Declare r to be [1 .. 5].`,
 			varName:  "r",
-			expected: []interface{}{float64(1), float64(2), float64(3), float64(4), float64(5)},
+			expected: []interface{}{float64(1), float64(2), float64(3), float64(4)},
 		},
 		{
 			code:     `Let myRange be a range from 1 to 3.`,
 			varName:  "myRange",
-			expected: []interface{}{float64(1), float64(2), float64(3)},
+			expected: []interface{}{float64(1), float64(2)},
 		},
 		{
 			code:     `Declare desc to be [5 .. 1].`,
 			varName:  "desc",
-			expected: []interface{}{float64(5), float64(4), float64(3), float64(2), float64(1)},
+			expected: []interface{}{},
 		},
 		{
 			code:     `Declare evens to be [0 .. 10 by 2].`,
 			varName:  "evens",
-			expected: []interface{}{float64(0), float64(2), float64(4), float64(6), float64(8), float64(10)},
+			expected: []interface{}{float64(0), float64(2), float64(4), float64(6), float64(8)},
 		},
 		{
 			code:     `Let odds be a range from 1 to 9 by 2.`,
 			varName:  "odds",
-			expected: []interface{}{float64(1), float64(3), float64(5), float64(7), float64(9)},
+			expected: []interface{}{float64(1), float64(3), float64(5), float64(7)},
 		},
 		{
 			code:     `Declare countdown to be [10 .. 0 by -2].`,
 			varName:  "countdown",
-			expected: []interface{}{float64(10), float64(8), float64(6), float64(4), float64(2), float64(0)},
+			expected: []interface{}{float64(10), float64(8), float64(6), float64(4), float64(2)},
 		},
 		{
 			code:     `Let multiples be a range from 5 to 25 by 5.`,
 			varName:  "multiples",
-			expected: []interface{}{float64(5), float64(10), float64(15), float64(20), float64(25)},
+			expected: []interface{}{float64(5), float64(10), float64(15), float64(20)},
 		},
 	}
 
@@ -821,7 +821,7 @@ func TestRangeLazyEvaluation(t *testing.T) {
 	code := `Declare bigRange to be [1 .. 1000].
 Declare first to be the item at position 0 in bigRange.
 Declare middle to be the item at position 500 in bigRange.
-Declare last to be the item at position 999 in bigRange.`
+Declare last to be the item at position 998 in bigRange.`
 
 	lexer := parser.NewLexer(code)
 	tokens := lexer.TokenizeAll()
@@ -851,8 +851,8 @@ Declare last to be the item at position 999 in bigRange.`
 	}
 
 	last, _ := env.Get("last")
-	if last != float64(1000) {
-		t.Errorf("Expected last element to be 1000, got %v", last)
+	if last != float64(999) {
+		t.Errorf("Expected last element to be 999, got %v", last)
 	}
 
 	// Verify the range itself is still a RangeValue (not expanded to a full slice)
@@ -862,8 +862,8 @@ Declare last to be the item at position 999 in bigRange.`
 		t.Fatalf("Expected bigRange to be *RangeValue, got %T", bigRange)
 	}
 
-	if rangeVal.Length() != 1000 {
-		t.Errorf("Expected range length to be 1000, got %d", rangeVal.Length())
+	if rangeVal.Length() != 999 {
+		t.Errorf("Expected range length to be 999, got %d", rangeVal.Length())
 	}
 }
 
@@ -875,7 +875,7 @@ thats it.`
 	output := captureOutput(func() {
 		evaluate(code)
 	})
-	expected := "1\n2\n3\n"
+	expected := "1\n2\n"
 	if output != expected {
 		t.Errorf("Expected %q, got %q", expected, output)
 	}

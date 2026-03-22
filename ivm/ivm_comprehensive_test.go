@@ -123,6 +123,67 @@ Print the value of found.`)
 	}
 }
 
+func TestRangeLiteralPythonSemantics(t *testing.T) {
+	tests := []struct {
+		name     string
+		src      string
+		expected string
+	}{
+		{
+			name: "default step excludes stop",
+			src: `for each n in [1 .. 5], do the following:
+    Print n.
+thats it.`,
+			expected: "1\n2\n3\n4\n",
+		},
+		{
+			name: "default step descending is empty",
+			src: `for each n in [5 .. 1], do the following:
+    Print n.
+thats it.`,
+			expected: "",
+		},
+		{
+			name: "custom positive step excludes stop",
+			src: `for each n in [0 .. 10 by 2], do the following:
+    Print n.
+thats it.`,
+			expected: "0\n2\n4\n6\n8\n",
+		},
+		{
+			name: "custom negative step excludes stop",
+			src: `for each n in [10 .. 0 by -2], do the following:
+    Print n.
+thats it.`,
+			expected: "10\n8\n6\n4\n2\n",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			out := captureOutput(func() {
+				_, err := run(tt.src)
+				if err != nil {
+					t.Fatalf("unexpected error: %v", err)
+				}
+			})
+			if out != tt.expected {
+				t.Fatalf("expected %q, got %q", tt.expected, out)
+			}
+		})
+	}
+}
+
+func TestRangeZeroStepErrorsLikePython(t *testing.T) {
+	_, err := run(`Declare r to be [1 .. 5 by 0].`)
+	if err == nil {
+		t.Fatal("expected error for zero range step")
+	}
+	if !strings.Contains(err.Error(), "step cannot be zero") {
+		t.Fatalf("expected zero-step error, got %v", err)
+	}
+}
+
 func TestRepeatForever(t *testing.T) {
 	out := captureOutput(func() {
 		_, err := run(`Declare i to be 0.

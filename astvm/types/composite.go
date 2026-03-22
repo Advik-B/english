@@ -1,5 +1,7 @@
 package types
 
+import "math"
+
 // ArrayValue is a homogeneous array: every element must share the same TypeKind.
 // The zero value has ElementType == TypeUnknown.
 type ArrayValue struct {
@@ -51,24 +53,19 @@ func (lt *LookupTableValue) Delete(serialKey string) bool {
 type RangeValue struct {
 	Start     float64
 	End       float64
-	Step      float64 // custom step value, default is 1 or -1
+	Step      float64 // custom step value, default is 1
 	Ascending bool
 	cache     []interface{} // cached elements (up to 20 at a time)
 	cachePos  int           // position in the range where cache starts
 }
 
-// NewRange creates a new RangeValue with default step (1 or -1 based on direction).
+// NewRange creates a new RangeValue with default step (1), matching Python's range(start, stop).
 func NewRange(start, end float64) *RangeValue {
-	step := 1.0
-	ascending := start <= end
-	if !ascending {
-		step = -1.0
-	}
 	return &RangeValue{
 		Start:     start,
 		End:       end,
-		Step:      step,
-		Ascending: ascending,
+		Step:      1.0,
+		Ascending: true,
 		cache:     nil,
 		cachePos:  0,
 	}
@@ -76,13 +73,11 @@ func NewRange(start, end float64) *RangeValue {
 
 // NewRangeWithStep creates a new RangeValue with a custom step value.
 func NewRangeWithStep(start, end, step float64) *RangeValue {
-	// Determine direction based on step sign
-	ascending := step > 0
 	return &RangeValue{
 		Start:     start,
 		End:       end,
 		Step:      step,
-		Ascending: ascending,
+		Ascending: step > 0,
 		cache:     nil,
 		cachePos:  0,
 	}
@@ -94,27 +89,18 @@ func (r *RangeValue) Length() int {
 		return 0 // avoid infinite loop
 	}
 
-	if r.Ascending {
-		if r.End < r.Start {
+	if r.Step > 0 {
+		if r.Start >= r.End {
 			return 0
 		}
-		// For ascending ranges: count = floor((end - start) / step) + 1
-		count := int((r.End-r.Start)/r.Step) + 1
-		if count < 0 {
-			return 0
-		}
-		return count
-	} else {
-		if r.End > r.Start {
-			return 0
-		}
-		// For descending ranges: count = floor((start - end) / abs(step)) + 1
-		count := int((r.Start-r.End)/(-r.Step)) + 1
-		if count < 0 {
-			return 0
-		}
-		return count
+		return int(math.Ceil((r.End - r.Start) / r.Step))
 	}
+
+	// Step < 0
+	if r.Start <= r.End {
+		return 0
+	}
+	return int(math.Ceil((r.Start - r.End) / (-r.Step)))
 }
 
 // Get returns the element at the given index (0-based).

@@ -167,6 +167,11 @@ type Token struct {
 	Pos   int // byte offset of the token's first character in the source string
 }
 
+// IsKeyword reports whether t is a language keyword token.
+func IsKeyword(t Type) bool {
+	return t >= DECLARE && t <= SLEEP
+}
+
 // String representation of token type
 func (t Type) String() string {
 	switch t {

@@ -11,7 +11,7 @@ const ENGLISH_GITHUB_ARCHIVE_URL = 'https://api.github.com/repos/Advik-B/english
 
 let client: LanguageClient | undefined;
 let catHighlightController: CatHighlightController | undefined;
-let resolvedLanguageServerCommand = 'english';
+let activeLanguageServerCommand = 'english';
 
 function isExecutable(filePath: string): boolean {
   try {
@@ -117,6 +117,11 @@ async function buildEnglishFromGithubArchive(
   context: vscode.ExtensionContext,
   outputChannel: vscode.OutputChannel
 ): Promise<string | undefined> {
+  if (!isAvailable('tar')) {
+    outputChannel.appendLine('The "tar" command was not found on PATH; cannot extract GitHub source archive.');
+    return undefined;
+  }
+
   const tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'english-src-'));
   const archivePath = path.join(tmpRoot, 'english.tar.gz');
   const sourceDir = path.join(tmpRoot, 'source');
@@ -218,9 +223,9 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   catHighlightController = new CatHighlightController();
   context.subscriptions.push(catHighlightController);
 
-  resolvedLanguageServerCommand = await ensureEnglishInstalled(context, outputChannel);
+  activeLanguageServerCommand = await ensureEnglishInstalled(context, outputChannel);
 
-  const serverOptions = createServerOptions(resolvedLanguageServerCommand);
+  const serverOptions = createServerOptions(activeLanguageServerCommand);
   const clientOptions = createClientOptions(outputChannel);
 
   client = new LanguageClient('englishLanguageServer', 'English Language Server', serverOptions, clientOptions);

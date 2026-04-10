@@ -3,6 +3,7 @@ import * as fs from 'node:fs';
 import * as https from 'node:https';
 import * as os from 'node:os';
 import * as path from 'node:path';
+import * as tar from 'tar';
 import * as vscode from 'vscode';
 import { LanguageClient, LanguageClientOptions, ServerOptions, TransportKind } from 'vscode-languageclient/node';
 import { CatHighlightController } from './catHighlight';
@@ -130,15 +131,6 @@ async function buildEnglishFromGithubArchive(
   context: vscode.ExtensionContext,
   outputChannel: vscode.OutputChannel
 ): Promise<string | undefined> {
-  if (!isAvailable('tar')) {
-    const guidance =
-      process.platform === 'win32'
-        ? 'Install tar (for example via Git for Windows/bsdtar) or set english.languageServer.path manually.'
-        : 'Install tar from your system package manager or set english.languageServer.path manually.';
-    outputChannel.appendLine(`The "tar" command was not found on PATH; cannot extract GitHub source archive. ${guidance}`);
-    return undefined;
-  }
-
   const tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'english-src-'));
   const archivePath = path.join(tmpRoot, 'english.tar.gz');
   const sourceDir = path.join(tmpRoot, 'source');
@@ -150,14 +142,14 @@ async function buildEnglishFromGithubArchive(
     fs.mkdirSync(sourceDir, { recursive: true });
     fs.mkdirSync(binDir, { recursive: true });
     await downloadToFile(ENGLISH_GITHUB_ARCHIVE_URL, archivePath, outputChannel);
-    const extracted = await runCommand(
-      'tar',
-      ['-xzf', archivePath, '-C', sourceDir, '--strip-components=1'],
-      outputChannel
-    );
-    if (!extracted) {
-      return undefined;
-    }
+    outputChannel.appendLine('Extracting GitHub source archive with JavaScript tar unarchiver...');
+    await tar.x({
+      file: archivePath,
+      cwd: sourceDir,
+      strip: 1,
+      preservePaths: false,
+      strict: true
+    });
     const built = await runCommand('go', ['build', '-o', binaryPath, '.'], outputChannel, { cwd: sourceDir });
     if (!built) {
       outputChannel.appendLine(

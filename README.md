@@ -886,6 +886,9 @@ Quick setup:
 ```bash
 cd vscode-extension
 npm install
+npm run compile
+npm test              # runs integration tests in real VS Code
+npm run package:vsix  # creates english-language.vsix
 ```
 
 Then press `F5` in VS Code from that folder to launch an Extension Development Host.

@@ -4,6 +4,10 @@
   "description": "VS Code support for the English programming language",
   "version": "0.1.0",
   "publisher": "advik-b",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Advik-B/english.git"
+  },
   "engines": {
     "vscode": "^1.85.0"
   },
@@ -13,7 +17,7 @@
   "activationEvents": [
     "onLanguage:english"
   ],
-  "main": "./extension.js",
+  "main": "./out/extension.js",
   "contributes": {
     "languages": [
       {
@@ -55,10 +59,25 @@
     }
   },
   "scripts": {
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
     "lint": "echo 'No extension lint configured'",
-    "test": "echo 'No extension tests configured'"
+    "pretest": "npm run compile",
+    "test": "bash -lc 'if command -v xvfb-run >/dev/null 2>&1; then xvfb-run -a node ./out/test/runTest.js; else node ./out/test/runTest.js; fi'",
+    "package:vsix": "vsce package --out english-language.vsix"
   },
   "dependencies": {
     "vscode-languageclient": "^9.0.1"
+  },
+  "devDependencies": {
+    "@types/glob": "^8.1.0",
+    "@types/mocha": "^10.0.10",
+    "@types/node": "^20.17.50",
+    "@types/vscode": "^1.85.0",
+    "@vscode/test-electron": "^2.5.2",
+    "@vscode/vsce": "^3.6.2",
+    "glob": "^10.4.5",
+    "mocha": "^10.8.2",
+    "typescript": "^5.8.3"
   }
 }

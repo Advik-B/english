@@ -120,7 +120,7 @@ let max_size be always 256.
 
 ### Step 3 — Data Types
 
-English has five built-in value types:
+English has six built-in value types:
 
 | Type | Examples | Notes |
 |---|---|---|
@@ -129,6 +129,7 @@ English has five built-in value types:
 | `boolean` | `true`, `false` | |
 | `nothing` | `nothing` | equivalent to null/nil |
 | list | `[1, 2, 3]` | ordered, mixed-type allowed |
+| range | `[1 .. 10]` | immutable sequence of numbers |
 
 Declare a variable with an **explicit type annotation**:
 
@@ -736,6 +737,55 @@ Declare answer to be ask("Enter a number: ").
 Print answer cast to number + 1.
 ```
 
+#### Ranges
+
+A **range** is an immutable sequence of numbers. Use it wherever a list is expected (e.g. `for each` loops).
+
+**Programmer-style** — two dots inside brackets:
+
+```english
+Declare r to be [1 .. 10].        # 1, 2, 3, …, 10 (inclusive)
+Declare r to be [10 .. 1].        # 10, 9, 8, …, 1 (descending)
+Declare r to be [1 .. 10 by 2].   # 1, 3, 5, 7, 9  (with step)
+```
+
+**Natural-English style:**
+
+```english
+Declare r to be a range from 1 to 10.
+Declare r to be a range from 1 to 10 by 2.
+```
+
+Both forms produce the same immutable range value. Use them in loops:
+
+```english
+For each n in [1 .. 5], do the following:
+    Print the value of n.
+thats it.
+# Prints 1 2 3 4 5
+```
+
+#### Sleep / Wait
+
+Pause execution for a given duration with `Sleep for` or `Wait for`:
+
+```english
+Sleep for 500ms.          # 500 milliseconds
+Sleep for 2 seconds.      # 2 seconds
+Wait for 1 minute.        # 1 minute
+Wait for a second.        # natural-language shorthand
+Sleep for an hour.        # 1 hour
+```
+
+Accepted units: `ms` / `millisecond(s)`, `s` / `second(s)`, `m` / `minute(s)`, `h` / `hour(s)`.
+
+The polite prefix `Please` or `Would you kindly` is also accepted:
+
+```english
+Please sleep for 100ms.
+Would you kindly wait for a second.
+```
+
 ---
 
 ## 📚 Standard Library Reference
@@ -838,6 +888,16 @@ Print answer cast to number + 1.
 | `table_has(table, key)` | true if key exists |
 | `merge(t1, t2)` | merge two tables (t2 wins on conflict) |
 | `get_or_default(table, key, default)` | safe access with fallback |
+
+### Time
+
+| Function | Description |
+|---|---|
+| `current_time()` | current date/time as a text string (`"YYYY-MM-DD HH:MM:SS"`) |
+| `elapsed_time()` | seconds elapsed since the program started (number) |
+| `sleep(seconds)` | pause execution for the given number of seconds |
+
+> **Tip:** Prefer the `Sleep for …` / `Wait for …` statement syntax over calling `sleep()` directly — it reads more naturally and accepts human-friendly units like `500ms` or `2 minutes`.
 
 ---
 

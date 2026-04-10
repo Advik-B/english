@@ -195,7 +195,7 @@ async function buildEnglishFromGithubArchive(
     fs.mkdirSync(binDir, { recursive: true });
     const archiveUrl = await getLatestReleaseTarballUrl(outputChannel);
     await downloadToFile(archiveUrl, archivePath, outputChannel);
-    outputChannel.appendLine('Extracting latest GitHub release source archive with JavaScript tar extractor...');
+    outputChannel.appendLine('Extracting latest GitHub release source archive with Node.js tar extractor...');
     try {
       await tar.x({
         file: archivePath,

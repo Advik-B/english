@@ -20,6 +20,8 @@ const (
 	thenSuffix       = ", then"
 )
 
+var defaultCompletionTriggerCharacters = buildCompletionTriggerCharacters()
+
 // Server represents the LSP server
 type Server struct {
 	reader *bufio.Reader
@@ -27,8 +29,9 @@ type Server struct {
 	logger *log.Logger
 	mu     sync.Mutex
 
-	initialized bool
-	shutdown    bool
+	initialized       bool
+	shutdownRequested bool
+	exitRequested     bool
 
 	documents  *DocumentManager
 	analyzer   *Analyzer
@@ -125,7 +128,7 @@ func (s *Server) Run() error {
 
 		s.handleMessage(msg)
 
-		if s.shutdown {
+		if s.exitRequested {
 			s.logger.Println("Server shutting down")
 			return nil
 		}
@@ -147,8 +150,9 @@ func (s *Server) readMessage() (json.RawMessage, error) {
 			break // End of headers
 		}
 
-		if strings.HasPrefix(line, "Content-Length: ") {
-			lengthStr := strings.TrimPrefix(line, "Content-Length: ")
+		header := strings.ToLower(line)
+		if strings.HasPrefix(header, "content-length:") {
+			lengthStr := strings.TrimSpace(header[len("content-length:"):])
 			contentLength, err = strconv.Atoi(lengthStr)
 			if err != nil {
 				return nil, fmt.Errorf("invalid Content-Length: %v", err)
@@ -226,6 +230,10 @@ func (s *Server) handleRequest(req RequestMessage) {
 		s.sendError(req.ID, ServerNotInitialized, "Server not initialized")
 		return
 	}
+	if s.shutdownRequested {
+		s.sendError(req.ID, InvalidRequest, "Server is shutting down")
+		return
+	}
 
 	switch req.Method {
 	case "initialize":
@@ -281,7 +289,7 @@ func (s *Server) handleNotification(notif NotificationMessage) {
 	case "initialized":
 		s.logger.Println("Client initialized")
 	case "exit":
-		s.shutdown = true
+		s.exitRequested = true
 	case "textDocument/didOpen":
 		s.handleDidOpen(notif.Params)
 	case "textDocument/didClose":
@@ -372,7 +380,7 @@ func (s *Server) handleInitialize(params json.RawMessage) (*InitializeResult, er
 				},
 			},
 			CompletionProvider: &CompletionOptions{
-				TriggerCharacters: []string{".", " "},
+				TriggerCharacters: defaultCompletionTriggerCharacters,
 				ResolveProvider:   false,
 			},
 			HoverProvider: true,
@@ -395,13 +403,25 @@ func (s *Server) handleInitialize(params json.RawMessage) (*InitializeResult, er
 	}, nil
 }
 
+func buildCompletionTriggerCharacters() []string {
+	triggers := make([]string, 0, 54)
+	for ch := 'a'; ch <= 'z'; ch++ {
+		triggers = append(triggers, string(ch))
+	}
+	for ch := 'A'; ch <= 'Z'; ch++ {
+		triggers = append(triggers, string(ch))
+	}
+	triggers = append(triggers, "_", ".", " ", "'")
+	return triggers
+}
+
 func (s *Server) handleShutdown() (interface{}, error) {
 	if s.onShutdown != nil {
 		if err := s.onShutdown(); err != nil {
 			return nil, err
 		}
 	}
-	s.shutdown = true
+	s.shutdownRequested = true
 	return nil, nil
 }
 

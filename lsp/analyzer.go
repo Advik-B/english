@@ -1,11 +1,14 @@
 package lsp
 
 import (
+	"fmt"
+	"sort"
+	"strconv"
+	"strings"
+
 	"github.com/Advik-B/english/ast"
 	"github.com/Advik-B/english/parser"
 	"github.com/Advik-B/english/token"
-	"fmt"
-	"strings"
 )
 
 // SymbolType represents the type of a symbol
@@ -492,16 +495,14 @@ func (a *Analyzer) generateFunctionDoc(f *ast.FunctionDecl) string {
 func (a *Analyzer) GetCompletions(doc *Document, pos Position, result *AnalysisResult) []CompletionItem {
 	items := make([]CompletionItem, 0)
 
-	// Get the word being typed
-	word, _ := doc.GetWordAtPosition(pos)
-	wordLower := strings.ToLower(word)
+	prefix := strings.ToLower(completionPrefixAtPosition(doc, pos))
 
 	// Add keyword completions
-	items = append(items, a.getKeywordCompletions(wordLower)...)
+	items = append(items, a.getKeywordCompletions(prefix)...)
 
 	// Add variable completions
 	for name, info := range result.Variables {
-		if wordLower == "" || strings.HasPrefix(strings.ToLower(name), wordLower) {
+		if prefix == "" || strings.HasPrefix(strings.ToLower(name), prefix) {
 			kind := CompletionItemKindVariable
 			if info.IsConstant {
 				kind = CompletionItemKindConstant
@@ -520,7 +521,7 @@ func (a *Analyzer) GetCompletions(doc *Document, pos Position, result *AnalysisR
 
 	// Add function completions
 	for name, info := range result.Functions {
-		if wordLower == "" || strings.HasPrefix(strings.ToLower(name), wordLower) {
+		if prefix == "" || strings.HasPrefix(strings.ToLower(name), prefix) {
 			items = append(items, CompletionItem{
 				Label:  name,
 				Kind:   CompletionItemKindFunction,
@@ -533,7 +534,51 @@ func (a *Analyzer) GetCompletions(doc *Document, pos Position, result *AnalysisR
 		}
 	}
 
-	return items
+	return normalizeCompletionItems(items)
+}
+
+func completionPrefixAtPosition(doc *Document, pos Position) string {
+	line := doc.GetLine(pos.Line)
+	if line == "" {
+		return ""
+	}
+	if pos.Character < 0 {
+		return ""
+	}
+	if pos.Character > len(line) {
+		pos.Character = len(line)
+	}
+	start := pos.Character
+	for start > 0 && isWordChar(line[start-1]) {
+		start--
+	}
+	return line[start:pos.Character]
+}
+
+func normalizeCompletionItems(items []CompletionItem) []CompletionItem {
+	seen := make(map[string]struct{}, len(items))
+	out := make([]CompletionItem, 0, len(items))
+	for _, item := range items {
+		key := strings.ToLower(item.Label) + ":" + strconv.Itoa(int(item.Kind))
+		if _, ok := seen[key]; ok {
+			continue
+		}
+		seen[key] = struct{}{}
+		if item.FilterText == "" {
+			item.FilterText = item.Label
+		}
+		if item.InsertText == "" {
+			item.InsertText = item.Label
+		}
+		out = append(out, item)
+	}
+	sort.SliceStable(out, func(i, j int) bool {
+		if out[i].Kind != out[j].Kind {
+			return out[i].Kind < out[j].Kind
+		}
+		return strings.ToLower(out[i].Label) < strings.ToLower(out[j].Label)
+	})
+	return out
 }
 
 // getKeywordCompletions returns keyword completions

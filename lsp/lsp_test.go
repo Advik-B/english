@@ -222,6 +222,33 @@ Declare myConstant to always be 10.
 		}
 	})
 
+	t.Run("GetCompletions_PrefixAtCursor", func(t *testing.T) {
+		doc := NewDocument("test", "english", 1, "Dec")
+		result := analyzer.Analyze(doc)
+
+		completions := analyzer.GetCompletions(doc, Position{Line: 0, Character: 3}, result)
+		found := false
+		for _, c := range completions {
+			if c.Label == "Declare" {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Error("Expected 'Declare' completion when typing prefix 'Dec'")
+		}
+	})
+
+	t.Run("GetCompletions_NoDuplicates", func(t *testing.T) {
+		items := normalizeCompletionItems([]CompletionItem{
+			{Label: "Print", Kind: CompletionItemKindKeyword},
+			{Label: "Print", Kind: CompletionItemKindKeyword},
+		})
+		if len(items) != 1 {
+			t.Errorf("Expected 1 completion item after dedupe, got %d", len(items))
+		}
+	})
+
 	t.Run("GetHover_Variable", func(t *testing.T) {
 		doc := NewDocument("test", "english", 1, "Declare x to be 5.")
 		result := analyzer.Analyze(doc)

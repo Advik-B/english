@@ -1,0 +1,114 @@
+{
+  "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+  "name": "English",
+  "scopeName": "source.english",
+  "patterns": [
+    { "include": "#comments" },
+    { "include": "#strings" },
+    { "include": "#numbers" },
+    { "include": "#operators" },
+    { "include": "#keywords" },
+    { "include": "#constants" },
+    { "include": "#punctuation" }
+  ],
+  "repository": {
+    "comments": {
+      "patterns": [
+        {
+          "name": "comment.line.number-sign.english",
+          "match": "#.*$"
+        }
+      ]
+    },
+    "strings": {
+      "patterns": [
+        {
+          "name": "string.quoted.double.english",
+          "begin": "\"",
+          "end": "\"",
+          "patterns": [
+            {
+              "name": "constant.character.escape.english",
+              "match": "\\\\."
+            }
+          ]
+        },
+        {
+          "name": "string.quoted.single.english",
+          "begin": "'",
+          "end": "'",
+          "patterns": [
+            {
+              "name": "constant.character.escape.english",
+              "match": "\\\\."
+            }
+          ]
+        }
+      ]
+    },
+    "numbers": {
+      "patterns": [
+        {
+          "name": "constant.numeric.english",
+          "match": "\\b\\d+(?:\\.\\d+)?\\b"
+        }
+      ]
+    },
+    "operators": {
+      "patterns": [
+        {
+          "name": "keyword.operator.comparison.english",
+          "match": "\\b(?:is\\s+equal\\s+to|is\\s+not\\s+equal\\s+to|is\\s+less\\s+than(?:\\s+or\\s+equal\\s+to)?|is\\s+greater\\s+than(?:\\s+or\\s+equal\\s+to)?|is\\s+true|is\\s+false|is\\s+nothing|is\\s+something|isn['’]t\\s+true|isn['’]t\\s+false)\\b"
+        },
+        {
+          "name": "keyword.operator.arithmetic.english",
+          "match": "\\.\\.|\\+|\\-|\\*|/|="
+        }
+      ]
+    },
+    "keywords": {
+      "patterns": [
+        {
+          "name": "keyword.control.english",
+          "match": "\\b(?:if|then|otherwise|repeat|while|forever|for|each|do|break|continue|skip|return|thats\\s+it|try|finally|on\\s+error)\\b"
+        },
+        {
+          "name": "storage.type.function.english",
+          "match": "\\b(?:declare\\s+function|function|takes|call|calling)\\b"
+        },
+        {
+          "name": "keyword.declaration.english",
+          "match": "\\b(?:declare|let|set|always|to|be|import|everything|all|safely|as|structure|struct|fields|field|instance|new|raise|toggle|ask|array|lookup|table|range|reference|copy|swap|casted|cast|type|from|default)\\b"
+        }
+      ]
+    },
+    "constants": {
+      "patterns": [
+        {
+          "name": "constant.language.boolean.english",
+          "match": "\\b(?:true|false)\\b"
+        },
+        {
+          "name": "constant.language.null.english",
+          "match": "\\b(?:nothing|none|null)\\b"
+        }
+      ]
+    },
+    "punctuation": {
+      "patterns": [
+        {
+          "name": "punctuation.separator.english",
+          "match": "[.,:]"
+        },
+        {
+          "name": "punctuation.brackets.english",
+          "match": "[()\\[\\]]"
+        },
+        {
+          "name": "keyword.operator.possessive.english",
+          "match": "'s\\b"
+        }
+      ]
+    }
+  }
+}

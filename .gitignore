@@ -24,6 +24,7 @@ __engcache__/
 
 # Dependency directories
 vendor/
+node_modules/
 
 # Go workspace file
 go.work
@@ -31,6 +32,7 @@ go.work
 # Editor directories and files
 .vscode/
 .idea/
+.vscode-test/
 *.swp
 *.swo
 *~
@@ -42,3 +44,6 @@ Thumbs.db
 # Temporary files
 *.tmp
 *.log
+*.vsix
+vscode-extension/.bin/
+vscode-extension/out/

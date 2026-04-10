@@ -260,6 +260,7 @@ export class CatHighlightController implements vscode.Disposable {
       null: vscode.window.createTextEditorDecorationType({ color: '#6272A4' }),
       identifier: vscode.window.createTextEditorDecorationType({ color: '#F8F8F2' }),
       operator: vscode.window.createTextEditorDecorationType({ color: '#FF5555' }),
+      // Keep this gold to match the compiler's `cat` command comparison styling exactly.
       comparison: vscode.window.createTextEditorDecorationType({ color: '#FFD700' }),
       possessive: vscode.window.createTextEditorDecorationType({ color: '#8BE9FD' }),
       punctuation: vscode.window.createTextEditorDecorationType({ color: '#6272A4' }),

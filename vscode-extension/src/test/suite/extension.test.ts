@@ -77,9 +77,12 @@ suite('English Extension (Real VS Code)', () => {
     });
     const editor = await vscode.window.showTextDocument(document);
 
-    for (let i = 0; i < 25; i++) {
+    for (let iteration = 0; iteration < 25; iteration++) {
       await editor.edit(editBuilder => {
-        editBuilder.insert(new vscode.Position(i + 1, 0), `set x to be ${i + 2} # comment ${i}\n`);
+        editBuilder.insert(
+          new vscode.Position(iteration + 1, 0),
+          `set x to be ${iteration + 2} # comment ${iteration}\n`
+        );
       });
     }
     await new Promise(resolve => setTimeout(resolve, 300));

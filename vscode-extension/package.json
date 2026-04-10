@@ -4,6 +4,7 @@
   "description": "VS Code support for the English programming language",
   "version": "0.1.0",
   "publisher": "advik-b",
+  "packageManager": "bun@1.2.12",
   "repository": {
     "type": "git",
     "url": "https://github.com/Advik-B/english.git"

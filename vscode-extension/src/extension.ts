@@ -57,8 +57,8 @@ async function runCommand(
     outputChannel.show(true);
     outputChannel.appendLine(`Running: ${command} ${args.join(' ')}`);
     const proc = child_process.spawn(command, args, { env: process.env, ...options });
-    proc.stdout.on('data', (data: Buffer) => outputChannel.append(data.toString()));
-    proc.stderr.on('data', (data: Buffer) => outputChannel.append(data.toString()));
+    proc.stdout?.on('data', (data: Buffer) => outputChannel.append(data.toString()));
+    proc.stderr?.on('data', (data: Buffer) => outputChannel.append(data.toString()));
     proc.on('close', code => {
       if (code === 0) {
         resolve(true);

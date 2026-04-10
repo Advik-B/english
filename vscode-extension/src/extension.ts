@@ -131,7 +131,7 @@ async function buildEnglishFromGithubArchive(
   context: vscode.ExtensionContext,
   outputChannel: vscode.OutputChannel
 ): Promise<string | undefined> {
-  const tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'english-src-'));
+  const tmpRoot = await fs.promises.mkdtemp(path.join(os.tmpdir(), 'english-src-'));
   const archivePath = path.join(tmpRoot, 'english.tar.gz');
   const sourceDir = path.join(tmpRoot, 'source');
   const binDir = path.join(context.globalStorageUri.fsPath, 'bin');
@@ -143,13 +143,20 @@ async function buildEnglishFromGithubArchive(
     fs.mkdirSync(binDir, { recursive: true });
     await downloadToFile(ENGLISH_GITHUB_ARCHIVE_URL, archivePath, outputChannel);
     outputChannel.appendLine('Extracting GitHub source archive with JavaScript tar extractor...');
-    await tar.x({
-      file: archivePath,
-      cwd: sourceDir,
-      strip: 1,
-      preservePaths: false,
-      strict: true
-    });
+    try {
+      await tar.x({
+        file: archivePath,
+        cwd: sourceDir,
+        strip: 1,
+        preservePaths: false,
+        strict: true
+      });
+    } catch (err) {
+      outputChannel.appendLine(
+        `Failed to extract downloaded source archive: ${err instanceof Error ? err.message : String(err)}`
+      );
+      return undefined;
+    }
     const built = await runCommand('go', ['build', '-o', binaryPath, '.'], outputChannel, { cwd: sourceDir });
     if (!built) {
       outputChannel.appendLine(
@@ -165,7 +172,7 @@ async function buildEnglishFromGithubArchive(
     );
     return undefined;
   } finally {
-    fs.rmSync(tmpRoot, { recursive: true, force: true });
+    await fs.promises.rm(tmpRoot, { recursive: true, force: true });
   }
 }
 

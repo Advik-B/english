@@ -57,12 +57,6 @@ jobs:
         if: steps.version.outputs.create_release != 'true'
         run: echo "Tag ${{ steps.version.outputs.tag }} already exists. Nothing to release."
 
-      - name: Create and push tag
-        if: steps.version.outputs.create_release == 'true'
-        run: |
-          git tag "${{ steps.version.outputs.tag }}"
-          git push origin "${{ steps.version.outputs.tag }}"
-
       - name: Run Go tests
         if: steps.version.outputs.create_release == 'true'
         run: go test ./...
@@ -82,6 +76,12 @@ jobs:
           bun run compile
           bun run package:vsix
           cp english-language.vsix ../dist/english-language.vsix
+
+      - name: Create and push tag
+        if: steps.version.outputs.create_release == 'true'
+        run: |
+          git tag "${{ steps.version.outputs.tag }}"
+          git push origin "${{ steps.version.outputs.tag }}"
 
       - name: Create GitHub release
         if: steps.version.outputs.create_release == 'true'

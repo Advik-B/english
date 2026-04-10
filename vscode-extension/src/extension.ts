@@ -1,14 +1,18 @@
 import * as child_process from 'node:child_process';
 import * as fs from 'node:fs';
+import * as https from 'node:https';
+import * as os from 'node:os';
 import * as path from 'node:path';
+import * as tar from 'tar';
 import * as vscode from 'vscode';
 import { LanguageClient, LanguageClientOptions, ServerOptions, TransportKind } from 'vscode-languageclient/node';
 import { CatHighlightController } from './catHighlight';
 
-const ENGLISH_MODULE = 'github.com/Advik-B/english@latest';
+const ENGLISH_GITHUB_LATEST_RELEASE_API_URL = 'https://api.github.com/repos/Advik-B/english/releases/latest';
 
 let client: LanguageClient | undefined;
 let catHighlightController: CatHighlightController | undefined;
+let languageServerCommandPath = 'english';
 
 function isExecutable(filePath: string): boolean {
   try {
@@ -44,37 +48,196 @@ function isAvailable(command: string): boolean {
   return resolveCommandOnPath(command) !== undefined;
 }
 
-async function runGoInstall(outputChannel: vscode.OutputChannel): Promise<boolean> {
+async function runCommand(
+  command: string,
+  args: string[],
+  outputChannel: vscode.OutputChannel,
+  options?: child_process.SpawnOptions
+): Promise<boolean> {
   return new Promise(resolve => {
     outputChannel.show(true);
-    outputChannel.appendLine(`Running: go install ${ENGLISH_MODULE}`);
-    const proc = child_process.spawn('go', ['install', ENGLISH_MODULE], {
-      env: process.env
-    });
-    proc.stdout.on('data', (data: Buffer) => outputChannel.append(data.toString()));
-    proc.stderr.on('data', (data: Buffer) => outputChannel.append(data.toString()));
+    outputChannel.appendLine(`Running: ${command} ${args.join(' ')}`);
+    const proc = child_process.spawn(command, args, { env: process.env, ...options });
+    proc.stdout?.on('data', (data: Buffer) => outputChannel.append(data.toString()));
+    proc.stderr?.on('data', (data: Buffer) => outputChannel.append(data.toString()));
     proc.on('close', code => {
       if (code === 0) {
-        outputChannel.appendLine('english compiler installed successfully.');
         resolve(true);
       } else {
-        outputChannel.appendLine(`go install exited with code ${code}.`);
+        outputChannel.appendLine(`${command} exited with code ${code}.`);
         resolve(false);
       }
     });
     proc.on('error', err => {
-      outputChannel.appendLine(`Failed to run go install: ${err.message}`);
+      outputChannel.appendLine(`Failed to run ${command}: ${err.message}`);
       resolve(false);
     });
   });
 }
 
-async function ensureEnglishInstalled(outputChannel: vscode.OutputChannel): Promise<void> {
+function downloadToFile(url: string, destination: string, outputChannel: vscode.OutputChannel): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const request = (nextUrl: string) => {
+      outputChannel.appendLine(`Downloading: ${nextUrl}`);
+      const req = https.get(
+        nextUrl,
+        {
+          headers: {
+            'User-Agent': 'english-vscode-extension',
+            Accept: 'application/vnd.github+json'
+          }
+        },
+        response => {
+          const status = response.statusCode ?? 0;
+          if (status >= 300 && status < 400 && response.headers.location) {
+            response.resume();
+            request(response.headers.location);
+            return;
+          }
+          if (status < 200 || status >= 300) {
+            response.resume();
+            reject(new Error(`HTTP ${status} while downloading source archive`));
+            return;
+          }
+          const file = fs.createWriteStream(destination);
+          let settled = false;
+          const fail = (err: Error) => {
+            if (settled) {
+              return;
+            }
+            settled = true;
+            file.destroy();
+            reject(err);
+          };
+          file.once('error', fail);
+          response.once('error', fail);
+          file.once('finish', () => {
+            if (settled) {
+              return;
+            }
+            settled = true;
+            file.close(err => (err ? reject(err) : resolve()));
+          });
+          response.pipe(file);
+        }
+      );
+      req.on('error', err => reject(err));
+    };
+    request(url);
+  });
+}
+
+function getLatestReleaseTarballUrl(outputChannel: vscode.OutputChannel): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const request = (nextUrl: string) => {
+      outputChannel.appendLine(`Resolving latest release: ${nextUrl}`);
+      const req = https.get(
+        nextUrl,
+        {
+          headers: {
+            'User-Agent': 'english-vscode-extension',
+            Accept: 'application/vnd.github+json'
+          }
+        },
+        response => {
+          const status = response.statusCode ?? 0;
+          if (status >= 300 && status < 400 && response.headers.location) {
+            response.resume();
+            request(response.headers.location);
+            return;
+          }
+          if (status < 200 || status >= 300) {
+            response.resume();
+            reject(new Error(`HTTP ${status} while resolving latest release`));
+            return;
+          }
+          let body = '';
+          response.setEncoding('utf8');
+          response.on('data', chunk => {
+            body += chunk;
+          });
+          response.on('end', () => {
+            try {
+              const parsed = JSON.parse(body) as { tarball_url?: unknown; tag_name?: unknown };
+              const tarballUrl = typeof parsed.tarball_url === 'string' ? parsed.tarball_url : '';
+              const tagName = typeof parsed.tag_name === 'string' ? parsed.tag_name : 'unknown';
+              if (!tarballUrl) {
+                reject(new Error('Latest release response did not include a tarball URL'));
+                return;
+              }
+              outputChannel.appendLine(`Latest release resolved: ${tagName}`);
+              resolve(tarballUrl);
+            } catch (err) {
+              reject(new Error(`Failed to parse latest release response: ${err instanceof Error ? err.message : String(err)}`));
+            }
+          });
+        }
+      );
+      req.on('error', err => reject(err));
+    };
+    request(ENGLISH_GITHUB_LATEST_RELEASE_API_URL);
+  });
+}
+
+async function buildEnglishFromGithubArchive(
+  context: vscode.ExtensionContext,
+  outputChannel: vscode.OutputChannel
+): Promise<string | undefined> {
+  const tmpRoot = await fs.promises.mkdtemp(path.join(os.tmpdir(), 'english-src-'));
+  const archivePath = path.join(tmpRoot, 'english.tar.gz');
+  const sourceDir = path.join(tmpRoot, 'source');
+  const binDir = path.join(context.globalStorageUri.fsPath, 'bin');
+  const binaryName = process.platform === 'win32' ? 'english.exe' : 'english';
+  const binaryPath = path.join(binDir, binaryName);
+
+  try {
+    fs.mkdirSync(sourceDir, { recursive: true });
+    fs.mkdirSync(binDir, { recursive: true });
+    const archiveUrl = await getLatestReleaseTarballUrl(outputChannel);
+    await downloadToFile(archiveUrl, archivePath, outputChannel);
+    outputChannel.appendLine('Extracting latest GitHub release source archive with Node.js tar extractor...');
+    try {
+      await tar.x({
+        file: archivePath,
+        cwd: sourceDir,
+        strip: 1,
+        preservePaths: false,
+        strict: true
+      });
+    } catch (err) {
+      outputChannel.appendLine(
+        `Failed to extract downloaded source archive: ${err instanceof Error ? err.message : String(err)}`
+      );
+      return undefined;
+    }
+    const built = await runCommand('go', ['build', '-o', binaryPath, '.'], outputChannel, { cwd: sourceDir });
+    if (!built) {
+      outputChannel.appendLine(
+        'Failed to build english from source. Verify your Go toolchain and review build output above for details.'
+      );
+      return undefined;
+    }
+    outputChannel.appendLine(`english compiler built successfully: ${binaryPath}`);
+    return binaryPath;
+  } catch (err) {
+    outputChannel.appendLine(
+      `Failed to build from GitHub archive: ${err instanceof Error ? err.message : String(err)}`
+    );
+    return undefined;
+  } finally {
+    await fs.promises.rm(tmpRoot, { recursive: true, force: true });
+  }
+}
+
+async function ensureEnglishInstalled(
+  context: vscode.ExtensionContext,
+  outputChannel: vscode.OutputChannel
+): Promise<string> {
   const config = vscode.workspace.getConfiguration('english.languageServer');
   const command = config.get<string>('path', 'english');
 
   if (isAvailable(command)) {
-    return;
+    return command;
   }
 
   if (!isAvailable('go')) {
@@ -82,29 +245,32 @@ async function ensureEnglishInstalled(outputChannel: vscode.OutputChannel): Prom
       `The English compiler ("${command}") was not found, and "go" is not on your PATH. ` +
       'Install Go (https://go.dev/dl/) and reload VS Code, or set english.languageServer.path to the compiler binary.'
     );
-    return;
+    return command;
   }
 
-  const ok = await vscode.window.withProgress(
+  const builtBinary = await vscode.window.withProgress(
     {
       location: vscode.ProgressLocation.Notification,
-      title: 'Installing English compiler via go install…',
+      title: 'Building English compiler from latest GitHub release source…',
       cancellable: false
     },
-    () => runGoInstall(outputChannel)
+    () => buildEnglishFromGithubArchive(context, outputChannel)
   );
 
-  if (!ok) {
+  if (!builtBinary) {
     void vscode.window.showErrorMessage(
-      'Failed to install the English compiler automatically. ' +
+      'Failed to build the English compiler automatically. ' +
       `See the "English Language Server" output channel for details.`
     );
+    return command;
   }
+
+  return builtBinary;
 }
 
-function createServerOptions(): ServerOptions {
+function createServerOptions(commandOverride?: string): ServerOptions {
   const config = vscode.workspace.getConfiguration('english.languageServer');
-  const command = config.get<string>('path', 'english');
+  const command = commandOverride ?? config.get<string>('path', 'english');
   const args = config.get<string[]>('args', ['lsp']);
 
   return {
@@ -129,9 +295,9 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   catHighlightController = new CatHighlightController();
   context.subscriptions.push(catHighlightController);
 
-  await ensureEnglishInstalled(outputChannel);
+  languageServerCommandPath = await ensureEnglishInstalled(context, outputChannel);
 
-  const serverOptions = createServerOptions();
+  const serverOptions = createServerOptions(languageServerCommandPath);
   const clientOptions = createClientOptions(outputChannel);
 
   client = new LanguageClient('englishLanguageServer', 'English Language Server', serverOptions, clientOptions);

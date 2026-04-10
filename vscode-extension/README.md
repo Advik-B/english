@@ -6,7 +6,10 @@ This extension provides:
 
 ## Requirements
 
-The `english` binary must be available on `PATH` (or configured explicitly).
+- Bun (for extension development workflows)
+- Go (required only when auto-building the compiler, e.g. when `english` is not already available)
+
+If `english.languageServer.path` is unavailable, the extension downloads the latest source archive from GitHub, builds `english` locally with Go, and then starts the LSP from that compiled binary.
 
 ## Settings
 
@@ -17,24 +20,24 @@ The `english` binary must be available on `PATH` (or configured explicitly).
 
 ```bash
 cd vscode-extension
-npm install
-npm run compile
+bun install
+bun run compile
 ```
 
 ## Test with real VS Code
 
 ```bash
 cd vscode-extension
-npm test
+bun test
 ```
 
-`npm test` compiles the extension, builds the local Go `english` binary, downloads/runs a real VS Code instance via `@vscode/test-electron`, and executes the integration suite.
+`bun test` compiles the extension, builds the local Go `english` binary, downloads/runs a real VS Code instance via `@vscode/test-electron`, and executes the integration suite.
 
 ## Build VSIX
 
 ```bash
 cd vscode-extension
-npm run package:vsix
+bun run package:vsix
 ```
 
 This generates `english-language.vsix` in `vscode-extension/`.

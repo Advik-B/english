@@ -8,7 +8,7 @@ import * as vscode from 'vscode';
 import { LanguageClient, LanguageClientOptions, ServerOptions, TransportKind } from 'vscode-languageclient/node';
 import { CatHighlightController } from './catHighlight';
 
-const ENGLISH_GITHUB_ARCHIVE_URL = 'https://api.github.com/repos/Advik-B/english/tarball/main';
+const ENGLISH_GITHUB_LATEST_RELEASE_API_URL = 'https://api.github.com/repos/Advik-B/english/releases/latest';
 
 let client: LanguageClient | undefined;
 let catHighlightController: CatHighlightController | undefined;
@@ -127,6 +127,58 @@ function downloadToFile(url: string, destination: string, outputChannel: vscode.
   });
 }
 
+function getLatestReleaseTarballUrl(outputChannel: vscode.OutputChannel): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const request = (nextUrl: string) => {
+      outputChannel.appendLine(`Resolving latest release: ${nextUrl}`);
+      const req = https.get(
+        nextUrl,
+        {
+          headers: {
+            'User-Agent': 'english-vscode-extension',
+            Accept: 'application/vnd.github+json'
+          }
+        },
+        response => {
+          const status = response.statusCode ?? 0;
+          if (status >= 300 && status < 400 && response.headers.location) {
+            response.resume();
+            request(response.headers.location);
+            return;
+          }
+          if (status < 200 || status >= 300) {
+            response.resume();
+            reject(new Error(`HTTP ${status} while resolving latest release`));
+            return;
+          }
+          let body = '';
+          response.setEncoding('utf8');
+          response.on('data', chunk => {
+            body += chunk;
+          });
+          response.on('end', () => {
+            try {
+              const parsed = JSON.parse(body) as { tarball_url?: unknown; tag_name?: unknown };
+              const tarballUrl = typeof parsed.tarball_url === 'string' ? parsed.tarball_url : '';
+              const tagName = typeof parsed.tag_name === 'string' ? parsed.tag_name : 'unknown';
+              if (!tarballUrl) {
+                reject(new Error('Latest release response did not include a tarball URL'));
+                return;
+              }
+              outputChannel.appendLine(`Latest release resolved: ${tagName}`);
+              resolve(tarballUrl);
+            } catch (err) {
+              reject(new Error(`Failed to parse latest release response: ${err instanceof Error ? err.message : String(err)}`));
+            }
+          });
+        }
+      );
+      req.on('error', err => reject(err));
+    };
+    request(ENGLISH_GITHUB_LATEST_RELEASE_API_URL);
+  });
+}
+
 async function buildEnglishFromGithubArchive(
   context: vscode.ExtensionContext,
   outputChannel: vscode.OutputChannel
@@ -141,8 +193,9 @@ async function buildEnglishFromGithubArchive(
   try {
     fs.mkdirSync(sourceDir, { recursive: true });
     fs.mkdirSync(binDir, { recursive: true });
-    await downloadToFile(ENGLISH_GITHUB_ARCHIVE_URL, archivePath, outputChannel);
-    outputChannel.appendLine('Extracting GitHub source archive with JavaScript tar extractor...');
+    const archiveUrl = await getLatestReleaseTarballUrl(outputChannel);
+    await downloadToFile(archiveUrl, archivePath, outputChannel);
+    outputChannel.appendLine('Extracting latest GitHub release source archive with JavaScript tar extractor...');
     try {
       await tar.x({
         file: archivePath,
@@ -198,7 +251,7 @@ async function ensureEnglishInstalled(
   const builtBinary = await vscode.window.withProgress(
     {
       location: vscode.ProgressLocation.Notification,
-      title: 'Building English compiler from GitHub source…',
+      title: 'Building English compiler from latest GitHub release source…',
       cancellable: false
     },
     () => buildEnglishFromGithubArchive(context, outputChannel)

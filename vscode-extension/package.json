@@ -1,0 +1,64 @@
+{
+  "name": "english-language",
+  "displayName": "English Language",
+  "description": "VS Code support for the English programming language",
+  "version": "0.1.0",
+  "publisher": "advik-b",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Programming Languages"
+  ],
+  "activationEvents": [
+    "onLanguage:english"
+  ],
+  "main": "./extension.js",
+  "contributes": {
+    "languages": [
+      {
+        "id": "english",
+        "aliases": [
+          "English",
+          "english"
+        ],
+        "extensions": [
+          ".abc"
+        ],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "english",
+        "scopeName": "source.english",
+        "path": "./syntaxes/english.tmLanguage.json"
+      }
+    ],
+    "configuration": {
+      "title": "English Language",
+      "properties": {
+        "english.languageServer.path": {
+          "type": "string",
+          "default": "english",
+          "description": "Path to the English language binary."
+        },
+        "english.languageServer.args": {
+          "type": "array",
+          "default": ["lsp"],
+          "description": "Arguments passed to the English language server binary.",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  },
+  "scripts": {
+    "lint": "echo 'No extension lint configured'",
+    "test": "echo 'No extension tests configured'"
+  },
+  "dependencies": {
+    "vscode-languageclient": "^9.0.1"
+  }
+}

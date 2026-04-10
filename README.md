@@ -865,10 +865,30 @@ Print answer cast to number + 1.
 # Show version
 ./english version
 
+# Start Language Server Protocol server (for editor integrations)
+./english lsp
+
 # Help
 ./english --help
 ./english run --help
 ```
+
+---
+
+## 🧩 VS Code Extension
+
+A VS Code extension is included in `/vscode-extension` with:
+- TextMate syntax highlighting for `.abc` files
+- LSP-backed autocomplete/hover/definition via `english lsp`
+
+Quick setup:
+
+```bash
+cd vscode-extension
+npm install
+```
+
+Then press `F5` in VS Code from that folder to launch an Extension Development Host.
 
 ---
 

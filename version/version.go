@@ -6,4 +6,4 @@ package version
 //   - major is incremented when a change breaks existing programs
 //   - minor is incremented when a new feature is added
 //   - the third number is the count of commits made since the minor was last incremented
-const Version = "2.0.0" 
+const Version = "2.0.1" 

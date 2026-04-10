@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/Advik-B/english/highlight"
+	"github.com/Advik-B/english/version"
 )
 
 // Run prints the startup banner and then enters the interactive loop.
@@ -15,7 +16,7 @@ import (
 // reaches EOF.
 func (r *REPL) Run() {
 	now := time.Now().Format("Jan 2 2006")
-	fmt.Fprintf(r.out, "English %s (%s) on %s\n", Version, now, runtime.GOOS)
+	fmt.Fprintf(r.out, "English %s (%s) on %s\n", version.Version, now, runtime.GOOS)
 	fmt.Fprintf(r.out, "Type \"exit\" to exit, \"help\" for help.\n")
 	r.Loop()
 }

@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/Advik-B/english/repl"
+	"github.com/Advik-B/english/version"
 )
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -97,7 +98,7 @@ func TestBannerContainsEnglish(t *testing.T) {
 
 func TestBannerContainsVersion(t *testing.T) {
 	out := runWithBanner("exit\n")
-	assertContains(t, out, repl.Version)
+	assertContains(t, out, version.Version)
 }
 
 // ── Exit / quit ───────────────────────────────────────────────────────────────

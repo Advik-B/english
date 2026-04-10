@@ -3,10 +3,12 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as vscode from 'vscode';
 import { LanguageClient, LanguageClientOptions, ServerOptions, TransportKind } from 'vscode-languageclient/node';
+import { CatHighlightController } from './catHighlight';
 
 const ENGLISH_MODULE = 'github.com/Advik-B/english@latest';
 
 let client: LanguageClient | undefined;
+let catHighlightController: CatHighlightController | undefined;
 
 function isExecutable(filePath: string): boolean {
   try {
@@ -124,6 +126,8 @@ function createClientOptions(outputChannel: vscode.OutputChannel): LanguageClien
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
   const outputChannel = vscode.window.createOutputChannel('English Language Server');
   context.subscriptions.push(outputChannel);
+  catHighlightController = new CatHighlightController();
+  context.subscriptions.push(catHighlightController);
 
   await ensureEnglishInstalled(outputChannel);
 
@@ -136,6 +140,10 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 }
 
 export async function deactivate(): Promise<void> {
+  if (catHighlightController) {
+    catHighlightController.dispose();
+    catHighlightController = undefined;
+  }
   if (!client) {
     return;
   }

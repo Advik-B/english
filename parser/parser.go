@@ -1574,6 +1574,13 @@ func (p *Parser) parseExpression() (ast.Expression, error) {
 	return p.parseCast()
 }
 
+// isPossessiveMethodNameToken reports whether token t can legally appear as a
+// method name after a possessive ('s). We allow plain identifiers and keyword
+// tokens only, and reject literals/operators/punctuation by default.
+func isPossessiveMethodNameToken(t token.Type) bool {
+	return t == token.IDENTIFIER || token.IsKeyword(t)
+}
+
 // parseCast handles postfix operators on any expression:
 //   - "cast to <type>" / "casted to <type>" — explicit type conversion
 //   - "has <key>"                            — lookup table key check
@@ -1627,7 +1634,7 @@ func (p *Parser) parseCast() (ast.Expression, error) {
 	//   "hello"'s title   →   MethodCall{Object: "hello", MethodName: "title"}
 	if p.curToken.Type == token.POSSESSIVE {
 		p.nextToken() // consume 's
-		if p.curToken.Type != token.IDENTIFIER {
+		if !isPossessiveMethodNameToken(p.curToken.Type) {
 			return nil, p.syntaxErr(
 				msgPossessive,
 				hintPossessive,
@@ -1904,7 +1911,7 @@ func (p *Parser) parsePrimary() (ast.Expression, error) {
 		// e.g. "her_love_txt's casefold" → casefold applied to her_love_txt
 		if len(name) > 2 && name[len(name)-2:] == "'s" {
 			objectName := name[:len(name)-2]
-			if p.curToken.Type == token.IDENTIFIER {
+			if isPossessiveMethodNameToken(p.curToken.Type) {
 				methodName := p.curToken.Value
 				p.nextToken()
 				var args []ast.Expression

@@ -2606,6 +2606,28 @@ thats it.`
 	}
 }
 
+func TestPossessiveKeywordMethodUndefinedError(t *testing.T) {
+	code := `Print 'hellos''s length.`
+	_, err := evaluate(code)
+	if err == nil {
+		t.Fatal("Expected error for undefined function, got nil")
+	}
+	if !strings.Contains(err.Error(), "undefined function 'length'") {
+		t.Errorf("Expected undefined function 'length' error, got: %v", err)
+	}
+}
+
+func TestPossessiveUnknownMethodUndefinedError(t *testing.T) {
+	code := `Print 'hellos''s lengx.`
+	_, err := evaluate(code)
+	if err == nil {
+		t.Fatal("Expected error for undefined function, got nil")
+	}
+	if !strings.Contains(err.Error(), "undefined function 'lengx'") {
+		t.Errorf("Expected undefined function 'lengx' error, got: %v", err)
+	}
+}
+
 func TestCasefold_OfInCondition(t *testing.T) {
 	code := `Declare answer to be "Y".
 If casefold of answer is equal to "y", then

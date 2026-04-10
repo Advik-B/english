@@ -118,10 +118,11 @@ async function buildEnglishFromGithubArchive(
   outputChannel: vscode.OutputChannel
 ): Promise<string | undefined> {
   if (!isAvailable('tar')) {
-    outputChannel.appendLine(
-      'The "tar" command was not found on PATH; cannot extract GitHub source archive. ' +
-      'On Windows, install tar (for example via Git for Windows/bsdtar) or set english.languageServer.path manually.'
-    );
+    const guidance =
+      process.platform === 'win32'
+        ? 'Install tar (for example via Git for Windows/bsdtar) or set english.languageServer.path manually.'
+        : 'Install tar from your system package manager or set english.languageServer.path manually.';
+    outputChannel.appendLine(`The "tar" command was not found on PATH; cannot extract GitHub source archive. ${guidance}`);
     return undefined;
   }
 
@@ -146,6 +147,9 @@ async function buildEnglishFromGithubArchive(
     }
     const built = await runCommand('go', ['build', '-o', binaryPath, '.'], outputChannel, { cwd: sourceDir });
     if (!built) {
+      outputChannel.appendLine(
+        'Failed to build english from source. Verify your Go toolchain and review build output above for details.'
+      );
       return undefined;
     }
     outputChannel.appendLine(`english compiler built successfully: ${binaryPath}`);

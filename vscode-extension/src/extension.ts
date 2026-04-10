@@ -3,10 +3,12 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as vscode from 'vscode';
 import { LanguageClient, LanguageClientOptions, ServerOptions, TransportKind } from 'vscode-languageclient/node';
+import { CatHighlightController } from './catHighlight';
 
 const ENGLISH_MODULE = 'github.com/Advik-B/english@latest';
 
 let client: LanguageClient | undefined;
+let catHighlightController: CatHighlightController | undefined;
 
 function isExecutable(filePath: string): boolean {
   try {
@@ -124,6 +126,8 @@ function createClientOptions(outputChannel: vscode.OutputChannel): LanguageClien
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
   const outputChannel = vscode.window.createOutputChannel('English Language Server');
   context.subscriptions.push(outputChannel);
+  catHighlightController = new CatHighlightController();
+  context.subscriptions.push(catHighlightController);
 
   await ensureEnglishInstalled(outputChannel);
 
@@ -132,12 +136,24 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 
   client = new LanguageClient('englishLanguageServer', 'English Language Server', serverOptions, clientOptions);
   context.subscriptions.push(client);
-  void client.start();
+  void client.start().catch(err => {
+    outputChannel.appendLine(`Failed to start language client: ${err instanceof Error ? err.message : String(err)}`);
+  });
 }
 
 export async function deactivate(): Promise<void> {
+  if (catHighlightController) {
+    catHighlightController.dispose();
+    catHighlightController = undefined;
+  }
   if (!client) {
     return;
   }
-  await client.stop();
+  try {
+    await client.stop();
+  } catch {
+    // VS Code may dispose extension host while the client is still starting.
+  } finally {
+    client = undefined;
+  }
 }

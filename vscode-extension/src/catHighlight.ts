@@ -87,7 +87,7 @@ function addSpan(spans: Record<TokenKind, Span[]>, kind: TokenKind, start: numbe
   spans[kind].push({ start, end });
 }
 
-function tokenize(text: string): Record<TokenKind, Span[]> {
+export function tokenizeForCatHighlight(text: string): Record<TokenKind, Span[]> {
   const spans: Record<TokenKind, Span[]> = {
     keyword: [],
     controlFlow: [],
@@ -120,6 +120,12 @@ function tokenize(text: string): Record<TokenKind, Span[]> {
         i++;
       }
       addSpan(spans, 'comment', start, i);
+      continue;
+    }
+
+    if (text.startsWith("'s", i) && isWordBoundary(text, i + 2)) {
+      addSpan(spans, 'possessive', i, i + 2);
+      i += 2;
       continue;
     }
 
@@ -188,12 +194,6 @@ function tokenize(text: string): Record<TokenKind, Span[]> {
     if ('+-*/='.includes(ch)) {
       addSpan(spans, 'operator', i, i + 1);
       i++;
-      continue;
-    }
-
-    if (text.startsWith("'s", i) && isWordBoundary(text, i + 2)) {
-      addSpan(spans, 'possessive', i, i + 2);
-      i += 2;
       continue;
     }
 
@@ -341,7 +341,7 @@ export class CatHighlightController implements vscode.Disposable {
     }
 
     const text = editor.document.getText();
-    const tokens = tokenize(text);
+    const tokens = tokenizeForCatHighlight(text);
     for (const [kind, decoration] of Object.entries(this.decorations) as Array<[TokenKind, vscode.TextEditorDecorationType]>) {
       editor.setDecorations(decoration, toRanges(editor.document, tokens[kind]));
     }

@@ -1,7 +1,7 @@
 # English VS Code Extension
 
 This extension provides:
-- Syntax highlighting for `.abc` files
+- Syntax highlighting for `.abc` files (runtime-colored to match `english cat` palette)
 - Language server features (autocomplete, hover, go-to-definition, diagnostics)
 
 ## Requirements

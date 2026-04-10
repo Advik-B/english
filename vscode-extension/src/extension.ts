@@ -136,7 +136,9 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 
   client = new LanguageClient('englishLanguageServer', 'English Language Server', serverOptions, clientOptions);
   context.subscriptions.push(client);
-  void client.start();
+  void client.start().catch(err => {
+    outputChannel.appendLine(`Failed to start language client: ${err instanceof Error ? err.message : String(err)}`);
+  });
 }
 
 export async function deactivate(): Promise<void> {
@@ -147,5 +149,11 @@ export async function deactivate(): Promise<void> {
   if (!client) {
     return;
   }
-  await client.stop();
+  try {
+    await client.stop();
+  } catch {
+    // VS Code may dispose extension host while the client is still starting.
+  } finally {
+    client = undefined;
+  }
 }

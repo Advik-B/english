@@ -32,8 +32,12 @@ The server communicates over stdin/stdout using the LSP protocol.`,
 	},
 }
 
+var lspStdio bool
+
 func init() {
 	rootCmd.AddCommand(lspCmd)
+	lspCmd.Flags().BoolVar(&lspStdio, "stdio", false, "Use stdio transport (default)")
+	_ = lspCmd.Flags().MarkHidden("stdio")
 }
 
 func runLSPServer() {

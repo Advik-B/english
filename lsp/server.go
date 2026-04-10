@@ -20,6 +20,8 @@ const (
 	thenSuffix       = ", then"
 )
 
+var defaultCompletionTriggerCharacters = buildCompletionTriggerCharacters()
+
 // Server represents the LSP server
 type Server struct {
 	reader *bufio.Reader
@@ -150,7 +152,7 @@ func (s *Server) readMessage() (json.RawMessage, error) {
 
 		header := strings.ToLower(line)
 		if strings.HasPrefix(header, "content-length:") {
-			lengthStr := strings.TrimSpace(line[len("Content-Length:"):])
+			lengthStr := strings.TrimSpace(header[len("content-length:"):])
 			contentLength, err = strconv.Atoi(lengthStr)
 			if err != nil {
 				return nil, fmt.Errorf("invalid Content-Length: %v", err)
@@ -228,7 +230,7 @@ func (s *Server) handleRequest(req RequestMessage) {
 		s.sendError(req.ID, ServerNotInitialized, "Server not initialized")
 		return
 	}
-	if s.shutdownRequested && req.Method != "shutdown" {
+	if s.shutdownRequested {
 		s.sendError(req.ID, InvalidRequest, "Server is shutting down")
 		return
 	}
@@ -378,7 +380,7 @@ func (s *Server) handleInitialize(params json.RawMessage) (*InitializeResult, er
 				},
 			},
 			CompletionProvider: &CompletionOptions{
-				TriggerCharacters: completionTriggerCharacters(),
+				TriggerCharacters: defaultCompletionTriggerCharacters,
 				ResolveProvider:   false,
 			},
 			HoverProvider: true,
@@ -401,7 +403,7 @@ func (s *Server) handleInitialize(params json.RawMessage) (*InitializeResult, er
 	}, nil
 }
 
-func completionTriggerCharacters() []string {
+func buildCompletionTriggerCharacters() []string {
 	triggers := make([]string, 0, 54)
 	for ch := 'a'; ch <= 'z'; ch++ {
 		triggers = append(triggers, string(ch))

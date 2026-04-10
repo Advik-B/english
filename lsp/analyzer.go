@@ -2,11 +2,13 @@ package lsp
 
 import (
 	"fmt"
+	"sort"
+	"strconv"
+	"strings"
+
 	"github.com/Advik-B/english/ast"
 	"github.com/Advik-B/english/parser"
 	"github.com/Advik-B/english/token"
-	"sort"
-	"strings"
 )
 
 // SymbolType represents the type of a symbol
@@ -557,7 +559,7 @@ func normalizeCompletionItems(items []CompletionItem) []CompletionItem {
 	seen := make(map[string]struct{}, len(items))
 	out := make([]CompletionItem, 0, len(items))
 	for _, item := range items {
-		key := strings.ToLower(item.Label) + ":" + fmt.Sprintf("%d", item.Kind)
+		key := strings.ToLower(item.Label) + ":" + strconv.Itoa(int(item.Kind))
 		if _, ok := seen[key]; ok {
 			continue
 		}

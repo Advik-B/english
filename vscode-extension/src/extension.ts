@@ -99,12 +99,25 @@ function downloadToFile(url: string, destination: string, outputChannel: vscode.
             return;
           }
           const file = fs.createWriteStream(destination);
-          response.pipe(file);
-          file.on('finish', () => {
-            file.close();
-            resolve();
+          let settled = false;
+          const fail = (err: Error) => {
+            if (settled) {
+              return;
+            }
+            settled = true;
+            file.destroy();
+            reject(err);
+          };
+          file.once('error', fail);
+          response.once('error', fail);
+          file.once('finish', () => {
+            if (settled) {
+              return;
+            }
+            settled = true;
+            file.close(err => (err ? reject(err) : resolve()));
           });
-          file.on('error', err => reject(err));
+          response.pipe(file);
         }
       );
       req.on('error', err => reject(err));

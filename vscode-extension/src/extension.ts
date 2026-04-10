@@ -25,12 +25,12 @@ function createClientOptions(): LanguageClientOptions {
 }
 
 export function activate(context: vscode.ExtensionContext): void {
-	const serverOptions = createServerOptions();
-	const clientOptions = createClientOptions();
+  const serverOptions = createServerOptions();
+  const clientOptions = createClientOptions();
 
-	client = new LanguageClient('englishLanguageServer', 'English Language Server', serverOptions, clientOptions);
-	context.subscriptions.push(client);
-	void client.start();
+  client = new LanguageClient('englishLanguageServer', 'English Language Server', serverOptions, clientOptions);
+  context.subscriptions.push(client);
+  void client.start();
 }
 
 export async function deactivate(): Promise<void> {

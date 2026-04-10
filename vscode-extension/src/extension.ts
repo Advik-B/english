@@ -142,7 +142,7 @@ async function buildEnglishFromGithubArchive(
     fs.mkdirSync(sourceDir, { recursive: true });
     fs.mkdirSync(binDir, { recursive: true });
     await downloadToFile(ENGLISH_GITHUB_ARCHIVE_URL, archivePath, outputChannel);
-    outputChannel.appendLine('Extracting GitHub source archive with JavaScript tar unarchiver...');
+    outputChannel.appendLine('Extracting GitHub source archive with JavaScript tar extractor...');
     await tar.x({
       file: archivePath,
       cwd: sourceDir,

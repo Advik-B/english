@@ -32,6 +32,38 @@ func NewParser(tokens []token.Token) *Parser {
 	return p
 }
 
+// isWord reports whether the current token is the given filler word, matched
+// case-insensitively. English has a number of words that read naturally but
+// are not keywords — "being", "gives", "back", "a" — and they were previously
+// compared with a mix of ==, strings.ToLower and strings.EqualFold, so some
+// were accidentally case-sensitive.
+func (p *Parser) isWord(word string) bool {
+	return p.curToken.Type == token.IDENTIFIER && strings.EqualFold(p.curToken.Value, word)
+}
+
+// skipWord consumes the current token if it is the given filler word.
+func (p *Parser) skipWord(word string) bool {
+	if p.isWord(word) {
+		p.nextToken()
+		return true
+	}
+	return false
+}
+
+// peekWord reports whether the lookahead token is the given filler word.
+func (p *Parser) peekWord(word string) bool {
+	return p.peekToken.Type == token.IDENTIFIER && strings.EqualFold(p.peekToken.Value, word)
+}
+
+// skipOptional consumes the current token if it has the given type.
+func (p *Parser) skipOptional(t token.Type) bool {
+	if p.curToken.Type == t {
+		p.nextToken()
+		return true
+	}
+	return false
+}
+
 // at converts a token's location into a node position. Every AST node embeds
 // ast.Base, so this is the single place the parser records where a node starts.
 func at(t token.Token) ast.Base {
@@ -620,23 +652,49 @@ func (p *Parser) parseFunctionDeclaration() (ast.Statement, error) {
 					hintParameterName,
 				)
 			}
-			parameters = append(parameters, ast.Param{Base: at(paramToken), Name: paramToken.Value})
+			param := ast.Param{Base: at(paramToken), Name: paramToken.Value}
 			p.nextToken()
+
+			// Optional annotation: "takes x as number".
+			if p.curToken.Type == token.AS {
+				p.nextToken()
+				paramType, err := p.parseTypeName()
+				if err != nil {
+					return nil, err
+				}
+				param.Type = paramType
+			}
+			parameters = append(parameters, param)
 
 			if p.curToken.Type != token.AND {
 				break
 			}
-			// Check if "and" is followed by "does" (end of params) or another param
-			if p.peekToken.Type == token.DOES {
+			// "and" here either joins another parameter or introduces the rest
+			// of the declaration ("and gives back …", "and does …").
+			if p.peekToken.Type == token.DOES || p.peekWord("gives") {
 				break
 			}
 			p.nextToken()
 		}
 	}
 
-	// Support "and does" syntax after parameters
-	if p.curToken.Type == token.AND {
-		p.nextToken()
+	// Support "and does" / "and gives back" syntax after parameters
+	p.skipOptional(token.COMMA)
+	p.skipOptional(token.AND)
+
+	// Optional return type: "gives back a number".
+	var returnType *ast.TypeExpr
+	if p.skipWord("gives") {
+		if !p.skipWord("back") {
+			return nil, p.syntaxErr(msgGivesNeedsBack, hintReturnType)
+		}
+		var err error
+		returnType, err = p.parseTypeName()
+		if err != nil {
+			return nil, err
+		}
+		p.skipOptional(token.COMMA)
+		p.skipOptional(token.AND)
 	}
 
 	if err := p.expectToken(token.DOES); err != nil {
@@ -669,10 +727,11 @@ func (p *Parser) parseFunctionDeclaration() (ast.Statement, error) {
 	}
 
 	return &ast.FunctionDecl{
-		Name:   nameToken.Value,
-		Params: parameters,
-		Body:   body,
-		Base:   funcPos,
+		Base:       funcPos,
+		Name:       nameToken.Value,
+		Params:     parameters,
+		ReturnType: returnType,
+		Body:       body,
 	}, nil
 }
 

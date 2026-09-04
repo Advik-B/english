@@ -1394,3 +1394,122 @@ Declare r to be not x is equal to 2.`)
 		t.Errorf("operand of not is %T, want the comparison", un.Right)
 	}
 }
+
+// TestFunctionSignatureSyntax covers the parameter and return type annotations
+// added so that a function has a signature the checker can verify. Before
+// this, a function was just a name and a list of parameter names.
+func TestFunctionSignatureSyntax(t *testing.T) {
+	tests := []struct {
+		name       string
+		src        string
+		paramTypes []string // "" means unannotated
+		returnType string
+	}{
+		{
+			name: "annotated parameters and return",
+			src: `Declare function add that takes x as number and y as number, and gives back a number, and does the following:
+    Return x + y.
+thats it.`,
+			paramTypes: []string{"number", "number"},
+			returnType: "number",
+		},
+		{
+			name: "return type with no comma",
+			src: `Declare function shout that takes msg as text and gives back a text, and does the following:
+    Return msg.
+thats it.`,
+			paramTypes: []string{"text"},
+			returnType: "text",
+		},
+		{
+			name: "no parameters, only a return type",
+			src: `Declare function answer that gives back a number, and does the following:
+    Return 42.
+thats it.`,
+			paramTypes: nil,
+			returnType: "number",
+		},
+		{
+			name: "unannotated still parses",
+			src: `Declare function add that takes a and b and does the following:
+    Return a + b.
+thats it.`,
+			paramTypes: []string{"", ""},
+			returnType: "",
+		},
+		{
+			name: "mixed annotation",
+			src: `Declare function f that takes a as number and b and does the following:
+    Return a.
+thats it.`,
+			paramTypes: []string{"number", ""},
+			returnType: "",
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			prog, err := parse(test.src)
+			if err != nil {
+				t.Fatalf("should parse, got: %v", err)
+			}
+			fd, ok := prog.Statements[0].(*ast.FunctionDecl)
+			if !ok {
+				t.Fatalf("statement is %T, want *ast.FunctionDecl", prog.Statements[0])
+			}
+			if len(fd.Params) != len(test.paramTypes) {
+				t.Fatalf("got %d parameter(s), want %d", len(fd.Params), len(test.paramTypes))
+			}
+			for i, want := range test.paramTypes {
+				got := ast.TypeName(fd.Params[i].Type)
+				if got != want {
+					t.Errorf("parameter %d annotation is %q, want %q", i, got, want)
+				}
+				if want != "" && !fd.Params[i].Type.Pos().IsKnown() {
+					t.Errorf("parameter %d annotation has no position", i)
+				}
+			}
+			if got := ast.TypeName(fd.ReturnType); got != test.returnType {
+				t.Errorf("return type is %q, want %q", got, test.returnType)
+			}
+		})
+	}
+}
+
+// TestGivesRequiresBack checks the diagnostic for a half-written return clause.
+func TestGivesRequiresBack(t *testing.T) {
+	_, err := parse(`Declare function f that gives a number, and does the following:
+    Return 1.
+thats it.`)
+	if err == nil {
+		t.Fatal("expected an error for \"gives\" without \"back\"")
+	}
+	if !strings.Contains(err.Error(), "'back'") {
+		t.Errorf("error should mention the missing word: %v", err)
+	}
+}
+
+// TestStructMethodSignatureSyntax checks methods accept the same annotations.
+func TestStructMethodSignatureSyntax(t *testing.T) {
+	prog, err := parse(`Declare Point as a structure with the following fields:
+    x is a number with 0 being the default.
+
+    let scaled be a function that takes factor as number and gives back a number, and does the following:
+        Return x * factor.
+    thats it.
+thats it.`)
+	if err != nil {
+		t.Fatalf("should parse, got: %v", err)
+	}
+	sd := prog.Statements[0].(*ast.StructDecl)
+	if len(sd.Methods) != 1 {
+		t.Fatalf("got %d method(s), want 1", len(sd.Methods))
+	}
+	m := sd.Methods[0]
+	if len(m.Params) != 1 || ast.TypeName(m.Params[0].Type) != "number" {
+		t.Errorf("method parameter annotation is %q, want \"number\"", ast.TypeName(m.Params[0].Type))
+	}
+	if ast.TypeName(m.ReturnType) != "number" {
+		t.Errorf("method return type is %q, want \"number\"", ast.TypeName(m.ReturnType))
+	}
+}

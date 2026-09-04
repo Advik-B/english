@@ -238,14 +238,26 @@ func (p *Parser) parseStructMethod() (*ast.FunctionDecl, error) {
 						hintMethodParam,
 					)
 				}
-				parameters = append(parameters, ast.Param{Base: at(paramToken), Name: paramToken.Value})
+				param := ast.Param{Base: at(paramToken), Name: paramToken.Value}
 				p.nextToken()
+
+				// Optional annotation: "takes x as number".
+				if p.curToken.Type == token.AS {
+					p.nextToken()
+					paramType, err := p.parseTypeName()
+					if err != nil {
+						return nil, err
+					}
+					param.Type = paramType
+				}
+				parameters = append(parameters, param)
 
 				if p.curToken.Type != token.AND {
 					break
 				}
-				// Check if "and" is followed by "does" (end of params) or another param
-				if p.peekToken.Type == token.DOES {
+				// "and" here either joins another parameter or introduces the
+				// rest of the declaration ("and gives back …", "and does …").
+				if p.peekToken.Type == token.DOES || p.peekWord("gives") {
 					break
 				}
 				p.nextToken()
@@ -253,15 +265,27 @@ func (p *Parser) parseStructMethod() (*ast.FunctionDecl, error) {
 		}
 	}
 
-	// Support "and does" syntax after parameters
-	if p.curToken.Type == token.AND {
-		p.nextToken()
+	// Support "and does" / "and gives back" syntax after parameters
+	p.skipOptional(token.COMMA)
+	p.skipOptional(token.AND)
+
+	// Optional return type: "gives back a number".
+	var returnType *ast.TypeExpr
+	if p.skipWord("gives") {
+		if !p.skipWord("back") {
+			return nil, p.syntaxErr(msgGivesNeedsBack, hintReturnType)
+		}
+		var err error
+		returnType, err = p.parseTypeName()
+		if err != nil {
+			return nil, err
+		}
+		p.skipOptional(token.COMMA)
+		p.skipOptional(token.AND)
 	}
 
 	// Expect "that does" or just "does"
-	if p.curToken.Type == token.THAT {
-		p.nextToken()
-	}
+	p.skipOptional(token.THAT)
 
 	if err := p.expectToken(token.DOES); err != nil {
 		return nil, err
@@ -297,10 +321,11 @@ func (p *Parser) parseStructMethod() (*ast.FunctionDecl, error) {
 	}
 
 	return &ast.FunctionDecl{
-		Base:   methodPos,
-		Name:   nameToken.Value,
-		Params: parameters,
-		Body:   body,
+		Base:       methodPos,
+		Name:       nameToken.Value,
+		Params:     parameters,
+		ReturnType: returnType,
+		Body:       body,
 	}, nil
 }
 

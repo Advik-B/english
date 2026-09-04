@@ -64,6 +64,7 @@ const (
 	// Type cast / possessive / error-type check.
 	hintFmtTypeName     = "Built-in types are: %s. A struct name also works where a struct is expected."
 	hintUnsignedInteger = "Write 'unsigned integer', for example: 'age is an unsigned integer.'"
+	hintReturnType      = "Declare a return type like this: 'and gives back a number, and does the following:'."
 	hintPossessive      = "For example: 'myText's length' or 'myText's upper'."
 	hintErrorTypeCheck  = "For example: 'error is NetworkError' or 'error is RuntimeError'."
 
@@ -224,6 +225,7 @@ const (
 
 	// "I do not know what to do with '<tok>' here."
 	msgUnterminatedText     = "I found a text literal that is never closed."
+	msgGivesNeedsBack       = "I expected the word 'back' after 'gives'."
 	msgFmtTypeNameExpected  = "I expected a type name here, but found %s."
 	msgUnsignedNeedsInteger = "I expected the word 'integer' after 'unsigned'."
 	msgFmtIllegalChar       = "I do not recognise the character '%s'."

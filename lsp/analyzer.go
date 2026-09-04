@@ -1,6 +1,7 @@
 package lsp
 
 import (
+	"errors"
 	"fmt"
 	"sort"
 	"strconv"
@@ -103,7 +104,7 @@ func (a *Analyzer) Analyze(doc *Document) *AnalysisResult {
 	program, err := p.Parse()
 	if err != nil {
 		// Add parse error as diagnostic
-		diag := a.parseErrorToDiagnostic(err.Error(), doc)
+		diag := a.parseErrorToDiagnostic(err, doc)
 		result.Diagnostics = append(result.Diagnostics, diag)
 		return result
 	}
@@ -136,24 +137,12 @@ func semaDiagnostic(d *sema.Diagnostic, doc *Document) Diagnostic {
 		col = 0
 	}
 
-	// Underline to the end of the offending word where one can be found.
-	end := col + 1
-	if lines := strings.Split(doc.Content, "\n"); line < len(lines) {
-		text := lines[line]
-		for end < len(text) && isWordChar(text[end]) {
-			end++
-		}
-	}
-
 	message := d.Message
 	if d.Hint != "" {
 		message += "\n" + d.Hint
 	}
 	return Diagnostic{
-		Range: Range{
-			Start: Position{Line: line, Character: col},
-			End:   Position{Line: line, Character: end},
-		},
+		Range:    Range{Start: Position{Line: line, Character: col}, End: wordEnd(doc, line, col)},
 		Severity: DiagnosticSeverityError,
 		Source:   "english",
 		Message:  message,
@@ -176,54 +165,55 @@ func (a *Analyzer) tokenizeAll(lexer *parser.Lexer) []token.Token {
 	return tokens
 }
 
-// parseErrorToDiagnostic converts a parse error to a diagnostic
-func (a *Analyzer) parseErrorToDiagnostic(errMsg string, doc *Document) Diagnostic {
-	// Try to extract line and column from error message
-	line := 0
-	col := 0
+// parseErrorToDiagnostic converts a parse error into an editor diagnostic.
+//
+// The parser reports a *parser.SyntaxError carrying the line, the column and a
+// hint. This used to ignore all of that and scan the *rendered* message for the
+// substring "at line ", re-parsing the digits by hand — so any rewording of the
+// message silently moved every syntax error to line 1, column 1. It also ended
+// the underline at a fixed column + 10, which ran past the end of short lines.
+func (a *Analyzer) parseErrorToDiagnostic(err error, doc *Document) Diagnostic {
+	line, col := 0, 0
+	message := err.Error()
 
-	// Look for "at line X, column Y" pattern
-	if idx := strings.Index(errMsg, "at line "); idx != -1 {
-		// Parse line number
-		remaining := errMsg[idx+8:]
-		for i, c := range remaining {
-			if c >= '0' && c <= '9' {
-				line = line*10 + int(c-'0')
-			} else if c == ',' {
-				// Found comma, look for column
-				colStr := remaining[i+1:]
-				if colIdx := strings.Index(colStr, "column "); colIdx != -1 {
-					colPart := colStr[colIdx+7:]
-					for _, c := range colPart {
-						if c >= '0' && c <= '9' {
-							col = col*10 + int(c-'0')
-						} else {
-							break
-						}
-					}
-				}
-				break
-			}
+	var syntaxErr *parser.SyntaxError
+	if errors.As(err, &syntaxErr) {
+		line = syntaxErr.Line - 1
+		col = syntaxErr.Col - 1
+		message = syntaxErr.Msg
+		if syntaxErr.Hint != "" {
+			message += "\n" + syntaxErr.Hint
 		}
 	}
-
-	// Convert to 0-indexed
-	if line > 0 {
-		line--
+	if line < 0 {
+		line = 0
 	}
-	if col > 0 {
-		col--
+	if col < 0 {
+		col = 0
 	}
 
 	return Diagnostic{
-		Range: Range{
-			Start: Position{Line: line, Character: col},
-			End:   Position{Line: line, Character: col + 10},
-		},
+		Range:    Range{Start: Position{Line: line, Character: col}, End: wordEnd(doc, line, col)},
 		Severity: DiagnosticSeverityError,
 		Source:   "english",
-		Message:  errMsg,
+		Message:  message,
 	}
+}
+
+// wordEnd returns the position just past the word starting at col, clamped to
+// the end of the line, so an underline never extends past the text.
+func wordEnd(doc *Document, line, col int) Position {
+	text := doc.GetLine(line)
+	end := col
+	for end < len(text) && isWordChar(text[end]) {
+		end++
+	}
+	if end == col {
+		// Nothing word-like starts here, so underline a single character.
+		// An empty range renders as nothing at all in an editor.
+		end = col + 1
+	}
+	return Position{Line: line, Character: end}
 }
 
 // extractSymbols extracts symbols from the AST
@@ -233,108 +223,69 @@ func (a *Analyzer) extractSymbols(program *ast.Program, result *AnalysisResult, 
 	}
 }
 
-// extractFromStatement extracts symbols from a statement
+// extractFromStatement collects the symbols a statement defines and the names
+// it mentions.
+//
+// Every statement kind is handled. It used to handle 10 of the 24, so anything
+// written inside a try block, a struct declaration or method, a raise, a swap,
+// a lookup-table assignment or a field assignment was invisible to the editor:
+// no references, no rename, no go-to-definition, and no document symbol.
 func (a *Analyzer) extractFromStatement(stmt ast.Statement, result *AnalysisResult, doc *Document, parent *Symbol) {
 	switch s := stmt.(type) {
 	case *ast.VariableDecl:
-		sym := a.createVariableSymbol(s, doc)
-		if parent != nil {
-			parent.Children = append(parent.Children, sym)
-		} else {
-			result.Symbols = append(result.Symbols, sym)
+		detail := "variable"
+		if s.IsConstant {
+			detail = "constant"
 		}
+		a.declareVariable(s.Name, s.IsConstant, detail+": "+a.exprToString(s.Value),
+			a.exprToString(s.Value), s.Pos(), result, doc, parent)
+		a.extractReferencesFromExpr(s.Value, result, doc)
 
-		// Add to variables map
-		result.Variables[s.Name] = &VariableInfo{
-			Name:       s.Name,
-			IsConstant: s.IsConstant,
-			Range:      sym.Range,
-			DefRange:   sym.DefRange,
-			Value:      a.exprToString(s.Value),
+	case *ast.TypedVariableDecl:
+		// An annotated declaration is a declaration: the editor showed nothing
+		// for one, so "Declare total as a number." had no symbol at all.
+		kind := "variable"
+		if s.IsConstant {
+			kind = "constant"
 		}
-
-		// Add reference for the definition
-		result.References = append(result.References, &Reference{
-			Name:         s.Name,
-			Range:        sym.DefRange,
-			IsDefinition: true,
-		})
-
-		// Extract references from value expression
+		value := "?"
+		if s.Value != nil {
+			value = a.exprToString(s.Value)
+		}
+		a.declareVariable(s.Name, s.IsConstant,
+			kind+": "+ast.TypeName(s.Type), value, s.Pos(), result, doc, parent)
 		a.extractReferencesFromExpr(s.Value, result, doc)
 
 	case *ast.FunctionDecl:
-		sym := a.createFunctionSymbol(s, doc)
-		if parent != nil {
-			parent.Children = append(parent.Children, sym)
-		} else {
-			result.Symbols = append(result.Symbols, sym)
-		}
-
-		// Add to functions map
-		result.Functions[s.Name] = &FunctionInfo{
-			Name:          s.Name,
-			Parameters:    s.ParamNames(),
-			Range:         sym.Range,
-			DefRange:      sym.DefRange,
-			Body:          s.Body,
-			Documentation: a.generateFunctionDoc(s),
-		}
-
-		// Add reference for the definition
-		result.References = append(result.References, &Reference{
-			Name:         s.Name,
-			Range:        sym.DefRange,
-			IsDefinition: true,
-		})
-
-		// Extract symbols from function body
-		for _, bodyStmt := range s.Body {
-			a.extractFromStatement(bodyStmt, result, doc, sym)
-		}
+		a.extractFunction(s, result, doc, parent)
 
 	case *ast.Assignment:
-		// Add reference for the variable being assigned
-		varRange := a.findIdentifierRange(s.Name, doc)
-		result.References = append(result.References, &Reference{
-			Name:  s.Name,
-			Range: varRange,
-		})
-		// Extract references from value
+		a.reference(s.Name, s.Pos(), result, doc)
 		a.extractReferencesFromExpr(s.Value, result, doc)
 
 	case *ast.IfStatement:
 		a.extractReferencesFromExpr(s.Condition, result, doc)
-		for _, thenStmt := range s.Then {
-			a.extractFromStatement(thenStmt, result, doc, parent)
-		}
+		a.extractFromBody(s.Then, result, doc, parent)
 		for _, elseIf := range s.ElseIf {
 			a.extractReferencesFromExpr(elseIf.Condition, result, doc)
-			for _, stmt := range elseIf.Body {
-				a.extractFromStatement(stmt, result, doc, parent)
-			}
+			a.extractFromBody(elseIf.Body, result, doc, parent)
 		}
-		for _, elseStmt := range s.Else {
-			a.extractFromStatement(elseStmt, result, doc, parent)
-		}
+		a.extractFromBody(s.Else, result, doc, parent)
 
 	case *ast.WhileLoop:
 		a.extractReferencesFromExpr(s.Condition, result, doc)
-		for _, bodyStmt := range s.Body {
-			a.extractFromStatement(bodyStmt, result, doc, parent)
-		}
+		a.extractFromBody(s.Body, result, doc, parent)
 
 	case *ast.ForLoop:
 		a.extractReferencesFromExpr(s.Count, result, doc)
-		for _, bodyStmt := range s.Body {
-			a.extractFromStatement(bodyStmt, result, doc, parent)
-		}
+		a.extractFromBody(s.Body, result, doc, parent)
 
 	case *ast.ForEachLoop:
+		// The loop variable is introduced here, so it is a definition; without
+		// it, renaming the loop variable renamed only its uses.
+		a.define(s.Item, s.Pos(), result, doc)
 		a.extractReferencesFromExpr(s.List, result, doc)
-		for _, bodyStmt := range s.Body {
-			a.extractFromStatement(bodyStmt, result, doc, parent)
-		}
+		a.extractFromBody(s.Body, result, doc, parent)
 
 	case *ast.OutputStatement:
 		for _, value := range s.Values {
@@ -348,26 +299,198 @@ func (a *Analyzer) extractFromStatement(stmt ast.Statement, result *AnalysisResu
 		if s.FunctionCall != nil {
 			a.extractReferencesFromExpr(s.FunctionCall, result, doc)
 		}
+		if s.MethodCall != nil {
+			a.extractReferencesFromExpr(s.MethodCall, result, doc)
+		}
 
 	case *ast.IndexAssignment:
-		varRange := a.findIdentifierRange(s.ListName, doc)
-		result.References = append(result.References, &Reference{
-			Name:  s.ListName,
-			Range: varRange,
-		})
+		a.reference(s.ListName, s.Pos(), result, doc)
 		a.extractReferencesFromExpr(s.Index, result, doc)
 		a.extractReferencesFromExpr(s.Value, result, doc)
 
+	case *ast.LookupKeyAssignment:
+		a.reference(s.TableName, s.Pos(), result, doc)
+		a.extractReferencesFromExpr(s.Key, result, doc)
+		a.extractReferencesFromExpr(s.Value, result, doc)
+
+	case *ast.FieldAssignment:
+		a.reference(s.ObjectName, s.Pos(), result, doc)
+		a.extractReferencesFromExpr(s.Value, result, doc)
+
 	case *ast.ToggleStatement:
-		varRange := a.findIdentifierRange(s.Name, doc)
-		result.References = append(result.References, &Reference{
-			Name:  s.Name,
-			Range: varRange,
-		})
+		a.reference(s.Name, s.Pos(), result, doc)
+
+	case *ast.SwapStatement:
+		a.reference(s.Name1, s.Pos(), result, doc)
+		a.reference(s.Name2, s.Pos(), result, doc)
+
+	case *ast.StructDecl:
+		a.extractStruct(s, result, doc, parent)
+
+	case *ast.TryStatement:
+		a.extractFromBody(s.TryBody, result, doc, parent)
+		if s.ErrorVar != "" {
+			a.define(s.ErrorVar, s.Pos(), result, doc)
+		}
+		a.extractFromBody(s.ErrorBody, result, doc, parent)
+		a.extractFromBody(s.FinallyBody, result, doc, parent)
+
+	case *ast.RaiseStatement:
+		a.extractReferencesFromExpr(s.Message, result, doc)
+
+	case *ast.ImportStatement, *ast.ErrorTypeDecl, *ast.BreakStatement,
+		*ast.ContinueStatement, *ast.CommentStatement:
+		// Nothing here names a variable or a function.
 	}
 }
 
-// extractReferencesFromExpr extracts variable/function references from an expression
+// extractFromBody walks a block of statements.
+func (a *Analyzer) extractFromBody(body []ast.Statement, result *AnalysisResult, doc *Document, parent *Symbol) {
+	for _, stmt := range body {
+		a.extractFromStatement(stmt, result, doc, parent)
+	}
+}
+
+// extractFunction records a function, its parameters and its body.
+func (a *Analyzer) extractFunction(f *ast.FunctionDecl, result *AnalysisResult, doc *Document, parent *Symbol) {
+	sym := a.createFunctionSymbol(f, doc)
+	a.attach(sym, result, parent)
+
+	result.Functions[f.Name] = &FunctionInfo{
+		Name:          f.Name,
+		Parameters:    f.ParamNames(),
+		Range:         sym.Range,
+		DefRange:      sym.DefRange,
+		Body:          f.Body,
+		Documentation: a.generateFunctionDoc(f),
+	}
+	result.References = append(result.References, &Reference{
+		Name:         f.Name,
+		Range:        sym.DefRange,
+		IsDefinition: true,
+	})
+
+	// Parameters are declarations too, so hovering or renaming one works.
+	for i := range f.Params {
+		param := &f.Params[i]
+		paramRange := a.nameRangeAt(param.Pos(), param.Name, doc)
+		sym.Children = append(sym.Children, &Symbol{
+			Name:     param.Name,
+			Type:     SymbolTypeParameter,
+			Range:    paramRange,
+			DefRange: paramRange,
+			Detail:   "parameter: " + ast.TypeName(param.Type),
+		})
+		result.References = append(result.References, &Reference{
+			Name:         param.Name,
+			Range:        paramRange,
+			IsDefinition: true,
+		})
+	}
+
+	a.extractFromBody(f.Body, result, doc, sym)
+}
+
+// extractStruct records a struct, its fields and its methods.
+func (a *Analyzer) extractStruct(sd *ast.StructDecl, result *AnalysisResult, doc *Document, parent *Symbol) {
+	structRange := a.nameRangeAt(sd.Pos(), sd.Name, doc)
+	sym := &Symbol{
+		Name:     sd.Name,
+		Type:     SymbolTypeVariable,
+		Range:    structRange,
+		DefRange: structRange,
+		Detail:   "structure",
+		Children: make([]*Symbol, 0, len(sd.Fields)),
+	}
+	a.attach(sym, result, parent)
+	result.References = append(result.References, &Reference{
+		Name:         sd.Name,
+		Range:        structRange,
+		IsDefinition: true,
+	})
+
+	for _, field := range sd.Fields {
+		fieldRange := a.nameRangeAt(field.Pos(), field.Name, doc)
+		sym.Children = append(sym.Children, &Symbol{
+			Name:     field.Name,
+			Type:     SymbolTypeVariable,
+			Range:    fieldRange,
+			DefRange: fieldRange,
+			Detail:   "field: " + ast.TypeName(field.Type),
+		})
+		a.extractReferencesFromExpr(field.DefaultValue, result, doc)
+	}
+
+	for _, method := range sd.Methods {
+		a.extractFunction(method, result, doc, sym)
+	}
+}
+
+// declareVariable records a variable declaration as a symbol, a reference and
+// an entry in the variables map.
+func (a *Analyzer) declareVariable(name string, isConstant bool, detail, value string,
+	pos ast.Position, result *AnalysisResult, doc *Document, parent *Symbol) {
+	symType := SymbolTypeVariable
+	if isConstant {
+		symType = SymbolTypeConstant
+	}
+	nameRange := a.nameRangeAt(pos, name, doc)
+	sym := &Symbol{
+		Name:     name,
+		Type:     symType,
+		Range:    nameRange,
+		DefRange: nameRange,
+		Detail:   detail,
+	}
+	a.attach(sym, result, parent)
+
+	result.Variables[name] = &VariableInfo{
+		Name:       name,
+		IsConstant: isConstant,
+		Range:      nameRange,
+		DefRange:   nameRange,
+		Value:      value,
+	}
+	result.References = append(result.References, &Reference{
+		Name:         name,
+		Range:        nameRange,
+		IsDefinition: true,
+	})
+}
+
+// attach files a symbol under its enclosing symbol, or at the top level.
+func (a *Analyzer) attach(sym *Symbol, result *AnalysisResult, parent *Symbol) {
+	if parent != nil {
+		parent.Children = append(parent.Children, sym)
+		return
+	}
+	result.Symbols = append(result.Symbols, sym)
+}
+
+// reference records a use of a name at a node's position.
+func (a *Analyzer) reference(name string, pos ast.Position, result *AnalysisResult, doc *Document) {
+	result.References = append(result.References, &Reference{
+		Name:  name,
+		Range: a.nameRangeAt(pos, name, doc),
+	})
+}
+
+// define records a name introduced by a binding construct — a loop variable or
+// a caught error — which is a definition rather than a use.
+func (a *Analyzer) define(name string, pos ast.Position, result *AnalysisResult, doc *Document) {
+	result.References = append(result.References, &Reference{
+		Name:         name,
+		Range:        a.nameRangeAt(pos, name, doc),
+		IsDefinition: true,
+	})
+}
+
+// extractReferencesFromExpr collects the names an expression mentions.
+//
+// Every expression kind is handled. It used to handle 8 of about 27, so a name
+// used in a cast, a copy, a range, an array or lookup-table literal, a struct
+// instantiation, a field access, a method call, an "ask", a "has" or a nothing
+// check was invisible.
 func (a *Analyzer) extractReferencesFromExpr(expr ast.Expression, result *AnalysisResult, doc *Document) {
 	if expr == nil {
 		return
@@ -375,23 +498,21 @@ func (a *Analyzer) extractReferencesFromExpr(expr ast.Expression, result *Analys
 
 	switch e := expr.(type) {
 	case *ast.Identifier:
-		varRange := a.findIdentifierRange(e.Name, doc)
-		result.References = append(result.References, &Reference{
-			Name:  e.Name,
-			Range: varRange,
-		})
+		a.reference(e.Name, e.Pos(), result, doc)
+
+	case *ast.LocationExpression:
+		a.reference(e.Name, e.Pos(), result, doc)
+
+	case *ast.ReferenceExpression:
+		a.reference(e.Name, e.Pos(), result, doc)
 
 	case *ast.FunctionCall:
-		// Add reference to function
-		funcRange := a.findIdentifierRange(e.Name, doc)
-		result.References = append(result.References, &Reference{
-			Name:  e.Name,
-			Range: funcRange,
-		})
-		// Extract references from arguments
-		for _, arg := range e.Arguments {
-			a.extractReferencesFromExpr(arg, result, doc)
-		}
+		a.reference(e.Name, e.Pos(), result, doc)
+		a.extractReferencesFromExprs(e.Arguments, result, doc)
+
+	case *ast.MethodCall:
+		a.extractReferencesFromExpr(e.Object, result, doc)
+		a.extractReferencesFromExprs(e.Arguments, result, doc)
 
 	case *ast.BinaryExpression:
 		a.extractReferencesFromExpr(e.Left, result, doc)
@@ -408,43 +529,69 @@ func (a *Analyzer) extractReferencesFromExpr(expr ast.Expression, result *Analys
 		a.extractReferencesFromExpr(e.List, result, doc)
 
 	case *ast.ListLiteral:
-		for _, elem := range e.Elements {
-			a.extractReferencesFromExpr(elem, result, doc)
+		a.extractReferencesFromExprs(e.Elements, result, doc)
+
+	case *ast.ArrayLiteral:
+		a.extractReferencesFromExprs(e.Elements, result, doc)
+
+	case *ast.RangeLiteral:
+		a.extractReferencesFromExpr(e.Start, result, doc)
+		a.extractReferencesFromExpr(e.End, result, doc)
+		a.extractReferencesFromExpr(e.Step, result, doc)
+
+	case *ast.StructInstantiation:
+		a.reference(e.StructName, e.Pos(), result, doc)
+		// FieldOrder, not the map, so the references come out in source order
+		// rather than in Go's randomised map order.
+		for _, name := range e.FieldOrder {
+			a.extractReferencesFromExpr(e.FieldValues[name], result, doc)
 		}
 
-	case *ast.LocationExpression:
-		varRange := a.findIdentifierRange(e.Name, doc)
-		result.References = append(result.References, &Reference{
-			Name:  e.Name,
-			Range: varRange,
-		})
+	case *ast.FieldAccess:
+		a.extractReferencesFromExpr(e.Object, result, doc)
+
+	case *ast.CastExpression:
+		a.extractReferencesFromExpr(e.Value, result, doc)
+
+	case *ast.CopyExpression:
+		a.extractReferencesFromExpr(e.Value, result, doc)
+
+	case *ast.TypeExpression:
+		a.extractReferencesFromExpr(e.Value, result, doc)
+
+	case *ast.AskExpression:
+		a.extractReferencesFromExpr(e.Prompt, result, doc)
+
+	case *ast.LookupKeyAccess:
+		a.extractReferencesFromExpr(e.Table, result, doc)
+		a.extractReferencesFromExpr(e.Key, result, doc)
+
+	case *ast.HasExpression:
+		a.extractReferencesFromExpr(e.Table, result, doc)
+		a.extractReferencesFromExpr(e.Key, result, doc)
+
+	case *ast.NilCheckExpression:
+		a.extractReferencesFromExpr(e.Value, result, doc)
+
+	case *ast.ErrorTypeCheckExpression:
+		a.extractReferencesFromExpr(e.Value, result, doc)
+
+	case *ast.NumberLiteral, *ast.StringLiteral, *ast.BooleanLiteral,
+		*ast.NothingLiteral, *ast.LookupTableLiteral:
+		// A literal names nothing.
 	}
 }
 
-// createVariableSymbol creates a symbol for a variable declaration
-func (a *Analyzer) createVariableSymbol(v *ast.VariableDecl, doc *Document) *Symbol {
-	symType := SymbolTypeVariable
-	detail := "variable"
-	if v.IsConstant {
-		symType = SymbolTypeConstant
-		detail = "constant"
-	}
-
-	// Find the range of the declaration in the document
-	nameRange := a.findIdentifierRange(v.Name, doc)
-
-	return &Symbol{
-		Name:     v.Name,
-		Type:     symType,
-		Range:    nameRange, // For simple cases, use the name range
-		DefRange: nameRange,
-		Detail:   detail + ": " + a.exprToString(v.Value),
+// extractReferencesFromExprs walks a list of expressions.
+func (a *Analyzer) extractReferencesFromExprs(exprs []ast.Expression, result *AnalysisResult, doc *Document) {
+	for _, expr := range exprs {
+		a.extractReferencesFromExpr(expr, result, doc)
 	}
 }
 
 // createFunctionSymbol creates a symbol for a function declaration
 func (a *Analyzer) createFunctionSymbol(f *ast.FunctionDecl, doc *Document) *Symbol {
-	nameRange := a.findIdentifierRange(f.Name, doc)
+	nameRange := a.nameRangeAt(f.Pos(), f.Name, doc)
 
 	params := strings.Join(f.ParamNames(), ", ")
 	detail := "function"
@@ -462,34 +609,75 @@ func (a *Analyzer) createFunctionSymbol(f *ast.FunctionDecl, doc *Document) *Sym
 	}
 }
 
-// findIdentifierRange finds the range of an identifier in the document
-// It searches for a whole-word match of the identifier name.
-func (a *Analyzer) findIdentifierRange(name string, doc *Document) Range {
-	for lineNum, line := range doc.Lines {
-		// Search for all occurrences on this line
-		searchStart := 0
-		for {
-			idx := strings.Index(line[searchStart:], name)
-			if idx == -1 {
-				break
-			}
-			idx += searchStart // Adjust for search offset
+// nameRangeAt locates a name in the document, starting from the position of
+// the node that mentions it.
+//
+// This used to scan the whole document and return the *first* whole-word match
+// of the name, ignoring which node was being asked about. So go-to-definition
+// on the fifth use of a variable jumped to the first occurrence anywhere in
+// the file — including inside a string or a comment, since nothing filtered
+// those — and find-all-references returned one identical range repeated once
+// per reference, which made rename unusable.
+//
+// Anchoring the search at the node's own position means the answer can only be
+// at or after where that node begins, so it cannot land on an unrelated
+// occurrence. A node records where it starts, which for a statement is its
+// keyword rather than the name, so the name is found forward from there.
+func (a *Analyzer) nameRangeAt(pos ast.Position, name string, doc *Document) Range {
+	// Positions are 1-based in the AST and 0-based in the protocol.
+	startLine := pos.Line - 1
+	startCol := pos.Col - 1
+	if startLine < 0 {
+		startLine, startCol = 0, 0
+	}
+	if startCol < 0 {
+		startCol = 0
+	}
 
-			// Check for whole word match
-			before := idx == 0 || !isWordChar(line[idx-1])
-			after := idx+len(name) >= len(line) || !isWordChar(line[idx+len(name)])
-			if before && after {
-				return Range{
-					Start: Position{Line: lineNum, Character: idx},
-					End:   Position{Line: lineNum, Character: idx + len(name)},
-				}
+	// A statement rarely spans more than a handful of lines; searching a few
+	// past the node keeps a multi-line construct working without reopening
+	// the whole-document scan.
+	const lookahead = 8
+	for line := startLine; line < len(doc.Lines) && line <= startLine+lookahead; line++ {
+		from := 0
+		if line == startLine {
+			from = startCol
+		}
+		if idx := wholeWordIndex(doc.Lines[line], name, from); idx >= 0 {
+			return Range{
+				Start: Position{Line: line, Character: idx},
+				End:   Position{Line: line, Character: idx + len(name)},
 			}
-
-			// Move past this occurrence
-			searchStart = idx + 1
 		}
 	}
-	return Range{}
+
+	// Nothing found: point at the node itself rather than at the top of the
+	// file, which is where an empty range would send the editor.
+	return Range{
+		Start: Position{Line: startLine, Character: startCol},
+		End:   Position{Line: startLine, Character: startCol + len(name)},
+	}
+}
+
+// wholeWordIndex returns the index of the first whole-word occurrence of name
+// in line at or after from, or -1.
+func wholeWordIndex(line, name string, from int) int {
+	if name == "" || from > len(line) {
+		return -1
+	}
+	for at := from; ; {
+		idx := strings.Index(line[at:], name)
+		if idx < 0 {
+			return -1
+		}
+		idx += at
+		before := idx == 0 || !isWordChar(line[idx-1])
+		after := idx+len(name) >= len(line) || !isWordChar(line[idx+len(name)])
+		if before && after {
+			return idx
+		}
+		at = idx + 1
+	}
 }
 
 // exprToString converts an expression to a string representation
@@ -638,8 +826,6 @@ func normalizeCompletionItems(items []CompletionItem) []CompletionItem {
 	return out
 }
 
-// getKeywordCompletions returns keyword completions
-
 // GetHover returns hover information at the given position
 func (a *Analyzer) GetHover(doc *Document, pos Position, result *AnalysisResult) *Hover {
 	word, wordRange := doc.GetWordAtPosition(pos)
@@ -686,8 +872,6 @@ func (a *Analyzer) GetHover(doc *Document, pos Position, result *AnalysisResult)
 
 	return nil
 }
-
-// getKeywordDocumentation returns documentation for a keyword
 
 // GetDefinition returns the definition location for a symbol at the given position
 func (a *Analyzer) GetDefinition(doc *Document, pos Position, result *AnalysisResult) *Location {
@@ -805,13 +989,15 @@ func (a *Analyzer) GetSignatureHelp(doc *Document, pos Position, result *Analysi
 
 	// Extract function name after "calling "
 	afterCalling := lineBeforeCursor[callingIdx+8:]
+	// Scanning bytes, not runes: isWordChar takes a byte, and truncating a
+	// multi-byte rune to its low byte can land on a letter, which would splice
+	// half a character into the name.
 	funcName := ""
-	for _, c := range afterCalling {
-		if isWordChar(byte(c)) {
-			funcName += string(c)
-		} else {
+	for i := 0; i < len(afterCalling); i++ {
+		if !isWordChar(afterCalling[i]) {
 			break
 		}
+		funcName += string(afterCalling[i])
 	}
 
 	if funcName == "" {

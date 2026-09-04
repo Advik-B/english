@@ -20,6 +20,7 @@ import (
 
 	vm "github.com/Advik-B/english/astvm"
 	"github.com/Advik-B/english/help"
+	"github.com/Advik-B/english/sema"
 	"github.com/Advik-B/english/stdlib"
 )
 
@@ -42,6 +43,9 @@ type REPL struct {
 	out          io.Writer
 	useColor     bool
 	helpRegistry *help.Registry
+	// analyzer keeps its declarations between lines, the way env does, so a
+	// name declared on one line is in scope on the next.
+	analyzer *sema.Analyzer
 }
 
 // New creates a REPL that reads from in and writes all output (prompts,
@@ -61,5 +65,6 @@ func New(in io.Reader, out io.Writer, useColor bool) *REPL {
 		out:          out,
 		useColor:     useColor,
 		helpRegistry: help.NewRegistry(),
+		analyzer:     sema.NewIncremental(sema.Config{Predefined: stdlib.PredefinedNames()}),
 	}
 }

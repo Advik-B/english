@@ -1,8 +1,12 @@
 package parser
 
 import (
-	"github.com/Advik-B/english/token"
+	"errors"
 	"fmt"
+	"strings"
+
+	"github.com/Advik-B/english/token"
+	"github.com/Advik-B/english/tokeniser"
 )
 
 // SyntaxError is a structured parse-time error.
@@ -14,6 +18,11 @@ type SyntaxError struct {
 	Line int    // 1-based source line (0 = unknown)
 	Col  int    // 1-based source column (0 = unknown)
 	Hint string // optional guidance for the programmer
+	// Truncated reports that the parser ran out of input rather than finding
+	// something it did not expect: the text so far is the beginning of
+	// something valid. An interactive prompt reads this to decide between
+	// asking for another line and reporting a mistake.
+	Truncated bool
 }
 
 // Error implements the standard error interface.
@@ -49,7 +58,85 @@ func (p *Parser) syntaxErr(msg string, hint string) *SyntaxError {
 	}
 }
 
+// markTruncated records whether the parser stopped because the input ended
+// part-way through a block.
+//
+// Two things have to hold. The parser returns without advancing when it fails,
+// so the current token being the end of input means it ran out of tokens
+// rather than finding the wrong one. And a block body has to have reached that
+// end unclosed, which is what parseBlock records: without it, a plainly
+// incomplete statement like "Declare x to be" would read as "more to come"
+// and an interactive prompt would wait instead of reporting it.
+//
+// Stamping this in one place keeps every error site from having to know.
+func (p *Parser) markTruncated(err error) error {
+	var syntaxErr *SyntaxError
+	if errors.As(err, &syntaxErr) && p.curToken.Type == token.EOF && p.blockAtEOF {
+		syntaxErr.Truncated = true
+	}
+	return err
+}
+
+// SyntaxErrors is every syntax error one parse found, reported together.
+//
+// The parser used to stop at the first, so a file with two typos took two runs
+// to fix, and the editor — which shows one diagnostic per parse and then gives
+// up before extracting any symbols — told you nothing else about a file until
+// its last syntax error was gone.
+type SyntaxErrors []*SyntaxError
+
+func (e SyntaxErrors) Error() string {
+	parts := make([]string, 0, len(e))
+	for _, err := range e {
+		parts = append(parts, err.Error())
+	}
+	return strings.Join(parts, "\n\n")
+}
+
+// Unwrap returns the first error, so that anything asking "is this a syntax
+// error, and where?" keeps working unchanged.
+func (e SyntaxErrors) Unwrap() error {
+	if len(e) == 0 {
+		return nil
+	}
+	return e[0]
+}
+
+// Errors returns every syntax error behind a parse failure, which is one error
+// for most callers and the whole set for anything that shows them all.
+func Errors(err error) []*SyntaxError {
+	var many SyntaxErrors
+	if errors.As(err, &many) {
+		return many
+	}
+	var one *SyntaxError
+	if errors.As(err, &one) {
+		return []*SyntaxError{one}
+	}
+	return nil
+}
+
+// IsTruncated reports whether a parse failed only because the input ended
+// part-way through something valid.
+//
+// This is what an interactive prompt needs in order to decide between asking
+// for another line and reporting a mistake. The REPL used to answer it with a
+// text search for "thats it." and a check for a line ending in "then", so
+// printing the text "thats it." inside a loop ended the block, a comment
+// mentioning "do the following:" opened one, and neither could be told from
+// the real thing.
+func IsTruncated(err error) bool {
+	var syntaxErr *SyntaxError
+	return errors.As(err, &syntaxErr) && syntaxErr.Truncated
+}
+
 // tokenFriendlyName returns a human-readable name for the expected token type.
+// tokenFriendlyName renders a token type the way a user would read it.
+//
+// Punctuation and literals get hand-written wording; every keyword and
+// multi-word operator is derived from the lexer's own spelling table, so a
+// token can never again fall through to its Go constant name (a missing "then"
+// used to produce "I expected 'THEN' here").
 func tokenFriendlyName(t token.Type) string {
 	switch t {
 	case token.PERIOD:
@@ -58,64 +145,6 @@ func tokenFriendlyName(t token.Type) string {
 		return "a comma (,)"
 	case token.COLON:
 		return "a colon (:)"
-	case token.IDENTIFIER:
-		return "a name"
-	case token.NUMBER:
-		return "a number"
-	case token.STRING:
-		return "some text (in quotes)"
-	case token.BE:
-		return "the word 'be'"
-	case token.TO:
-		return "the word 'to'"
-	case token.THATS:
-		return "the word 'thats'"
-	case token.IT:
-		return "the word 'it'"
-	case token.FUNCTION:
-		return "the word 'function'"
-	case token.DOES:
-		return "the word 'does'"
-	case token.FOLLOWING:
-		return "the word 'following'"
-	case token.TIMES:
-		return "the word 'times'"
-	case token.IN:
-		return "the word 'in'"
-	case token.AND:
-		return "the word 'and'"
-	case token.WITH:
-		return "the word 'with'"
-	case token.THE:
-		return "the word 'the'"
-	case token.OF:
-		return "the word 'of'"
-	case token.AT:
-		return "the word 'at'"
-	case token.POSITION:
-		return "the word 'position'"
-	case token.ITEM:
-		return "the word 'item'"
-	case token.DOING:
-		return "the word 'doing'"
-	case token.WHILE:
-		return "the word 'while'"
-	case token.RETURN:
-		return "the word 'return'"
-	case token.IMPORT:
-		return "the word 'import'"
-	case token.DECLARE:
-		return "the word 'declare'"
-	case token.SET:
-		return "the word 'set'"
-	case token.PRINT:
-		return "the word 'print'"
-	case token.CALL:
-		return "the word 'call'"
-	case token.IF:
-		return "the word 'if'"
-	case token.REPEAT:
-		return "the word 'repeat'"
 	case token.LBRACKET:
 		return "an opening bracket ([)"
 	case token.RBRACKET:
@@ -124,9 +153,42 @@ func tokenFriendlyName(t token.Type) string {
 		return "an opening parenthesis (()"
 	case token.RPAREN:
 		return "a closing parenthesis ())"
-	default:
-		return fmt.Sprintf("'%s'", t)
+	case token.PLUS:
+		return "a plus sign (+)"
+	case token.MINUS:
+		return "a minus sign (-)"
+	case token.STAR:
+		return "a multiplication sign (*)"
+	case token.SLASH:
+		return "a division sign (/)"
+	case token.ASSIGN:
+		return "an equals sign (=)"
+	case token.DOTDOT:
+		return "a range operator (..)"
+	case token.IDENTIFIER:
+		return "a name"
+	case token.NUMBER:
+		return "a number"
+	case token.STRING:
+		return "some text (in quotes)"
+	case token.COMMENT:
+		return "a comment"
+	case token.NEWLINE:
+		return "a new line"
+	case token.EOF:
+		return "the end of the file"
+	case token.ERROR:
+		return "an unrecognised character"
+	case token.WHITESPACE:
+		return "whitespace"
 	}
+	if word, ok := tokeniser.Spelling(t); ok {
+		if token.IsKeyword(t) {
+			return fmt.Sprintf("the word '%s'", word)
+		}
+		return fmt.Sprintf("'%s'", word)
+	}
+	return fmt.Sprintf("'%s'", t)
 }
 
 // tokenFriendlyValue returns a human-readable description of a token type + value.

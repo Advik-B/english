@@ -6,10 +6,15 @@
 package tokeniser
 
 import (
-	"github.com/Advik-B/english/token"
 	"strings"
-	"unicode"
+	"unicode/utf8"
+
+	"github.com/Advik-B/english/token"
 )
+
+// UnterminatedString is the Value carried by the ERROR token emitted for a
+// string literal with no closing quote. The parser turns it into a syntax error.
+const UnterminatedString = "unterminated text literal"
 
 // Lexer tokenizes English language source code.
 type Lexer struct {
@@ -61,10 +66,25 @@ func (l *Lexer) peekCharN(n int) byte {
 	return l.input[pos]
 }
 
-// isIdentChar reports whether b can appear in an identifier (letter, digit, or underscore).
-func isIdentChar(b byte) bool {
-	return (b >= 'a' && b <= 'z') || (b >= 'A' && b <= 'Z') || (b >= '0' && b <= '9') || b == '_'
+// The lexer scans bytes, so these say which bytes may begin and continue a
+// name, and which are digits.
+//
+// Any byte above ASCII counts as part of a name. Testing one byte of a
+// multi-byte character with unicode.IsLetter asks the wrong question: the
+// first byte of "é" is 0xC3, which as a rune is "Ã" and is a letter, while its
+// second byte is not — so "é" lexed as the one-byte name "\xC3" followed by an
+// unrecognised character, and any identifier or comment containing a non-ASCII
+// letter produced a syntax error. Treating the whole non-ASCII range as name
+// material accepts such names without the lexer having to decode runes.
+func isIdentStart(b byte) bool {
+	return (b >= 'a' && b <= 'z') || (b >= 'A' && b <= 'Z') || b == '_' || b >= utf8.RuneSelf
 }
+
+func isIdentChar(b byte) bool {
+	return isIdentStart(b) || isDigit(b)
+}
+
+func isDigit(b byte) bool { return b >= '0' && b <= '9' }
 
 // isPossessiveContext reports whether a possessive 's can follow a token of the given type.
 // Only tokens that end a value expression (identifiers, literals, closing delimiters)
@@ -101,7 +121,10 @@ func (l *Lexer) readComment() (token.Token, bool) {
 	return token.Token{Type: token.COMMENT, Value: text, Line: line, Col: col, Pos: pos}, true
 }
 
-func (l *Lexer) readString(quote byte) string {
+// readString reads a quoted literal. It returns the unquoted contents and
+// whether a closing quote was actually found; an unterminated literal used to
+// be accepted silently, swallowing the remainder of the file.
+func (l *Lexer) readString(quote byte) (string, bool) {
 	l.readChar() // skip opening quote
 	var result strings.Builder
 	for l.ch != quote && l.ch != 0 {
@@ -132,38 +155,69 @@ func (l *Lexer) readString(quote byte) string {
 		}
 		l.readChar()
 	}
+	if l.ch != quote {
+		// Hit end of input without a closing quote.
+		return result.String(), false
+	}
 	l.readChar() // skip closing quote
-	return result.String()
+	return result.String(), true
 }
 
 func (l *Lexer) readNumber() string {
 	start := l.position
-	for unicode.IsDigit(rune(l.ch)) {
+	for isDigit(l.ch) {
 		l.readChar()
 	}
 	// Handle decimal numbers
-	if l.ch == '.' && unicode.IsDigit(rune(l.peekChar())) {
+	if l.ch == '.' && isDigit(l.peekChar()) {
 		l.readChar() // skip dot
-		for unicode.IsDigit(rune(l.ch)) {
+		for isDigit(l.ch) {
 			l.readChar()
 		}
 	}
+	l.readExponent()
 	return l.input[start:l.position]
 }
 
-func (l *Lexer) readIdentifier() string {
-	start := l.position
-	for unicode.IsLetter(rune(l.ch)) || unicode.IsDigit(rune(l.ch)) || l.ch == '_' {
+// readExponent consumes the "e10" of "1e10" or the "E-3" of "2.5E-3".
+//
+// Without this, "1e10" lexed as the number 1 followed by the name "e10", which
+// parsed as two things and meant neither — and said nothing about it. The
+// exponent is consumed only when digits actually follow, so a name that
+// happens to begin with "e" after a number is left alone.
+func (l *Lexer) readExponent() {
+	if l.ch != 'e' && l.ch != 'E' {
+		return
+	}
+	switch next := l.peekChar(); {
+	case isDigit(next):
+		l.readChar() // consume e
+	case (next == '+' || next == '-') && isDigit(l.peekCharN(2)):
+		l.readChar() // consume e
+		l.readChar() // consume the sign
+	default:
+		return
+	}
+	for isDigit(l.ch) {
 		l.readChar()
 	}
+}
 
-	// Check for possessive form: identifier's
-	// If we see an apostrophe followed by 's', include it in the identifier
-	if l.ch == '\'' && l.peekChar() == 's' {
-		l.readChar() // consume apostrophe
-		l.readChar() // consume 's'
+// readIdentifier reads a name.
+//
+// The possessive "'s" is not part of it. This used to swallow the apostrophe-s
+// into the identifier, so "person's" was one token whose value ended in "'s",
+// while a possessive after anything else — a string, a number, a closing
+// bracket — was emitted as a separate POSSESSIVE token. Two spellings of one
+// construct meant two parsers for it, which had drifted: "Print x's length."
+// worked and "Call x's length." did not. It also made the IDENTIFIER case in
+// isPossessiveContext unreachable, since an identifier never reached the
+// apostrophe.
+func (l *Lexer) readIdentifier() string {
+	start := l.position
+	for isIdentChar(l.ch) {
+		l.readChar()
 	}
-
 	return l.input[start:l.position]
 }
 
@@ -236,7 +290,6 @@ var keywords = map[string]token.Type{
 	"casted":     token.CASTED,
 	"cast":       token.CASTED,
 	"type":       token.TYPE,
-	"which":      token.WHICH,
 	"is":         token.IS,
 	"from":       token.FROM,
 	"unsigned":   token.UNSIGNED,
@@ -295,14 +348,9 @@ func (l *Lexer) NextToken() token.Token {
 		return token.Token{Type: token.EOF, Line: line, Col: col, Pos: pos}
 	}
 
-	// Check for multi-word comparison operators (case-insensitive)
-	// Triggers for "is ..." (e.g. "is equal to") and "has ..." (e.g. "has a value")
-	if (l.ch == 'i' || l.ch == 'I') && l.position+1 < len(l.input) &&
-		strings.ToLower(l.input[l.position:l.position+2]) == "is" {
-		return l.tryMultiWordComparison(line, col, pos)
-	}
-	if (l.ch == 'h' || l.ch == 'H') && l.position+2 < len(l.input) &&
-		strings.ToLower(l.input[l.position:l.position+3]) == "has" {
+	// Check for multi-word comparison operators (case-insensitive):
+	// "is ..." (e.g. "is equal to") and "has ..." (e.g. "has a value").
+	if l.startsComparisonWord() {
 		return l.tryMultiWordComparison(line, col, pos)
 	}
 
@@ -366,22 +414,30 @@ func (l *Lexer) NextToken() token.Token {
 			l.readChar() // consume s
 			tok = token.Token{Type: token.POSSESSIVE, Value: "'s", Line: line, Col: col, Pos: pos}
 		} else {
-			str := l.readString(l.ch)
+			str, ok := l.readString(l.ch)
+			if !ok {
+				tok = token.Token{Type: token.ERROR, Value: UnterminatedString, Line: line, Col: col, Pos: pos}
+				break
+			}
 			tok = token.Token{Type: token.STRING, Value: str, Line: line, Col: col, Pos: pos}
 		}
 	case '"':
-		str := l.readString(l.ch)
+		str, ok := l.readString(l.ch)
+		if !ok {
+			tok = token.Token{Type: token.ERROR, Value: UnterminatedString, Line: line, Col: col, Pos: pos}
+			break
+		}
 		tok = token.Token{Type: token.STRING, Value: str, Line: line, Col: col, Pos: pos}
 	case '\n':
 		tok = token.Token{Type: token.NEWLINE, Value: "\n", Line: line, Col: col, Pos: pos}
 		l.readChar()
 	default:
-		if unicode.IsDigit(rune(l.ch)) {
+		if isDigit(l.ch) {
 			num := l.readNumber()
 			tok := token.Token{Type: token.NUMBER, Value: num, Line: line, Col: col, Pos: pos}
 			l.lastTokenType = tok.Type
 			return tok
-		} else if unicode.IsLetter(rune(l.ch)) || l.ch == '_' {
+		} else if isIdentStart(l.ch) {
 			ident := l.readIdentifier()
 			lower := strings.ToLower(ident)
 
@@ -437,6 +493,36 @@ func (l *Lexer) NextToken() token.Token {
 // tryMultiWordComparison handles multi-word operators like "is equal to".
 // line, col, and pos are the position of the first character of the phrase,
 // already captured by the caller.
+// startsComparisonWord reports whether the cursor is on the whole word "is" or
+// "has", either of which may begin a multi-word comparison.
+//
+// The word boundary matters: this used to test only that the text *started*
+// with those letters, so "island", "hash" and "is_digit" each began a scan
+// that read forward to the end of the line looking for a phrase and then rolled
+// back — quadratic on a line full of such words, for a match that could never
+// happen.
+func (l *Lexer) startsComparisonWord() bool {
+	// "isn't" is listed because the apostrophe is part of the word: the
+	// boundary after "is" is the letter "n", so it would be rejected as part
+	// of a longer word otherwise.
+	for _, word := range [...]string{"isn't", "is", "has"} {
+		end := l.position + len(word)
+		if end > len(l.input) || !strings.EqualFold(l.input[l.position:end], word) {
+			continue
+		}
+		if end < len(l.input) && isIdentChar(l.input[end]) {
+			continue // part of a longer word
+		}
+		return true
+	}
+	return false
+}
+
+// maxComparisonWords is the length of the longest comparison phrase,
+// "is greater than or equal to". The scan stops there rather than reading to
+// the end of the line for every "is".
+const maxComparisonWords = 6
+
 func (l *Lexer) tryMultiWordComparison(line, col, pos int) token.Token {
 	// Save current state for potential rollback
 	savePos := l.position
@@ -457,7 +543,7 @@ func (l *Lexer) tryMultiWordComparison(line, col, pos int) token.Token {
 
 	for {
 		l.skipWhitespace()
-		if !unicode.IsLetter(rune(l.ch)) {
+		if !isIdentStart(l.ch) {
 			break
 		}
 		word := l.readIdentifier()
@@ -516,7 +602,7 @@ func (l *Lexer) tryMultiWordComparison(line, col, pos int) token.Token {
 		}
 
 		l.skipWhitespace()
-		if l.ch == ',' || l.ch == ':' || l.ch == 0 {
+		if l.ch == ',' || l.ch == ':' || l.ch == 0 || len(words) >= maxComparisonWords {
 			break
 		}
 	}
@@ -529,7 +615,9 @@ func (l *Lexer) tryMultiWordComparison(line, col, pos int) token.Token {
 		l.line = bestMatchLine
 		l.col = bestMatchCol
 		l.ch = bestMatchCh
-		return token.Token{Type: bestMatchType, Value: bestMatch, Line: line, Col: col, Pos: pos}
+		tok := token.Token{Type: bestMatchType, Value: bestMatch, Line: line, Col: col, Pos: pos}
+		l.lastTokenType = tok.Type
+		return tok
 	}
 
 	// Restore position if not a comparison operator
@@ -539,7 +627,13 @@ func (l *Lexer) tryMultiWordComparison(line, col, pos int) token.Token {
 	l.col = saveCol
 	l.ch = saveCh
 	word := l.readIdentifier()
-	return token.Token{Type: l.lookupKeyword(word), Value: word, Line: line, Col: col, Pos: pos}
+	// Both exits record what was emitted. Neither did before, so the possessive
+	// detector saw a stale token type after any word beginning "is" or "has";
+	// TokenizeAll papered over that by re-recording each token, and
+	// TokenizeForHighlight did not, so the two tokenised differently.
+	tok := token.Token{Type: l.lookupKeyword(word), Value: word, Line: line, Col: col, Pos: pos}
+	l.lastTokenType = tok.Type
+	return tok
 }
 
 // Offset returns the current byte position in the input.  After a call to

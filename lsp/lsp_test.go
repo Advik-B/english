@@ -1,7 +1,11 @@
 package lsp
 
 import (
+	"sort"
+	"strings"
 	"testing"
+
+	"github.com/Advik-B/english/stdlib"
 )
 
 func TestDocument(t *testing.T) {
@@ -173,7 +177,7 @@ Print x + y.`)
 	})
 
 	t.Run("Analyze_Function", func(t *testing.T) {
-		doc := NewDocument("test", "english", 1, `Declare function greet that takes name and does the following:
+		doc := NewDocument("test", "english", 1, `Declare function greet that takes name as text, and gives back nothing, and does the following:
     Print name.
 Thats it.`)
 
@@ -301,7 +305,7 @@ Print x.`)
 
 	t.Run("GetDocumentSymbols", func(t *testing.T) {
 		doc := NewDocument("test", "english", 1, `Declare x to be 5.
-Declare function add that takes a and b and does the following:
+Declare function add that takes a as number and b as number, and gives back a number, and does the following:
     Return a + b.
 Thats it.`)
 		result := analyzer.Analyze(doc)
@@ -407,5 +411,298 @@ func TestTextDocumentSyncKind(t *testing.T) {
 	}
 	if TextDocumentSyncKindIncremental != 2 {
 		t.Errorf("Expected TextDocumentSyncKindIncremental to be 2, got %d", TextDocumentSyncKindIncremental)
+	}
+}
+
+// TestAnalyzerReportsTypeErrors covers the editor seeing the same problems the
+// compiler does. The analyser previously produced one diagnostic — a syntax
+// error — and nothing else, so a type error first appeared when the program
+// was run.
+func TestAnalyzerReportsTypeErrors(t *testing.T) {
+	doc := NewDocument("file:///test.abc", "english", 1,
+		"Declare total to be 0.\nSet total to be \"text\".\n")
+	result := NewAnalyzer().Analyze(doc)
+
+	if len(result.Diagnostics) == 0 {
+		t.Fatal("expected a diagnostic for assigning text to a number")
+	}
+	d := result.Diagnostics[0]
+	if !strings.Contains(d.Message, "cannot assign text") {
+		t.Errorf("unexpected message: %q", d.Message)
+	}
+	if d.Severity != DiagnosticSeverityError {
+		t.Errorf("severity is %v, want error", d.Severity)
+	}
+	// The problem is on the second line, which is line 1 zero-based.
+	if d.Range.Start.Line != 1 {
+		t.Errorf("diagnostic is on line %d, want 1", d.Range.Start.Line)
+	}
+	if d.Range.End.Character <= d.Range.Start.Character {
+		t.Errorf("diagnostic range is empty: %v", d.Range)
+	}
+}
+
+// TestAnalyzerAcceptsValidProgram guards the change above against reporting
+// problems in correct code.
+func TestAnalyzerAcceptsValidProgram(t *testing.T) {
+	doc := &Document{
+		URI: "file:///ok.abc",
+		Content: `Declare function double that takes n as number and gives back a number, and does the following:
+    Return n * 2.
+thats it.
+
+Declare total to be 0.
+Set total to be the result of calling double with 21.
+Print total.
+`,
+	}
+	result := NewAnalyzer().Analyze(doc)
+	if len(result.Diagnostics) != 0 {
+		for _, d := range result.Diagnostics {
+			t.Errorf("unexpected diagnostic: %s", d.Message)
+		}
+	}
+}
+
+// TestCompletionsCoverTheLanguage covers the editor's knowledge of the
+// language, which used to be two hand-written lists: 23 keyword completions
+// and 14 hover entries, disagreeing with each other and missing everything
+// added since they were written — including all 84 standard-library functions.
+func TestCompletionsCoverTheLanguage(t *testing.T) {
+	a := NewAnalyzer()
+	doc := NewDocument("file:///t.abc", "english", 1, "")
+	items := a.GetCompletions(doc, Position{}, a.Analyze(doc))
+
+	labels := make(map[string]bool, len(items))
+	for _, item := range items {
+		labels[item.Label] = true
+	}
+
+	// Constructs that postdate the old hand-written list.
+	for _, want := range []string{
+		"Try", "Raise", "Import", "cast to", "a new instance of",
+		"array", "range", "continue", "sleep", "please", "finally",
+	} {
+		if !labels[want] {
+			t.Errorf("no completion offered for %q", want)
+		}
+	}
+
+	// Every standard-library function must be offered.
+	missing := 0
+	for _, name := range stdlib.Names() {
+		if !labels[name] {
+			missing++
+			if missing <= 5 {
+				t.Errorf("no completion offered for the built-in %q", name)
+			}
+		}
+	}
+	if missing > 5 {
+		t.Errorf("and %d more built-ins have no completion", missing-5)
+	}
+}
+
+// TestCompletionsCarryUsage checks a built-in's completion says how to call
+// it, which is the thing a reader actually needs.
+func TestCompletionsCarryUsage(t *testing.T) {
+	a := NewAnalyzer()
+	doc := NewDocument("file:///t.abc", "english", 1, "")
+	for _, item := range a.GetCompletions(doc, Position{}, a.Analyze(doc)) {
+		if item.Label != "pad_left" {
+			continue
+		}
+		if item.Detail != "pad_left(text, width[, char])" {
+			t.Errorf("detail is %q, want the call template", item.Detail)
+		}
+		documentation, _ := item.Documentation.(string)
+		if !strings.Contains(documentation, "pad_left") {
+			t.Errorf("documentation does not describe the function: %q", documentation)
+		}
+		return
+	}
+	t.Error("pad_left was not offered at all")
+}
+
+// TestHoverCoversBuiltins covers hovering a standard-library function, which
+// previously showed nothing because the analyser's own map held 14 keywords
+// and no functions.
+func TestHoverCoversBuiltins(t *testing.T) {
+	a := NewAnalyzer()
+	doc := NewDocument("file:///t.abc", "english", 1, "Print uppercase of \"x\".\n")
+	result := a.Analyze(doc)
+
+	// "uppercase" starts at column 6 on the first line.
+	hover := a.GetHover(doc, Position{Line: 0, Character: 8}, result)
+	if hover == nil {
+		t.Fatal("no hover for a standard-library function")
+	}
+	if !strings.Contains(hover.Contents.Value, "uppercase") {
+		t.Errorf("hover does not describe uppercase: %q", hover.Contents.Value)
+	}
+}
+
+// TestReferencesAreAnchoredAtTheirNodes covers go-to-definition and rename,
+// which were both wrong: every range came from a textual scan of the whole
+// document that returned the *first* whole-word match of the name, ignoring
+// which node was being asked about. So the four uses of "count" below all
+// reported the same range, rename rewrote one occurrence four times, and a
+// name that also appears inside a string was matched there.
+func TestReferencesAreAnchoredAtTheirNodes(t *testing.T) {
+	src := `Declare count to be 0.
+Print "count is not a variable here".
+Set count to be count + 1.
+Print count.
+`
+	doc := NewDocument("file:///anchor.abc", "english", 1, src)
+	result := NewAnalyzer().Analyze(doc)
+
+	var lines []int
+	for _, ref := range result.References {
+		if ref.Name != "count" {
+			continue
+		}
+		lines = append(lines, ref.Range.Start.Line)
+
+		// Every range must actually contain the name it claims.
+		got := doc.GetText(ref.Range)
+		if got != "count" {
+			t.Errorf("a reference on line %d spans %q, not the name", ref.Range.Start.Line, got)
+		}
+	}
+
+	// The declaration (line 0), both uses on line 2 and the use on line 3.
+	// Nothing on line 1, which mentions the name only inside a string.
+	want := []int{0, 2, 2, 3}
+	if len(lines) != len(want) {
+		t.Fatalf("found %d references to count %v, want %d %v", len(lines), lines, len(want), want)
+	}
+	sort.Ints(lines)
+	for i := range want {
+		if lines[i] != want[i] {
+			t.Fatalf("references are on lines %v, want %v", lines, want)
+		}
+	}
+}
+
+// TestReferencesCoverEveryConstruct covers the reference walk, which handled
+// 10 of 24 statement kinds and 8 of about 27 expression kinds. A name used
+// only inside a try block, a swap, a struct default, a cast, a copy, a range,
+// an array literal, a lookup-table access or a method call was invisible to
+// the editor: renaming it silently left those uses behind.
+func TestReferencesCoverEveryConstruct(t *testing.T) {
+	src := `Declare Point as a structure with the following fields:
+    x is a number with 0 being the default.
+thats it.
+
+Declare first to be 1.
+Declare second to be 2.
+Declare limit to be 4.
+Declare source to be an array of number [1, 2, 3].
+Declare prices to be a lookup table.
+Set prices at "k" to be first.
+Declare p to be a new instance of Point with the following fields:
+    x is first.
+thats it.
+Declare span to be a range from first to limit.
+Declare mirror to be a copy of source.
+Declare shown to be first cast to text.
+Swap first and second.
+Try doing the following:
+    Print the x of p.
+on error:
+    Print error.
+thats it.
+Print the entry "k" in prices, mirror, span, shown.
+`
+	doc := NewDocument("file:///constructs.abc", "english", 1, src)
+	result := NewAnalyzer().Analyze(doc)
+
+	seen := make(map[string]int)
+	for _, ref := range result.References {
+		seen[ref.Name]++
+	}
+
+	// Each of these names is mentioned in a place the walk used to skip.
+	for _, name := range []string{
+		"first",  // struct field value, lookup assignment, range, swap, cast
+		"second", // swap
+		"limit",  // range end
+		"source", // copy
+		"mirror", // output
+		"prices", // lookup assignment and lookup access
+		"span",   // output
+		"shown",  // cast
+		"error",  // the variable the handler binds
+		"Point",  // struct declaration and instantiation
+		"p",      // field access
+	} {
+		if seen[name] == 0 {
+			t.Errorf("%q is never reported as a reference", name)
+		}
+	}
+
+	// The declaration and the swap must both count; before, a swap was not
+	// walked at all, so only the declaration did.
+	if seen["second"] < 2 {
+		t.Errorf("second has %d reference(s), want at least 2 (the declaration and the swap)", seen["second"])
+	}
+
+	// A struct field is a symbol, so the outline shows the structure's shape.
+	var point *Symbol
+	for _, sym := range result.Symbols {
+		if sym.Name == "Point" {
+			point = sym
+		}
+	}
+	if point == nil {
+		t.Fatal("the structure has no document symbol")
+	}
+	if len(point.Children) != 1 || point.Children[0].Name != "x" {
+		t.Errorf("the structure has %d field symbol(s), want 1 named x", len(point.Children))
+	}
+}
+
+// TestSyntaxErrorDiagnosticUsesTheParsersPosition covers the syntax
+// diagnostic, which scanned the *rendered* error message for the substring
+// "at line " and re-parsed the digits by hand, so any rewording of the message
+// silently moved every syntax error to line 1, column 1.
+func TestSyntaxErrorDiagnosticUsesTheParsersPosition(t *testing.T) {
+	doc := NewDocument("file:///bad.abc", "english", 1,
+		"Print 1.\nPrint 2.\nDeclare to be 3.\n")
+	result := NewAnalyzer().Analyze(doc)
+
+	if len(result.Diagnostics) == 0 {
+		t.Fatal("expected a syntax diagnostic")
+	}
+	d := result.Diagnostics[0]
+	if d.Range.Start.Line != 2 {
+		t.Errorf("the syntax error is reported on line %d, want 2", d.Range.Start.Line)
+	}
+	if d.Range.End.Character <= d.Range.Start.Character {
+		t.Errorf("diagnostic range is empty: %v", d.Range)
+	}
+	if d.Range.End.Character > len(doc.GetLine(d.Range.Start.Line)) {
+		t.Errorf("the underline runs past the end of the line: %v", d.Range)
+	}
+}
+
+// TestEverySyntaxErrorIsReported covers the editor's diagnostics, which
+// stopped at the first syntax error in a file: a document with two typos
+// needed two round trips to clear, since the analyser also gives up before
+// extracting any symbols while a parse fails.
+func TestEverySyntaxErrorIsReported(t *testing.T) {
+	doc := NewDocument("file:///two.abc", "english", 1,
+		"Declare x to be 1.\nDeclare to be 2.\nPrint x.\nSet 5 to be 3.\n")
+	result := NewAnalyzer().Analyze(doc)
+
+	if len(result.Diagnostics) != 2 {
+		t.Fatalf("reported %d diagnostic(s), want 2: %v", len(result.Diagnostics), result.Diagnostics)
+	}
+	if result.Diagnostics[0].Range.Start.Line != 1 {
+		t.Errorf("the first diagnostic is on line %d, want 1", result.Diagnostics[0].Range.Start.Line)
+	}
+	if result.Diagnostics[1].Range.Start.Line != 3 {
+		t.Errorf("the second diagnostic is on line %d, want 3", result.Diagnostics[1].Range.Start.Line)
 	}
 }

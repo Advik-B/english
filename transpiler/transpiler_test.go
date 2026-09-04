@@ -1,12 +1,13 @@
 package transpiler_test
 
 import (
-	ast_pkg "github.com/Advik-B/english/ast"
-	"github.com/Advik-B/english/parser"
-	"github.com/Advik-B/english/transpiler"
 	"os"
 	"strings"
 	"testing"
+
+	ast_pkg "github.com/Advik-B/english/ast"
+	"github.com/Advik-B/english/parser"
+	"github.com/Advik-B/english/transpiler"
 )
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
@@ -66,11 +67,13 @@ func containsLine(output, s string) bool {
 	return false
 }
 
-// assertContains fails the test if needle is not found in haystack.
-func assertContains(t *testing.T, haystack, needle string) {
+// assertContains fails the test if any needle is not found in haystack.
+func assertContains(t *testing.T, haystack string, needles ...string) {
 	t.Helper()
-	if !strings.Contains(haystack, needle) {
-		t.Errorf("expected output to contain %q\ngot:\n%s", needle, haystack)
+	for _, needle := range needles {
+		if !strings.Contains(haystack, needle) {
+			t.Errorf("expected output to contain %q\ngot:\n%s", needle, haystack)
+		}
 	}
 }
 
@@ -131,9 +134,14 @@ func TestAddition(t *testing.T) {
 	assertContainsLine(t, out, `x = 3 + 4`)
 }
 
+// TestModulo covers the remainder, which is not Python's %. English truncates
+// both operands and takes the sign of the dividend; Python's % is floored and
+// takes the sign of the divisor, so -7 % 3 was -1 in English and 2 in the
+// generated Python.
 func TestModulo(t *testing.T) {
 	out := transpile(t, `Declare r to be the remainder of 10 divided by 3.`)
-	assertContainsLine(t, out, `r = 10 % 3`)
+	assertContainsLine(t, out, `r = _remainder(10, 3)`)
+	assertContains(t, out, "def _remainder", "import math")
 }
 
 // ─── Control flow ─────────────────────────────────────────────────────────────
@@ -193,7 +201,7 @@ thats it.`)
 // ─── Functions ────────────────────────────────────────────────────────────────
 
 func TestFunctionDecl(t *testing.T) {
-	out := transpile(t, `Declare function add that takes a and b and does the following:
+	out := transpile(t, `Declare function add that takes a as number and b as number, and gives back a number, and does the following:
     Return a + b.
 thats it.`)
 	assertContains(t, out, "def add(a, b):")
@@ -201,7 +209,7 @@ thats it.`)
 }
 
 func TestFunctionCall(t *testing.T) {
-	out := transpile(t, `Declare function greet that takes name and does the following:
+	out := transpile(t, `Declare function greet that takes name as text, and gives back nothing, and does the following:
     Print "Hello", the value of name.
 thats it.
 Call greet with "Alice".`)
@@ -277,27 +285,53 @@ func TestListLiteral(t *testing.T) {
 	assertContainsLine(t, out, "nums = [1, 2, 3]")
 }
 
+// The range tests below used to expect a conditional expression that named
+// start, end and step up to three times each, so any of them that did
+// something as well as producing a value did it repeatedly.
+
 func TestRangeLiteralProgrammerStyle(t *testing.T) {
 	out := transpile(t, `Declare nums to be [1 .. 5].`)
-	assertContains(t, out, "range(1, 5 + 1 if 1 <= 5 else 5 - 1, 1 if 1 <= 5 else -1)")
+	assertContains(t, out, "_range(1, 5)", "def _range")
 }
 
 func TestRangeLiteralNaturalEnglish(t *testing.T) {
 	out := transpile(t, `Let myRange be a range from 10 to 15.`)
-	assertContains(t, out, "range(10, 15 + 1 if 10 <= 15 else 15 - 1, 1 if 10 <= 15 else -1)")
+	assertContains(t, out, "_range(10, 15)")
 }
 
 func TestRangeLiteralDescending(t *testing.T) {
 	out := transpile(t, `Declare countdown to be [10 .. 5].`)
-	assertContains(t, out, "range(10, 5 + 1 if 10 <= 5 else 5 - 1, 1 if 10 <= 5 else -1)")
+	assertContains(t, out, "_range(10, 5)")
 }
 
 func TestRangeLiteralInLoop(t *testing.T) {
 	out := transpile(t, `For each n in [1 .. 3], do the following:
     Print n.
 thats it.`)
-	assertContains(t, out, "for n in range(1, 3 + 1 if 1 <= 3 else 3 - 1, 1 if 1 <= 3 else -1):")
-	assertContains(t, out, "print(n)")
+	assertContains(t, out, "for n in _range(1, 3):")
+	assertContains(t, out, "print(_show(n))")
+}
+
+// TestRangeArgumentsAreEvaluatedOnce is the point of the helper: an argument
+// that does something as well as producing a value must appear once.
+func TestRangeArgumentsAreEvaluatedOnce(t *testing.T) {
+	out := transpile(t, `Declare function next_bound that gives back a number, and does the following:
+    Return 5.
+thats it.
+
+Declare nums to be a range from 1 to the result of calling next_bound.`)
+	var rangeLine string
+	for _, line := range strings.Split(out, "\n") {
+		if strings.Contains(line, "_range(") && !strings.HasPrefix(strings.TrimSpace(line), "def ") {
+			rangeLine = line
+		}
+	}
+	if rangeLine == "" {
+		t.Fatalf("no range expression in the output:\n%s", out)
+	}
+	if got := strings.Count(rangeLine, "next_bound()"); got != 1 {
+		t.Errorf("next_bound is called %d time(s) in %q, want 1", got, strings.TrimSpace(rangeLine))
+	}
 }
 
 func TestIndexAccess(t *testing.T) {
@@ -356,7 +390,7 @@ func TestStructMethod(t *testing.T) {
 	out := transpile(t, `declare Counter as a structure with the following fields:
     count is a number with 0 being the default.
 
-    let increment be a function that does the following:
+    let increment be a function that gives back nothing, and does the following:
         Set count to be count + 1.
     thats it.
 thats it.`)
@@ -372,9 +406,12 @@ func TestCastToNumber(t *testing.T) {
 	assertContains(t, out, `float("42")`)
 }
 
+// TestCastToText covers "cast to text", which goes through English's renderer:
+// Python's str() writes a whole number as 42.0, a boolean as True and the
+// absence of a value as None.
 func TestCastToText(t *testing.T) {
 	out := transpile(t, `Declare x to be 42 cast to text.`)
-	assertContains(t, out, `str(42)`)
+	assertContains(t, out, `_show(42)`, "def _show")
 }
 
 func TestCastToBool(t *testing.T) {
@@ -485,10 +522,11 @@ func TestStdlibEndsWith(t *testing.T) {
 	assertContains(t, out, `"hello".endswith("lo")`)
 }
 
+// TestStdlibSubstring covers substring, whose inline form named the start
+// twice — "s[start:start+length]" — and so evaluated it twice.
 func TestStdlibSubstring(t *testing.T) {
 	out := transpile(t, `Print substring("hello world", 6, 5).`)
-	// No int() wrapping on integer literals.
-	assertContains(t, out, `"hello world"[6:6+5]`)
+	assertContains(t, out, `_substring("hello world", 6, 5)`, "def _substring")
 }
 
 func TestStdlibStrRepeat(t *testing.T) {
@@ -548,7 +586,7 @@ func TestStdlibToNumber(t *testing.T) {
 
 func TestStdlibToString(t *testing.T) {
 	out := transpile(t, `Print to_string(42).`)
-	assertContains(t, out, `str(42)`)
+	assertContains(t, out, `_show(42)`)
 }
 
 func TestStdlibIsEmpty(t *testing.T) {
@@ -577,10 +615,12 @@ Print product(nums).`)
 	assertContains(t, out, "def _product")
 }
 
+// TestStdlibAverage covers average, whose inline form named its argument
+// twice — "(sum(x) / len(x))" — and so evaluated it twice.
 func TestStdlibAverage(t *testing.T) {
 	out := transpile(t, `Declare nums to be [1, 2, 3].
 Print average(nums).`)
-	assertContains(t, out, "(sum(nums) / len(nums))")
+	assertContains(t, out, "_average(nums)", "def _average")
 }
 
 func TestStdlibMinValue(t *testing.T) {
@@ -666,13 +706,15 @@ Print all_true(flags).`)
 func TestStdlibRemove(t *testing.T) {
 	out := transpile(t, `Declare nums to be [1, 2, 3].
 Set nums to be remove(nums, 1).`)
-	assertContains(t, out, "for i, v in enumerate(nums)")
+	assertContains(t, out, "_remove_at(nums, 1)", "def _remove_at")
 }
 
+// TestStdlibInsert covers insert, whose inline form named the list and the
+// index twice each — "xs[:i] + [v] + xs[i:]" — and so evaluated them twice.
 func TestStdlibInsert(t *testing.T) {
 	out := transpile(t, `Declare nums to be [1, 3].
 Set nums to be insert(nums, 1, 2).`)
-	assertContains(t, out, "nums[:1] + [2] + nums[1:]")
+	assertContains(t, out, "_insert(nums, 1, 2)", "def _insert")
 }
 
 func TestStdlibZipWith(t *testing.T) {
@@ -831,7 +873,7 @@ Print "hello".`)
 }
 
 func TestCommentInsideFunction(t *testing.T) {
-	out := transpile(t, `Declare function greet that takes name and does the following:
+	out := transpile(t, `Declare function greet that takes name as text, and gives back nothing, and does the following:
     # say hello
     Print "Hello", the value of name.
 thats it.`)
@@ -890,7 +932,7 @@ func TestStrippedModeCodeStillCorrect(t *testing.T) {
 Declare x to be 5 + 3.
 Print the value of x.`)
 	assertContains(t, out, "x = 5 + 3")
-	assertContains(t, out, "print(x)")
+	assertContains(t, out, "print(_show(x))")
 	if strings.Contains(out, "#") {
 		t.Errorf("stripped mode should produce no '#' lines, got:\n%s", out)
 	}
@@ -912,7 +954,7 @@ func TestImportInlining(t *testing.T) {
 	// Write a small library file to a temp dir.
 	dir := t.TempDir()
 	libPath := dir + "/mylib.abc"
-	libSrc := `Declare function double that takes n and does the following:
+	libSrc := `Declare function double that takes n as number, and gives back a number, and does the following:
     Return n * 2.
 thats it.
 `
@@ -930,17 +972,17 @@ Print the value of result.`
 	out := transpileInlined(t, mainSrc)
 	assertContains(t, out, "def double(n)")
 	assertContains(t, out, "result = double(5)")
-	assertContains(t, out, "print(result)")
+	assertContains(t, out, "print(_show(result))")
 }
 
 func TestSelectiveImportInlining(t *testing.T) {
 	dir := t.TempDir()
 	libPath := dir + "/mathlib.abc"
-	libSrc := `Declare function square that takes x and does the following:
+	libSrc := `Declare function square that takes x as number, and gives back a number, and does the following:
     Return x * x.
 thats it.
 
-Declare function cube that takes x and does the following:
+Declare function cube that takes x as number, and gives back a number, and does the following:
     Return x * x * x.
 thats it.
 `
@@ -1006,7 +1048,7 @@ Print "hi".`)
 func TestUserDefinedFunctionOverridesStdlib(t *testing.T) {
 	// A user-defined function named "average" taking numbers should not be
 	// mis-translated to the stdlib average(list) expression.
-	out := transpile(t, `Declare function average that takes x and y and z and does the following:
+	out := transpile(t, `Declare function average that takes x as number and y as number and z as number, and gives back a number, and does the following:
     Return (x + y + z) / 3.
 thats it.
 
@@ -1021,7 +1063,7 @@ func TestPythonKeywordEscaping(t *testing.T) {
 	out := transpile(t, `Declare class to be "A".
 Print the value of class.`)
 	assertContains(t, out, `class_ = "A"`)
-	assertContains(t, out, "print(class_)")
+	assertContains(t, out, "print(_show(class_))")
 }
 
 func TestStructZeroValueDefaults(t *testing.T) {
@@ -1053,7 +1095,7 @@ func TestTwoBlankLinesBeforeDef(t *testing.T) {
 	// A top-level function that follows regular code must be separated by
 	// exactly two blank lines.
 	out := transpile(t, `Print "hello".
-Declare function foo that takes x and does the following:
+Declare function foo that takes x as number, and gives back a number, and does the following:
     Return x.
 thats it.`)
 	// Two blank lines = three consecutive newlines between the print and def.
@@ -1062,11 +1104,11 @@ thats it.`)
 
 func TestTwoBlankLinesBetweenDefs(t *testing.T) {
 	// Two top-level functions must be separated by exactly two blank lines.
-	out := transpile(t, `Declare function foo that takes x and does the following:
+	out := transpile(t, `Declare function foo that takes x as number, and gives back a number, and does the following:
     Return x.
 thats it.
 
-Declare function bar that takes y and does the following:
+Declare function bar that takes y as number, and gives back a number, and does the following:
     Return y.
 thats it.`)
 	assertContains(t, out, "return x\n\n\ndef bar(y)")
@@ -1078,39 +1120,53 @@ func TestCommentAttachedToDef(t *testing.T) {
 	// and the def.
 	out := transpile(t, `Print "hi".
 # My function
-Declare function foo that takes x and does the following:
+Declare function foo that takes x as number, and gives back a number, and does the following:
     Return x.
 thats it.`)
 	// Blank lines must appear before the comment, not between comment and def.
 	assertContains(t, out, "print(\"hi\")\n\n\n# My function\ndef foo(x)")
 }
 
-func TestNoIntWrapOnIndexExpressions(t *testing.T) {
-	// Index expressions should not be wrapped in int().
+// TestIndexIsWholeInPython covers indices, which English computes as numbers —
+// it has one number type and it is a float — where Python demands an int.
+//
+// These tests used to assert the opposite, locking in a maybeInt that returned
+// its argument unchanged behind a doc comment claiming no wrapping was needed.
+// Python needs it: xs[1.0] is a TypeError, so any index that came from
+// division, an average or a square root failed the moment it was transpiled.
+func TestIndexIsWholeInPython(t *testing.T) {
 	out := transpile(t, `Declare arr to be [1, 2, 3].
-Declare i to be 0.
-Print the item at position i in arr.`)
-	assertContains(t, out, "arr[i]")
-	// Specifically guard against [int(...)] wrapping inside index brackets.
-	if strings.Contains(out, "[int(") {
-		t.Errorf("index expression must not be wrapped in int(); got:\n%s", out)
-	}
+Declare half to be 4 / 2.
+Print the item at position half in arr.`)
+	assertContains(t, out, "arr[int(half)]")
 }
 
-func TestNoIntWrapOnSliceExpressions(t *testing.T) {
-	// Slice/substring arguments should not be wrapped in int() either.
+func TestSliceBoundsAreWholeInPython(t *testing.T) {
 	out := transpile(t, `Declare s to be "hello world".
-Print substring(s, 0, 5).`)
-	// Guard against int() inside slice notation, not inside print().
-	if strings.Contains(out, "[int(") || strings.Contains(out, ":int(") {
-		t.Errorf("substring arguments must not be wrapped in int(); got:\n%s", out)
+Declare start to be 6 / 2.
+Print substring(s, start, 5).`)
+	assertContains(t, out, "int(start)")
+}
+
+// TestWholeNumbersAreNotWrappedTwice keeps the output readable: a literal, a
+// length and an int() are already whole, so wrapping them again is noise.
+func TestWholeNumbersAreNotWrappedTwice(t *testing.T) {
+	out := transpile(t, `Declare arr to be [1, 2, 3].
+Print the item at position 0 in arr.
+Repeat the following the length of arr times:
+    Print "x".
+thats it.`)
+	assertContains(t, out, "arr[0]")
+	assertContains(t, out, "range(len(arr))")
+	if strings.Contains(out, "int(0)") || strings.Contains(out, "int(len(") {
+		t.Errorf("a value already known to be whole was wrapped again:\n%s", out)
 	}
 }
 
 func TestNoBlankLinesAtStartOfFile(t *testing.T) {
 	// A def at the very start of the file must not be preceded by blank lines.
 	// Use raw (non-trimmed) output so that leading newlines are visible.
-	prog := parse(t, `Declare function foo that does the following:
+	prog := parse(t, `Declare function foo that gives back nothing, and does the following:
     Print "hi".
 thats it.`)
 	raw := transpiler.NewTranspiler().Transpile(prog)
@@ -1152,5 +1208,155 @@ func TestSleepNoBareFunctionCall(t *testing.T) {
 	out := transpile(t, `Sleep for 2 seconds.`)
 	if strings.Contains(out, "sleep(2)") && !strings.Contains(out, "time.sleep(2)") {
 		t.Errorf("sleep should emit time.sleep(), not bare sleep(); got:\n%s", out)
+	}
+}
+
+// ─── Identifier escaping ─────────────────────────────────────────────────────
+
+// TestBuiltinNamesAreEscaped covers a name that collides with a Python
+// built-in the generated code itself calls. "Declare sum to be 5." emitted
+// "sum = 5", and every later sum(...) — the translation of English's own
+// "sum of" — then failed with "int object is not callable".
+func TestBuiltinNamesAreEscaped(t *testing.T) {
+	out := transpile(t, `Declare sum to be 5.
+Declare nums to be [1, 2, 3].
+Print sum.
+Print sum of nums.`)
+	assertContains(t, out, "sum_ = 5", "print(_show(sum_))", "sum(nums)")
+}
+
+// TestEscapingIsConsistentAcrossEmissionSites covers the sites the escaping
+// was skipped at. A struct field called "class" was emitted as Point(class=1)
+// against a def __init__(self, class_=0), so the call did not match the
+// definition it was generated beside.
+func TestEscapingIsConsistentAcrossEmissionSites(t *testing.T) {
+	out := transpile(t, `Declare Shape as a structure with the following fields:
+    class is a text with "round" being the default.
+thats it.
+
+Declare s to be a new instance of Shape with the following fields:
+    class is "square".
+thats it.
+Print the class of s.`)
+	assertContains(t, out,
+		"class Shape:",              // the struct itself
+		"def __init__(self, class_", // the field as a parameter
+		"self.class_ = class_",      // the field as an attribute
+		`Shape(class_="square")`,    // the field at the call site
+		"s.class_",                  // the field being read
+	)
+}
+
+// TestStructDefaultsAreNotSharedBetweenInstances covers a list-valued default,
+// which Python evaluates once when the def is executed, so every instance
+// shared the same list and adding an item to one added it to all of them.
+func TestStructDefaultsAreNotSharedBetweenInstances(t *testing.T) {
+	out := transpile(t, `Declare Basket as a structure with the following fields:
+    items is a list with [] being the default.
+thats it.`)
+	assertContains(t, out, "items=None", "self.items = [] if items is None else items")
+	if strings.Contains(out, "items=[]") {
+		t.Errorf("a list default is shared between instances:\n%s", out)
+	}
+}
+
+// TestCollectionFieldsStartEmpty covers a field with no default at all, which
+// the interpreter starts as an empty collection and this rendered as None, so
+// the first thing done to it failed.
+func TestCollectionFieldsStartEmpty(t *testing.T) {
+	out := transpile(t, `Declare Basket as a structure with the following fields:
+    items is a list.
+    prices is a lookup table.
+thats it.`)
+	assertContains(t, out, "self.items = [] if items is None else items")
+	assertContains(t, out, "self.prices = {} if prices is None else prices")
+}
+
+// ─── Rendering ───────────────────────────────────────────────────────────────
+
+// TestPrintUsesEnglishRendering covers what a program writes out. English has
+// one number type and prints a whole one without a decimal point, writes
+// true/false in lower case and "nothing" for the absence of a value; Python
+// writes 5.0, True and None, so every such program said something different
+// once transpiled.
+func TestPrintUsesEnglishRendering(t *testing.T) {
+	out := transpile(t, `Declare ratio to be 10 / 2.
+Declare flag to be true.
+Declare missing to be nothing.
+Print ratio, flag, missing.`)
+	assertContains(t, out, "print(_show(ratio), _show(flag), _show(missing))", "def _show")
+}
+
+// TestPrintOfALiteralStaysPlain keeps the output readable: a literal Python
+// already spells the same way needs no renderer around it.
+func TestPrintOfALiteralStaysPlain(t *testing.T) {
+	out := transpile(t, `Print "hello", 42.`)
+	assertContainsLine(t, out, `print("hello", 42)`)
+	if strings.Contains(out, "def _show") {
+		t.Errorf("the renderer was emitted for a program that does not need it:\n%s", out)
+	}
+}
+
+// TestRoundIsHalfAwayFromZero covers rounding: English rounds half away from
+// zero, Python's round() rounds half to even, so round(2.5) was 3 in English
+// and 2 in the generated Python.
+func TestRoundIsHalfAwayFromZero(t *testing.T) {
+	out := transpile(t, `Print round(2.5).`)
+	assertContains(t, out, "_round(2.5)", "def _round", "import math")
+	if strings.Contains(out, "print(_show(round(") {
+		t.Errorf("Python's round() was emitted:\n%s", out)
+	}
+}
+
+// TestCastToBooleanReadsTheWords covers "cast to boolean", which in English
+// accepts the words a person would write and refuses anything else. Python's
+// bool() calls every non-empty string true, so casting "no" gave False in
+// English and True here.
+func TestCastToBooleanReadsTheWords(t *testing.T) {
+	out := transpile(t, `Declare answer to be "no".
+Declare yes to be answer cast to boolean.`)
+	assertContains(t, out, "_to_bool(answer)", "def _to_bool")
+}
+
+// ─── Module names ────────────────────────────────────────────────────────────
+
+// TestImportedModuleNameMatchesItsFile covers the name an imported English
+// file is known by. The .py file was named by stripping the last extension
+// while the import took everything before the *first* dot, so "my.lib.abc"
+// was written as "my.lib.py" and imported as "my" — a module that does not
+// exist, and not a legal module name either way.
+func TestImportedModuleNameMatchesItsFile(t *testing.T) {
+	dir := t.TempDir()
+	libPath := dir + "/my.helper.lib.abc"
+	if err := os.WriteFile(libPath, []byte("Declare answer to be 42.\n"), 0644); err != nil {
+		t.Fatalf("write lib: %v", err)
+	}
+	out := transpile(t, `Import "`+libPath+`".
+Print answer.`)
+	assertContains(t, out, "from my_helper_lib import *")
+}
+
+// TestImportOfAPythonModuleIsPassedThrough guards the change above: a path
+// with no ".abc" extension names a Python module, which is Python's to
+// resolve and not ours to rename.
+func TestImportOfAPythonModuleIsPassedThrough(t *testing.T) {
+	out := transpile(t, `Import "os.path".
+Print "x".`)
+	assertContains(t, out, "from os.path import *")
+}
+
+// TestRangeStopsBeforeItsEnd covers the range's bounds, which the generated
+// Python got wrong in two ways: it added one to the end, so every transpiled
+// range had one element the interpreter left out, and it chose the step's sign
+// from the direction, so "a range from 10 to 5" counted down where the
+// interpreter produces nothing at all.
+func TestRangeStopsBeforeItsEnd(t *testing.T) {
+	out := transpile(t, `Declare xs to be a range from 1 to 5.`)
+	assertContains(t, out, "_range(1, 5)")
+	if strings.Contains(out, "+ 1") {
+		t.Errorf("the range end was adjusted:\n%s", out)
+	}
+	if !strings.Contains(out, "return range(int(start), int(end), step)") {
+		t.Errorf("the range helper does not mirror the interpreter:\n%s", out)
 	}
 }

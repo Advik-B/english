@@ -1,15 +1,16 @@
 package vm
 
 import (
-	"bufio"
-	"github.com/Advik-B/english/ast"
-	"github.com/Advik-B/english/bytecode"
-	"github.com/Advik-B/english/parser"
-	"github.com/Advik-B/english/astvm/types"
 	"fmt"
 	"io"
 	"os"
 	"strings"
+
+	"github.com/Advik-B/english/ast"
+	"github.com/Advik-B/english/bytecode"
+	"github.com/Advik-B/english/parser"
+	"github.com/Advik-B/english/runtime"
+	"github.com/Advik-B/english/types"
 )
 
 // Evaluator executes the AST
@@ -47,44 +48,19 @@ func (ev *Evaluator) runtimeError(message string) error {
 	}
 }
 
-// getStatementLine extracts the source line from an AST statement node.
-// Returns 0 if the node type does not carry line information.
-func getStatementLine(stmt ast.Statement) int {
-	switch s := stmt.(type) {
-	case *ast.VariableDecl:
-		return s.Line
-	case *ast.TypedVariableDecl:
-		return s.Line
-	case *ast.OutputStatement:
-		return s.Line
-	case *ast.Assignment:
-		return s.Line
-	case *ast.IndexAssignment:
-		return s.Line
-	case *ast.LookupKeyAssignment:
-		return s.Line
-	case *ast.CallStatement:
-		return s.Line
-	case *ast.ReturnStatement:
-		return s.Line
-	case *ast.IfStatement:
-		return s.Line
-	case *ast.WhileLoop:
-		return s.Line
-	case *ast.ForLoop:
-		return s.Line
-	case *ast.ForEachLoop:
-		return s.Line
-	case *ast.ToggleStatement:
-		return s.Line
-	case *ast.RaiseStatement:
-		return s.Line
-	case *ast.TryStatement:
-		return s.Line
-	case *ast.SwapStatement:
-		return s.Line
+// checkCallDepth reports a catchable StackOverflowError when the call stack has
+// grown past types.MaxCallDepth. Without it, runaway recursion aborted the whole
+// process with an unrecoverable Go "stack overflow" fatal error, which no
+// English program could catch and no user could diagnose.
+func (ev *Evaluator) checkCallDepth(name string) error {
+	if len(ev.callStack) < types.MaxCallDepth {
+		return nil
 	}
-	return 0
+	return &types.ErrorValue{
+		ErrorType: types.StackOverflowErrorType,
+		Message:   fmt.Sprintf(types.StackOverflowMessage, types.MaxCallDepth, name),
+		CallStack: append([]string{}, ev.callStack[:min(len(ev.callStack), 10)]...),
+	}
 }
 
 // Eval evaluates an AST node
@@ -198,14 +174,14 @@ func (ev *Evaluator) Eval(node interface{}) (Value, error) {
 	case *ast.CopyExpression:
 		return ev.evalCopyExpression(node)
 	default:
-		return nil, fmt.Errorf("unknown node type: %T", node)
+		return nil, ev.runtimeError(fmt.Sprintf("unknown node type: %T", node))
 	}
 }
 
 func (ev *Evaluator) evalProgram(prog *ast.Program) (Value, error) {
 	var result Value
 	for _, stmt := range prog.Statements {
-		if line := getStatementLine(stmt); line > 0 {
+		if line := stmt.Pos().Line; line > 0 {
 			ev.currentLine = line
 		}
 		val, err := ev.Eval(stmt)
@@ -229,7 +205,7 @@ func (ev *Evaluator) evalImport(is *ast.ImportStatement) (Value, error) {
 	parseFunc := func(path string) (*ast.Program, error) {
 		content, err := os.ReadFile(path)
 		if err != nil {
-			return nil, fmt.Errorf("failed to read file: %w", err)
+			return nil, ev.runtimeError(fmt.Sprintf("failed to read '%s': %v", path, err))
 		}
 
 		lexer := parser.NewLexer(string(content))
@@ -285,8 +261,10 @@ func (ev *Evaluator) evalSafeImport(program *ast.Program, is *ast.ImportStatemen
 
 // evalSelectiveImport imports only specific items from the file
 func (ev *Evaluator) evalSelectiveImport(program *ast.Program, is *ast.ImportStatement) (Value, error) {
-	// Create a temporary environment for the imported file
-	tempEnv := NewEnvironment()
+	// The imported file gets the language, and nothing of this file. It used
+	// to get a completely empty environment, so an imported file that used pi
+	// or called sqrt failed to import at all.
+	tempEnv := ev.env.NewImportScope()
 	tempEval := NewEvaluator(tempEnv, ev.builtinFn)
 
 	// Execute in temporary environment
@@ -351,42 +329,12 @@ func (ev *Evaluator) evalIndexAssignment(ia *ast.IndexAssignment) (Value, error)
 	if err != nil {
 		return nil, err
 	}
-	index, err := ToNumber(indexVal)
-	if err != nil {
-		return nil, ev.runtimeError("index must be a number")
-	}
-	idx := int(index)
-
 	value, err := ev.Eval(ia.Value)
 	if err != nil {
 		return nil, err
 	}
-
-	switch items := list.(type) {
-	case []interface{}:
-		if idx < 0 || idx >= len(items) {
-			return nil, ev.runtimeError(fmt.Sprintf("index %d out of range for list of length %d", idx, len(items)))
-		}
-		items[idx] = value
-	case *ArrayValue:
-		if idx < 0 || idx >= len(items.Elements) {
-			return nil, ev.runtimeError(fmt.Sprintf("index %d out of range for array of length %d", idx, len(items.Elements)))
-		}
-		// Type-check the new value against the array's element type
-		if value != nil && items.ElementType != types.TypeUnknown {
-			vk := types.Canonical(inferTypeKind(value))
-			if vk != types.Canonical(items.ElementType) {
-				return nil, ev.runtimeError(fmt.Sprintf(
-					"TypeError: cannot assign %s to array of %s",
-					typeKindName(inferTypeKind(value)), typeKindName(items.ElementType),
-				))
-			}
-		}
-		items.Elements[idx] = value
-	case *RangeValue:
-		return nil, ev.runtimeError("cannot modify a range")
-	default:
-		return nil, ev.runtimeError(fmt.Sprintf("cannot index into %s", typeKindName(inferTypeKind(list))))
+	if err := runtime.SetIndex(list, indexVal, value); err != nil {
+		return nil, ev.runtimeError(err.Error())
 	}
 	return nil, nil
 }
@@ -401,32 +349,11 @@ func (ev *Evaluator) evalIndexExpression(ie *ast.IndexExpression) (Value, error)
 	if err != nil {
 		return nil, err
 	}
-	index, err := ToNumber(indexVal)
+	value, err := runtime.Index(list, indexVal)
 	if err != nil {
-		return nil, ev.runtimeError("index must be a number")
+		return nil, ev.runtimeError(err.Error())
 	}
-	idx := int(index)
-
-	switch items := list.(type) {
-	case []interface{}:
-		if idx < 0 || idx >= len(items) {
-			return nil, ev.runtimeError(fmt.Sprintf("index %d out of range for list of length %d", idx, len(items)))
-		}
-		return items[idx], nil
-	case *ArrayValue:
-		if idx < 0 || idx >= len(items.Elements) {
-			return nil, ev.runtimeError(fmt.Sprintf("index %d out of range for array of length %d", idx, len(items.Elements)))
-		}
-		return items.Elements[idx], nil
-	case *RangeValue:
-		val, ok := items.Get(idx)
-		if !ok {
-			return nil, ev.runtimeError(fmt.Sprintf("index %d out of range for range of length %d", idx, items.Length()))
-		}
-		return val, nil
-	default:
-		return nil, ev.runtimeError(fmt.Sprintf("TypeError: cannot index into %s", typeKindName(inferTypeKind(list))))
-	}
+	return value, nil
 }
 
 func (ev *Evaluator) evalLengthExpression(le *ast.LengthExpression) (Value, error) {
@@ -435,20 +362,11 @@ func (ev *Evaluator) evalLengthExpression(le *ast.LengthExpression) (Value, erro
 		return nil, err
 	}
 
-	switch v := list.(type) {
-	case []interface{}:
-		return float64(len(v)), nil
-	case *ArrayValue:
-		return float64(len(v.Elements)), nil
-	case *LookupTableValue:
-		return float64(len(v.Entries)), nil
-	case *RangeValue:
-		return float64(v.Length()), nil
-	case string:
-		return float64(len(v)), nil
-	default:
-		return nil, ev.runtimeError(fmt.Sprintf("cannot get length of %s", typeKindName(inferTypeKind(list))))
+	length, err := runtime.Length(list)
+	if err != nil {
+		return nil, ev.runtimeError(err.Error())
 	}
+	return length, nil
 }
 
 func (ev *Evaluator) evalLocationExpression(loc *ast.LocationExpression) (Value, error) {
@@ -458,7 +376,9 @@ func (ev *Evaluator) evalLocationExpression(loc *ast.LocationExpression) (Value,
 		return nil, ev.runtimeError(fmt.Sprintf("undefined variable '%s'", loc.Name))
 	}
 	// Return a unique identifier based on the variable name and environment
-	return fmt.Sprintf("0x%p:%s", ev.env, loc.Name), nil
+	// %p already writes the 0x prefix; the literal one made every location
+	// print as "0x0x…".
+	return fmt.Sprintf("%p:%s", ev.env, loc.Name), nil
 }
 
 func (ev *Evaluator) evalAskExpression(ae *ast.AskExpression) (Value, error) {
@@ -471,18 +391,9 @@ func (ev *Evaluator) evalAskExpression(ae *ast.AskExpression) (Value, error) {
 		fmt.Fprint(ev.out, ToString(prompt))
 	}
 
-	// Read a line from stdin
-	reader := bufio.NewReader(os.Stdin)
-	line, err := reader.ReadString('\n')
-	if err != nil {
-		// EOF is acceptable (e.g. input from pipe)
-		if len(line) == 0 {
-			return "", nil
-		}
-	}
-	// Trim trailing newline characters
-	line = strings.TrimRight(line, "\r\n")
-	return line, nil
+	// One reader for the process, so a second question still has whatever the
+	// first read ahead. See runtime.ReadLine.
+	return runtime.ReadLine(), nil
 }
 
 func (ev *Evaluator) evalToggle(ts *ast.ToggleStatement) (Value, error) {
@@ -506,7 +417,7 @@ func (ev *Evaluator) evalToggle(ts *ast.ToggleStatement) (Value, error) {
 func (ev *Evaluator) evalFunctionDecl(fd *ast.FunctionDecl) (Value, error) {
 	fn := &FunctionValue{
 		Name:       fd.Name,
-		Parameters: fd.Parameters,
+		Parameters: fd.ParamNames(),
 		Body:       fd.Body,
 		Closure:    ev.env,
 	}
@@ -542,6 +453,11 @@ func (ev *Evaluator) evalOutput(os *ast.OutputStatement) (Value, error) {
 }
 
 func (ev *Evaluator) evalReturn(rs *ast.ReturnStatement) (Value, error) {
+	// "Return." on its own carries no value, and finishes a function that
+	// gives back nothing.
+	if rs.Value == nil {
+		return &ReturnValue{}, nil
+	}
 	value, err := ev.Eval(rs.Value)
 	if err != nil {
 		return nil, err
@@ -772,8 +688,9 @@ func (ev *Evaluator) evalForEachLoop(fel *ast.ForEachLoop) (Value, error) {
 			result = val
 		}
 	default:
-		return nil, fmt.Errorf("TypeError: 'for each' requires list, array, or lookup table; got %s",
-			typeKindName(inferTypeKind(list)))
+		return nil, ev.runtimeError(fmt.Sprintf(
+			"TypeError: 'for each' requires a list, an array or a lookup table; got %s",
+			typeKindName(inferTypeKind(list))))
 	}
 
 	return result, nil
@@ -960,7 +877,7 @@ func (ev *Evaluator) evalBinaryExpression(be *ast.BinaryExpression) (Value, erro
 		result, err := Compare(be.Operator, left, right)
 		return result, err
 	default:
-		return nil, fmt.Errorf("unknown operator: %s", be.Operator)
+		return nil, ev.runtimeError(fmt.Sprintf("unknown operator: %s", be.Operator))
 	}
 }
 
@@ -984,7 +901,7 @@ func (ev *Evaluator) evalUnaryExpression(ue *ast.UnaryExpression) (Value, error)
 		}
 		return !rightBool, nil
 	default:
-		return nil, fmt.Errorf("unknown unary operator: %s", ue.Operator)
+		return nil, ev.runtimeError(fmt.Sprintf("unknown unary operator: %s", ue.Operator))
 	}
 }
 
@@ -1038,6 +955,10 @@ func (ev *Evaluator) evalFunctionCall(fc *ast.FunctionCall) (Value, error) {
 		return nil, ev.runtimeError(fmt.Sprintf("function '%s' expects %s, got %s%s", fc.Name, expected, got, paramList))
 	}
 
+	if err := ev.checkCallDepth(fc.Name); err != nil {
+		return nil, err
+	}
+
 	// Create new environment for function execution
 	funcEnv := fn.Closure.NewChild()
 
@@ -1065,7 +986,7 @@ func (ev *Evaluator) evalFunctionCall(fc *ast.FunctionCall) (Value, error) {
 	}()
 
 	for _, stmt := range fn.Body {
-		if line := getStatementLine(stmt); line > 0 {
+		if line := stmt.Pos().Line; line > 0 {
 			ev.currentLine = line
 		}
 		val, err := ev.Eval(stmt)
@@ -1102,6 +1023,10 @@ func (ev *Evaluator) callFunction(name string, args []Value) (Value, error) {
 		return nil, ev.runtimeError(fmt.Sprintf("function '%s' expects %d argument(s), got %d", name, len(fn.Parameters), len(args)))
 	}
 
+	if err := ev.checkCallDepth(name); err != nil {
+		return nil, err
+	}
+
 	funcEnv := fn.Closure.NewChild()
 	for i, param := range fn.Parameters {
 		funcEnv.Define(param, args[i], false)
@@ -1122,7 +1047,7 @@ func (ev *Evaluator) callFunction(name string, args []Value) (Value, error) {
 	}()
 
 	for _, stmt := range fn.Body {
-		if line := getStatementLine(stmt); line > 0 {
+		if line := stmt.Pos().Line; line > 0 {
 			ev.currentLine = line
 		}
 		val, err := ev.Eval(stmt)
@@ -1155,36 +1080,23 @@ func (ev *Evaluator) findSimilarFunction(name string) string {
 
 func (ev *Evaluator) evalArrayLiteral(al *ast.ArrayLiteral) (Value, error) {
 	elements := make([]interface{}, 0, len(al.Elements))
-
-	// Determine element type: from explicit hint or infer from first element
-	elemType := types.TypeUnknown
-	if al.ElementType != "" {
-		elemType = types.Parse(al.ElementType)
-	}
-
 	for _, expr := range al.Elements {
 		val, err := ev.Eval(expr)
 		if err != nil {
 			return nil, err
 		}
-		valType := types.Canonical(inferTypeKind(val))
-
-		// Infer element type from first element if not explicitly given
-		if elemType == types.TypeUnknown && val != nil {
-			elemType = valType
-		}
-
-		// Enforce homogeneity
-		if elemType != types.TypeUnknown && val != nil && types.Canonical(valType) != types.Canonical(elemType) {
-			return nil, fmt.Errorf(
-				"TypeError: array element has wrong type: expected %s, got %s",
-				typeKindName(elemType), typeKindName(valType),
-			)
-		}
 		elements = append(elements, val)
 	}
 
-	return &ArrayValue{ElementType: elemType, Elements: elements}, nil
+	declared := types.TypeUnknown
+	if al.ElemType != nil {
+		declared = al.ElemType.Kind
+	}
+	array, err := runtime.NewArray(declared, elements)
+	if err != nil {
+		return nil, ev.runtimeError(err.Error())
+	}
+	return array, nil
 }
 
 // ─── Lookup table ─────────────────────────────────────────────────────────────
@@ -1194,54 +1106,33 @@ func (ev *Evaluator) evalLookupKeyAccess(la *ast.LookupKeyAccess) (Value, error)
 	if err != nil {
 		return nil, err
 	}
-	lt, ok := tableVal.(*LookupTableValue)
-	if !ok {
-		return nil, fmt.Errorf("TypeError: cannot index %s with a key; expected lookup table",
-			typeKindName(inferTypeKind(tableVal)))
-	}
-
 	keyVal, err := ev.Eval(la.Key)
 	if err != nil {
 		return nil, err
 	}
-	serialKey, err := types.SerializeKey(keyVal)
+	value, err := runtime.LookupGet(tableVal, keyVal)
 	if err != nil {
-		return nil, err
+		return nil, ev.runtimeError(err.Error())
 	}
-
-	val, exists := lt.Entries[serialKey]
-	if !exists {
-		return nil, fmt.Errorf("KeyError: key %s not found in lookup table", ToString(keyVal))
-	}
-	return val, nil
+	return value, nil
 }
 
 func (ev *Evaluator) evalLookupKeyAssignment(la *ast.LookupKeyAssignment) (Value, error) {
 	tableVal, ok := ev.env.Get(la.TableName)
 	if !ok {
-		return nil, fmt.Errorf("undefined variable '%s'", la.TableName)
+		return nil, ev.runtimeError(fmt.Sprintf("undefined variable '%s'", la.TableName))
 	}
-	lt, ok := tableVal.(*LookupTableValue)
-	if !ok {
-		return nil, fmt.Errorf("TypeError: '%s' is not a lookup table (got %s)",
-			la.TableName, typeKindName(inferTypeKind(tableVal)))
-	}
-
 	keyVal, err := ev.Eval(la.Key)
 	if err != nil {
 		return nil, err
 	}
-	serialKey, err := types.SerializeKey(keyVal)
-	if err != nil {
-		return nil, err
-	}
-
 	value, err := ev.Eval(la.Value)
 	if err != nil {
 		return nil, err
 	}
-
-	lt.Set(serialKey, value)
+	if err := runtime.LookupSet(tableVal, keyVal, value); err != nil {
+		return nil, ev.runtimeError(err.Error())
+	}
 	return nil, nil
 }
 
@@ -1250,23 +1141,15 @@ func (ev *Evaluator) evalHasExpression(he *ast.HasExpression) (Value, error) {
 	if err != nil {
 		return nil, err
 	}
-	lt, ok := tableVal.(*LookupTableValue)
-	if !ok {
-		return nil, fmt.Errorf("TypeError: 'has' requires a lookup table, got %s",
-			typeKindName(inferTypeKind(tableVal)))
-	}
-
 	keyVal, err := ev.Eval(he.Key)
 	if err != nil {
 		return nil, err
 	}
-	serialKey, err := types.SerializeKey(keyVal)
+	present, err := runtime.LookupHas(tableVal, keyVal)
 	if err != nil {
-		return nil, err
+		return nil, ev.runtimeError(err.Error())
 	}
-
-	_, exists := lt.Entries[serialKey]
-	return exists, nil
+	return present, nil
 }
 
 // evalNilCheckExpression evaluates "x is something" / "x has a value" (IsSomethingCheck=true)

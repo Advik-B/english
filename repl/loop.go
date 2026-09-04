@@ -25,15 +25,12 @@ func (r *REPL) Run() {
 // This is useful for testing or for embedding the REPL in a larger program.
 func (r *REPL) Loop() {
 	var buffer []string
-	depth := 0
 
 	for {
 		// Show the appropriate prompt and remember which one was printed so
 		// we can redraw the line with syntax highlighting after input arrives.
-		var prompt string
-		if depth == 0 && len(buffer) == 0 {
-			prompt = PrimaryPrompt
-		} else {
+		prompt := PrimaryPrompt
+		if len(buffer) > 0 {
 			prompt = ContinuationPrompt
 		}
 		coloredPrompt := highlight.Prompt(prompt, r.useColor)
@@ -67,7 +64,7 @@ func (r *REPL) Loop() {
 		}
 
 		// ── Special top-level commands (only at the primary prompt) ─────────
-		if depth == 0 && len(buffer) == 0 {
+		if len(buffer) == 0 {
 			switch trimmed {
 			case "exit", "exit.", "quit", "quit.":
 				return
@@ -88,33 +85,23 @@ func (r *REPL) Loop() {
 
 		// ── Ignore blank lines outside of a block ────────────────────────────
 		if trimmed == "" {
-			if depth > 0 {
+			if len(buffer) > 0 {
 				buffer = append(buffer, line)
 			}
 			continue
 		}
 
-		lower := strings.ToLower(trimmed)
-
-		// ── Update block depth ───────────────────────────────────────────────
-		if isBlockOpener(lower) {
-			depth++
-		}
-		if isBlockCloser(lower) {
-			depth--
-			if depth < 0 {
-				depth = 0
-			}
-		}
-
 		buffer = append(buffer, line)
+		code := strings.Join(buffer, "\n")
 
 		// ── Execute when the block (or single statement) is complete ─────────
-		if depth <= 0 && len(buffer) > 0 {
-			depth = 0
-			code := strings.Join(buffer, "\n")
-			buffer = nil
-			r.execute(code)
+		//
+		// The parser decides, since it is the only thing that knows where a
+		// block ends; see needsMoreInput.
+		if needsMoreInput(code) {
+			continue
 		}
+		buffer = nil
+		r.execute(code)
 	}
 }

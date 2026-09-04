@@ -27,7 +27,7 @@ thats it.
 
 # ─── Polite function ─────────────────────────────────────────────────────────
 
-Please declare function greet that takes name and does the following:
+Please declare function greet that takes name as text, and gives back nothing, and does the following:
     Please print "Hello,".
     Please print the value of name.
 thats it.

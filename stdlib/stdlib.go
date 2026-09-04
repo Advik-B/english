@@ -3,80 +3,85 @@
 package stdlib
 
 import (
-	"github.com/Advik-B/english/astvm"
 	"math"
+
+	vm "github.com/Advik-B/english/astvm"
 )
 
-// Register registers all standard library functions into env.
+// predefinedConstants are the stdlib-provided constants visible to programs.
+// PredefinedNames and PredefinedValues both derive from this map so the two can
+// never disagree.
+var predefinedConstants = map[string]interface{}{
+	"pi":       math.Pi,
+	"e":        math.E,
+	"infinity": math.Inf(1),
+}
+
+// Register registers all standard library constants and functions into env.
+// Function stubs are derived from signatureList, so every built-in is
+// registered with exactly the arity its signature declares.
 func Register(env *vm.Environment) {
-	registerMathConstants(env)
-	registerMathFunctions(env)
-	registerStringFunctions(env)
-	registerListFunctions(env)
-	registerIOFunctions(env)
-	registerLookupTableFunctions(env)
-	registerNumberFunctions(env)
-	registerTimeFunctions(env)
+	for name, value := range predefinedConstants {
+		_ = env.DefinePredefined(name, value)
+	}
+	for _, s := range signatureList {
+		env.DefineFunction(s.Name, &vm.FunctionValue{
+			Name:       s.Name,
+			Parameters: s.ParamNames(),
+			Body:       nil, // nil body marks a built-in
+			Closure:    env,
+		})
+	}
 }
 
 // Eval evaluates a built-in function by name with the provided arguments.
+// The argument count is validated against the function's signature before
+// dispatch, so implementations may index args positionally without risking a
+// panic on a short call.
 func Eval(name string, args []vm.Value) (vm.Value, error) {
-	switch name {
-	// ── Math ──────────────────────────────────────────────────────────────────
-	case "sqrt", "pow", "abs", "floor", "ceil", "round", "min", "max",
-		"sin", "cos", "tan", "log", "log10", "log2", "exp",
-		"random", "random_between", "is_nan", "is_infinite":
-		return evalMath(name, args)
-
-	// ── String ────────────────────────────────────────────────────────────────
-	case "uppercase", "lowercase", "casefold", "split", "join", "trim",
-		"replace", "contains", "starts_with", "ends_with", "index_of",
-		"substring", "str_repeat", "count_occurrences", "pad_left", "pad_right",
-		"to_number", "to_string", "is_empty",
-		"title", "capitalize", "swapcase", "trim_left", "trim_right",
-		"is_digit", "is_alpha", "is_alnum", "is_space", "is_upper", "is_lower",
-		"center", "zfill":
-		return evalString(name, args)
-
-	// ── Number ────────────────────────────────────────────────────────────────
-	case "is_integer", "clamp", "sign":
-		return evalNumber(name, args)
-
-	// ── List ──────────────────────────────────────────────────────────────────
-	case "append", "remove", "insert", "sort", "reverse", "sum", "unique",
-		"first", "last", "flatten", "count", "slice",
-		"average", "min_value", "max_value", "any_true", "all_true",
-		"product", "sorted_desc", "zip_with":
-		return evalList(name, args)
-
-	// ── I/O ───────────────────────────────────────────────────────────────────
-	case "ask":
-		return evalIO(name, args)
-
-	// ── Lookup table ──────────────────────────────────────────────────────────
-	case "keys", "values", "table_remove", "table_has", "merge", "get_or_default":
-		return evalLookup(name, args)
-
-	// ── Time ──────────────────────────────────────────────────────────────────
-	case "current_time", "elapsed_time", "sleep":
-		return evalTime(name, args)
+	s, ok := Lookup(name)
+	if !ok {
+		return nil, vm.NewRuntimeError("unknown built-in function: " + name)
+	}
+	if err := checkArity(name, len(args)); err != nil {
+		return nil, err
 	}
 
+	switch s.Module {
+	case "math":
+		return evalMath(name, args)
+	case "string":
+		return evalString(name, args)
+	case "number":
+		return evalNumber(name, args)
+	case "list":
+		return evalList(name, args)
+	case "io":
+		return evalIO(name, args)
+	case "lookup":
+		return evalLookup(name, args)
+	case "time":
+		return evalTime(name, args)
+	}
 	return nil, vm.NewRuntimeError("unknown built-in function: " + name)
 }
 
 // PredefinedNames returns the names of all constants registered by the stdlib.
-// Pass these to vm.Check so the compile-time checker can catch redeclarations.
+// Pass these to the type checker so it can catch redeclarations.
 func PredefinedNames() []string {
-	return []string{"pi", "e", "infinity"}
+	out := make([]string, 0, len(predefinedConstants))
+	for name := range predefinedConstants {
+		out = append(out, name)
+	}
+	return out
 }
 
 // PredefinedValues returns all constants registered by the stdlib as a map.
 // Used by ivm.Machine to initialize predefined constants.
 func PredefinedValues() map[string]interface{} {
-	return map[string]interface{}{
-		"pi":       math.Pi,
-		"e":        math.E,
-		"infinity": math.Inf(1),
+	out := make(map[string]interface{}, len(predefinedConstants))
+	for name, value := range predefinedConstants {
+		out[name] = value
 	}
+	return out
 }

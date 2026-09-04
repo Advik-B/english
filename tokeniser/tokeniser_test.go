@@ -23,8 +23,8 @@ func TestTokenizeForHighlight_ReconstructsSource(t *testing.T) {
 		"line one\nline two\n",
 		`Declare x to be 5.` + "\n@@invalid@@\n",
 		`"hello"'s length`,
-		`Is  equal  to`,                  // extra spacing preserved
-		"If x isn't true then\n",        // contraction preserved
+		`Is  equal  to`,          // extra spacing preserved
+		"If x isn't true then\n", // contraction preserved
 		`If x is greater than or equal to 10 then`,
 	}
 
@@ -160,13 +160,13 @@ func TestNewLexer_TokenizeAll_BasicDeclaration(t *testing.T) {
 // exceed the source string length.
 func TestTokenizeForHighlight_UnterminatedString(t *testing.T) {
 	cases := []string{
-		`print rt's casefold'.`,  // From bug report
-		`'`,                        // Single quote at end
-		`"`,                        // Double quote at end
-		`'hello`,                   // Unterminated single-quoted string
-		`"hello`,                   // Unterminated double-quoted string
-		`x'`,                       // Single char followed by quote
-		`''`,                       // Two quotes
+		`print rt's casefold'.`, // From bug report
+		`'`,                     // Single quote at end
+		`"`,                     // Double quote at end
+		`'hello`,                // Unterminated single-quoted string
+		`"hello`,                // Unterminated double-quoted string
+		`x'`,                    // Single char followed by quote
+		`''`,                    // Two quotes
 	}
 
 	for _, src := range cases {
@@ -188,5 +188,84 @@ func TestTokenizeForHighlight_UnterminatedString(t *testing.T) {
 					src, len(src), got, len(got))
 			}
 		})
+	}
+}
+
+// ─── Word boundaries, numbers and non-ASCII names ────────────────────────────
+
+// tokenTypes lexes source and returns the token types, EOF included.
+func tokenTypes(src string) []token.Type {
+	var out []token.Type
+	for _, tok := range tokeniser.NewLexer(src).TokenizeAll() {
+		out = append(out, tok.Type)
+	}
+	return out
+}
+
+// TestComparisonNeedsAWholeWord covers the multi-word comparison scan, which
+// triggered on any text starting with the letters "is" or "has" — "island",
+// "hash", "is_digit" — and then read forward to the end of the line looking
+// for a phrase before rolling back, which is quadratic on a line full of such
+// words and can never match.
+func TestComparisonNeedsAWholeWord(t *testing.T) {
+	for _, src := range []string{"island", "hash", "is_digit", "issue", "haskell"} {
+		got := tokenTypes(src)
+		if len(got) != 2 || got[0] != token.IDENTIFIER {
+			t.Errorf("%q lexed as %v, want one identifier", src, got)
+		}
+	}
+
+	// The real phrases still lex as one token each.
+	for src, want := range map[string]token.Type{
+		"is equal to":                 token.IS_EQUAL_TO,
+		"is greater than or equal to": token.IS_GREATER_EQUAL,
+		"has a value":                 token.IS_SOMETHING,
+		"isn't true":                  token.ISNT_TRUE,
+	} {
+		got := tokenTypes(src)
+		if len(got) != 2 || got[0] != want {
+			t.Errorf("%q lexed as %v, want %v", src, got, want)
+		}
+	}
+}
+
+// TestScientificNotation covers exponents, which the lexer did not read at
+// all: "1e10" became the number 1 followed by the name "e10", which parsed as
+// two things and meant neither.
+func TestScientificNotation(t *testing.T) {
+	for _, src := range []string{"1e10", "2.5E-3", "6e+23", "1E0"} {
+		got := tokenTypes(src)
+		if len(got) != 2 || got[0] != token.NUMBER {
+			t.Errorf("%q lexed as %v, want one number", src, got)
+		}
+		if value := tokeniser.NewLexer(src).TokenizeAll()[0].Value; value != src {
+			t.Errorf("%q lexed with the value %q", src, value)
+		}
+	}
+
+	// An "e" that is not an exponent is left where it belongs.
+	got := tokenTypes("1 exp")
+	if len(got) != 3 || got[0] != token.NUMBER || got[1] != token.IDENTIFIER {
+		t.Errorf("\"1 exp\" lexed as %v, want a number and a name", got)
+	}
+}
+
+// TestNonASCIINames covers identifiers with a non-ASCII letter. The lexer
+// scans bytes, and testing one byte of a multi-byte character with
+// unicode.IsLetter asks the wrong question: the first byte of "é" is a letter
+// as a rune and its second is not, so "café" lexed as a name, a one-byte name
+// and an unrecognised character.
+func TestNonASCIINames(t *testing.T) {
+	got := tokenTypes("café")
+	if len(got) != 2 || got[0] != token.IDENTIFIER {
+		t.Errorf("\"café\" lexed as %v, want one identifier", got)
+	}
+	if value := tokeniser.NewLexer("café").TokenizeAll()[0].Value; value != "café" {
+		t.Errorf("the name lexed as %q", value)
+	}
+	for _, tok := range tokeniser.NewLexer(`Declare naïve to be "résumé".`).TokenizeAll() {
+		if tok.Type == token.ERROR {
+			t.Errorf("a non-ASCII letter produced an error token: %q", tok.Value)
+		}
 	}
 }

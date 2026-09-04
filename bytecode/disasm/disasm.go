@@ -23,7 +23,6 @@ import (
 	"github.com/Advik-B/english/ast"
 	"github.com/Advik-B/english/bytecode"
 	"github.com/Advik-B/english/parser"
-
 	"github.com/charmbracelet/lipgloss"
 )
 
@@ -184,17 +183,11 @@ func (d *disassembler) run(program *ast.Program, filename string, importDepth in
 // decodes that.  Otherwise it falls back to parsing the source file directly.
 // It returns the decoded program and the resolved file path used to load it.
 func loadImportedFile(path string) (*ast.Program, string, error) {
-	// Try the bytecode cache first.
-	cachePath := bytecode.GetCachePath(path)
-	if bytecode.IsCacheValid(path, cachePath) {
-		data, err := bytecode.ReadBytecodeCache(cachePath)
-		if err == nil {
-			dec := bytecode.NewDecoder(data)
-			prog, err := dec.Decode()
-			if err == nil {
-				return prog, cachePath, nil
-			}
-		}
+	// Try the bytecode cache first. Whether an entry may be used is the cache's
+	// own question to answer, so this asks rather than re-deciding: it used to
+	// repeat the validity check here, which meant two places to keep in step.
+	if prog, cachePath, ok := bytecode.LoadFromCache(path); ok {
+		return prog, cachePath, nil
 	}
 
 	// Fall back to parsing the source file.
@@ -244,7 +237,7 @@ func (d *disassembler) stmtMaybeUnroll(node ast.Statement) {
 		for _, tmp := range extras {
 			d.stmt(tmp)
 		}
-		d.stmt(&ast.TypedVariableDecl{Name: s.Name, TypeName: s.TypeName, Value: newVal, IsConstant: s.IsConstant})
+		d.stmt(&ast.TypedVariableDecl{Name: s.Name, Type: s.Type, Value: newVal, IsConstant: s.IsConstant})
 	case *ast.Assignment:
 		extras, newVal := d.unrollTopExpr(s.Value)
 		for _, tmp := range extras {

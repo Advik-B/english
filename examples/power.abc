@@ -4,7 +4,7 @@
 Print "=== Power Calculator ===".
 
 # Function to calculate power
-Declare function power that takes base and exponent and does the following:
+Declare function power that takes base as number and exponent as number, and gives back a number, and does the following:
     Declare result to be 1.
     Declare i to be 0.
     repeat the following while i is less than exponent:

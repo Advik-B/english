@@ -1,9 +1,10 @@
 package transpiler
 
 import (
-	"github.com/Advik-B/english/ast"
 	"fmt"
 	"strings"
+
+	"github.com/Advik-B/english/ast"
 )
 
 // ─── Expressions ─────────────────────────────────────────────────────────────
@@ -28,7 +29,7 @@ func (t *Transpiler) transpileExpr(expr ast.Expression) string {
 	case *ast.Identifier:
 		// Inside a struct method body, bare field names become self.<field>.
 		if t.methodFields[e.Name] {
-			return "self." + e.Name
+			return "self." + sanitizeIdent(e.Name)
 		}
 		// Well-known math constants are injected as env variables by the stdlib.
 		// Map them to their Python equivalents.
@@ -60,7 +61,7 @@ func (t *Transpiler) transpileExpr(expr ast.Expression) string {
 	case *ast.LengthExpression:
 		return fmt.Sprintf("len(%s)", t.transpileExpr(e.List))
 	case *ast.FieldAccess:
-		return fmt.Sprintf("%s.%s", t.transpileExpr(e.Object), e.Field)
+		return fmt.Sprintf("%s.%s", t.transpileExpr(e.Object), sanitizeIdent(e.Field))
 	case *ast.StructInstantiation:
 		return t.transpileStructInst(e)
 	case *ast.TypeExpression:
@@ -90,10 +91,37 @@ func (t *Transpiler) transpileExpr(expr ast.Expression) string {
 		}
 		return fmt.Sprintf("%s is None", inner)
 	case *ast.ErrorTypeCheckExpression:
-		return fmt.Sprintf("isinstance(%s, %s)", t.transpileExpr(e.Value), e.TypeName)
+		return fmt.Sprintf("isinstance(%s, %s)", t.transpileExpr(e.Value), sanitizeIdent(e.TypeName))
 	default:
 		return fmt.Sprintf("None  # unsupported expression: %T", expr)
 	}
+}
+
+// transpileShown renders an expression the way English writes it out.
+//
+// Most values need the renderer, since Python writes a whole number with a
+// decimal point, a boolean in title case and nothing as None. A literal that
+// Python already spells identically is passed through, which keeps the output
+// readable.
+func (t *Transpiler) transpileShown(expr ast.Expression) string {
+	if rendersAsItself(expr) {
+		return t.transpileExpr(expr)
+	}
+	return fmt.Sprintf("_show(%s)", t.transpileExpr(expr))
+}
+
+// rendersAsItself reports whether an expression's Python form already reads
+// the way English would write it.
+func rendersAsItself(expr ast.Expression) bool {
+	switch expr.(type) {
+	case *ast.StringLiteral:
+		// Text is printed as itself in both languages.
+		return true
+	case *ast.NumberLiteral:
+		// formatNumber already emits English's spelling of the number.
+		return true
+	}
+	return false
 }
 
 func (t *Transpiler) transpileListLit(elements []ast.Expression) string {
@@ -104,40 +132,35 @@ func (t *Transpiler) transpileListLit(elements []ast.Expression) string {
 	return "[" + strings.Join(parts, ", ") + "]"
 }
 
+// transpileRangeLit translates a range, which stops before its end and runs
+// downwards only with a negative step — the same rule as Python's range.
+//
+// A helper, rather than the conditional expression this used to emit: that
+// added one to the end and picked the step's sign from the direction, so every
+// transpiled range had one element the interpreter left out. It also named
+// start, end and step up to three times each, so any of them that did
+// something as well as producing a value did it repeatedly.
 func (t *Transpiler) transpileRangeLit(e *ast.RangeLiteral) string {
-	// Transpile range literals to Python range(...)
-	// Python's range is exclusive on the end, but English ranges are inclusive
-	// So we need to add 1 to the end value for ascending ranges
-	// For descending ranges, we need to subtract 1 from the end value
 	start := t.transpileExpr(e.Start)
 	end := t.transpileExpr(e.End)
-
-	// Wrap in maybeInt to convert floats to ints for range()
-	start = maybeInt(start)
-	end = maybeInt(end)
-
-	// Check if a custom step is provided
 	if e.Step != nil {
-		step := t.transpileExpr(e.Step)
-		step = maybeInt(step)
-
-		// With custom step, adjust end based on step sign
-		// For positive step: range(start, end+1, step)
-		// For negative step: range(start, end-1, step)
-		return fmt.Sprintf("range(%s, %s + 1 if %s > 0 else %s - 1, %s)",
-			start, end, step, end, step)
+		return fmt.Sprintf("_range(%s, %s, %s)", start, end, t.transpileExpr(e.Step))
 	}
-
-	// Use a conditional expression to handle both ascending and descending ranges
-	// range(start, end+1) for ascending
-	// range(start, end-1, -1) for descending
-	return fmt.Sprintf("range(%s, %s + 1 if %s <= %s else %s - 1, 1 if %s <= %s else -1)",
-		start, end, start, end, end, start, end)
+	return fmt.Sprintf("_range(%s, %s)", start, end)
 }
 
 func (t *Transpiler) transpileBinaryExpr(e *ast.BinaryExpression) string {
 	left := t.transpileExpr(e.Left)
 	right := t.transpileExpr(e.Right)
+
+	// The remainder is the one operator with no Python equivalent: English
+	// truncates both operands and takes the sign of the dividend, while
+	// Python's % is floored and takes the sign of the divisor, so -7 % 3 was
+	// -1 in English and 2 here.
+	if isRemainder(e.Operator) {
+		return fmt.Sprintf("_remainder(%s, %s)", left, right)
+	}
+
 	op := mapOperator(e.Operator)
 
 	// Wrap nested binary sub-expressions in parentheses to make precedence
@@ -169,30 +192,38 @@ func (t *Transpiler) transpileMethodCallExpr(e *ast.MethodCall) string {
 	for i, a := range e.Arguments {
 		args[i] = t.transpileExpr(a)
 	}
-	return fmt.Sprintf("%s.%s(%s)", obj, e.MethodName, strings.Join(args, ", "))
+	return fmt.Sprintf("%s.%s(%s)", obj, sanitizeIdent(e.MethodName), strings.Join(args, ", "))
 }
 
 func (t *Transpiler) transpileCast(e *ast.CastExpression) string {
 	inner := t.transpileExpr(e.Value)
-	switch strings.ToLower(e.TypeName) {
+	switch strings.ToLower(ast.TypeName(e.Type)) {
 	case "number", "float":
 		return fmt.Sprintf("float(%s)", inner)
 	case "integer", "int":
 		return fmt.Sprintf("int(%s)", inner)
 	case "text", "string", "str":
-		return fmt.Sprintf("str(%s)", inner)
+		// English's renderer, not Python's str(): a whole number has no
+		// decimal point, a boolean is lower case, nothing is "nothing".
+		return fmt.Sprintf("_show(%s)", inner)
 	case "boolean", "bool":
-		return fmt.Sprintf("bool(%s)", inner)
+		// English reads the words a person would write and refuses anything
+		// else; Python's bool() calls every non-empty string true, so casting
+		// "no" gave False in English and True here.
+		return fmt.Sprintf("_to_bool(%s)", inner)
 	default:
 		// Treat any other cast as a constructor / type call.
-		return fmt.Sprintf("%s(%s)", e.TypeName, inner)
+		return fmt.Sprintf("%s(%s)", sanitizeIdent(ast.TypeName(e.Type)), inner)
 	}
 }
 
 func (t *Transpiler) transpileStructInst(e *ast.StructInstantiation) string {
+	// The field names have to be escaped the same way the __init__ parameters
+	// were, or the call does not match the definition: a field called "class"
+	// was emitted as Point(class=1) against def __init__(self, class_=0).
 	args := make([]string, 0, len(e.FieldOrder))
 	for _, name := range e.FieldOrder {
-		args = append(args, fmt.Sprintf("%s=%s", name, t.transpileExpr(e.FieldValues[name])))
+		args = append(args, fmt.Sprintf("%s=%s", sanitizeIdent(name), t.transpileExpr(e.FieldValues[name])))
 	}
-	return fmt.Sprintf("%s(%s)", e.StructName, strings.Join(args, ", "))
+	return fmt.Sprintf("%s(%s)", sanitizeIdent(e.StructName), strings.Join(args, ", "))
 }

@@ -1,9 +1,10 @@
 package transpiler
 
 import (
+	"os"
+
 	"github.com/Advik-B/english/ast"
 	"github.com/Advik-B/english/parser"
-	"os"
 )
 
 // inlineImports walks the program's statement list and replaces every

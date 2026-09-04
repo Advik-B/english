@@ -2,15 +2,17 @@ package vm_test
 
 import (
 	"bytes"
-	"github.com/Advik-B/english/ast"
-	"github.com/Advik-B/english/parser"
-	"github.com/Advik-B/english/astvm"
-	"github.com/Advik-B/english/astvm/types"
-	"github.com/Advik-B/english/stdlib"
 	"io"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/Advik-B/english/ast"
+	vm "github.com/Advik-B/english/astvm"
+	"github.com/Advik-B/english/parser"
+	"github.com/Advik-B/english/stdlib"
+	"github.com/Advik-B/english/types"
 )
 
 // Helper function to evaluate code
@@ -206,7 +208,9 @@ func TestToString(t *testing.T) {
 		{nil, "nothing"}, // nil displays as "nothing" (the language keyword)
 		{true, "true"},
 		{false, "false"},
-		{[]interface{}{float64(1), float64(2), float64(3)}, "[1 2 3]"},
+		// A sequence renders the same way whichever container holds it; a list
+		// used to render without the separators an array rendered with.
+		{[]interface{}{float64(1), float64(2), float64(3)}, "[1, 2, 3]"},
 	}
 
 	for _, test := range tests {
@@ -588,7 +592,7 @@ thats it.`
 }
 
 func TestEvaluatorFunctionDeclarationAndCall(t *testing.T) {
-	code := `Declare function greet that does the following:
+	code := `Declare function greet that gives back nothing, and does the following:
     Print "Hello".
 thats it.
 Call greet.`
@@ -602,7 +606,7 @@ Call greet.`
 }
 
 func TestEvaluatorFunctionWithParams(t *testing.T) {
-	code := `Declare function add that takes a and b and does the following:
+	code := `Declare function add that takes a as number and b as number, and gives back a number, and does the following:
     Return a + b.
 thats it.
 Set result to be the result of calling add with 3 and 7.
@@ -617,7 +621,7 @@ Print the value of result.`
 }
 
 func TestEvaluatorFunctionReturn(t *testing.T) {
-	code := `Declare function double that takes x and does the following:
+	code := `Declare function double that takes x as number, and gives back a number, and does the following:
     Return x * 2.
 thats it.
 Set result to be the result of calling double with 5.
@@ -632,7 +636,7 @@ Print the value of result.`
 }
 
 func TestEvaluatorFunctionSingleParam(t *testing.T) {
-	code := `Declare function square that takes n and does the following:
+	code := `Declare function square that takes n as number, and gives back a number, and does the following:
     Return n * n.
 thats it.
 Set result to be the result of calling square with 4.
@@ -682,7 +686,7 @@ Set result to be x / y.`
 }
 
 func TestEvaluatorFunctionArgumentMismatch(t *testing.T) {
-	code := `Declare function add that takes a and b and does the following:
+	code := `Declare function add that takes a as number and b as number, and gives back a number, and does the following:
     Return a + b.
 thats it.
 Set result to be the result of calling add with 5.`
@@ -909,7 +913,7 @@ Print the value of x.`
 
 func TestEvaluatorNestedScopes(t *testing.T) {
 	code := `Declare x to be 5.
-Declare function change_local that does the following:
+Declare function change_local that gives back nothing, and does the following:
     Declare x to be 10.
     Print the value of x.
 thats it.
@@ -926,7 +930,7 @@ Print the value of x.`
 }
 
 func TestEvaluatorRecursion(t *testing.T) {
-	code := `Declare function factorial that takes n and does the following:
+	code := `Declare function factorial that takes n as number, and gives back a number, and does the following:
     If n is less than or equal to 1, then
         Return 1.
     otherwise
@@ -1167,7 +1171,7 @@ Declare combined to be list1 + list2.`
 }
 
 func TestEvaluatorReturnInLoop(t *testing.T) {
-	code := `Declare function findFirst that takes nums and does the following:
+	code := `Declare function findFirst that takes nums as list, and gives back a number, and does the following:
     for each n in nums, do the following:
         If n is greater than 5, then
             Return n.
@@ -1228,7 +1232,7 @@ func TestEvaluatorImport(t *testing.T) {
 
 	// Create a library file with functions and variables
 	libContent := `# Test library
-Declare function double that takes x and does the following:
+Declare function double that takes x as number, and gives back a number, and does the following:
     Return x * 2.
 thats it.
 
@@ -1262,7 +1266,7 @@ func TestEvaluatorImportWithFrom(t *testing.T) {
 	libFile := tempDir + "/helpers.abc"
 
 	// Create a library file
-	libContent := `Declare function square that takes n and does the following:
+	libContent := `Declare function square that takes n as number, and gives back a number, and does the following:
     Return n * n.
 thats it.
 `
@@ -1307,11 +1311,11 @@ func TestEvaluatorSelectiveImport(t *testing.T) {
 	libFile := tempDir + "/testlib.abc"
 
 	// Create a library file with multiple functions
-	libContent := `Declare function add that takes a and b and does the following:
+	libContent := `Declare function add that takes a as number and b as number, and gives back a number, and does the following:
     Return a + b.
 thats it.
 
-Declare function multiply that takes a and b and does the following:
+Declare function multiply that takes a as number and b as number, and gives back a number, and does the following:
     Return a * b.
 thats it.
 
@@ -1343,7 +1347,7 @@ func TestEvaluatorImportEverything(t *testing.T) {
 	libFile := tempDir + "/testlib.abc"
 
 	// Create a library file
-	libContent := `Declare function greet that takes name and does the following:
+	libContent := `Declare function greet that takes name as text, and gives back nothing, and does the following:
     Print "Hello,", the value of name.
 thats it.
 
@@ -1403,7 +1407,7 @@ func TestEvaluatorSafeImport(t *testing.T) {
 	// Create a library file with top-level code
 	libContent := `Print "This should not print in safe mode".
 
-Declare function test that does the following:
+Declare function test that gives back nothing, and does the following:
     Print "Test function".
 thats it.
 
@@ -2781,7 +2785,7 @@ func TestListMethods(t *testing.T) {
 		{`Print product of [1, 2, 3, 4].`, "24\n"},
 		{`Print any_true of [false, false, true].`, "true\n"},
 		{`Print all_true of [true, true, false].`, "false\n"},
-		{`Print sorted_desc of [1, 3, 2].`, "[3 2 1]\n"},
+		{`Print sorted_desc of [1, 3, 2].`, "[3, 2, 1]\n"},
 	}
 	for _, tt := range tests {
 		got := captureOutput(func() { evaluate(tt.code) })
@@ -2832,82 +2836,6 @@ func TestCompileTimeTypeError_PossessiveSyntax(t *testing.T) {
 }
 
 // ============================================
-// COMPILE-TIME DUPLICATE VARIABLE DETECTION
-// ============================================
-
-// checkCode parses the given source and runs the static checker with stdlib
-// predefines, mirroring what cmd/root.go does before evaluation.
-func checkCode(input string) []*vm.TypeError {
-lexer := parser.NewLexer(input)
-tokens := lexer.TokenizeAll()
-p := parser.NewParser(tokens)
-program, err := p.Parse()
-if err != nil {
-return nil
-}
-return vm.Check(program, stdlib.PredefinedNames()...)
-}
-
-func TestChecker_DuplicateVarTopLevel(t *testing.T) {
-errs := checkCode(`Declare x to be 1.
-Declare x to be 2.`)
-if len(errs) == 0 {
-t.Fatal("expected a duplicate-variable error, got none")
-}
-msg := errs[0].Error()
-if !strings.Contains(msg, "x") {
-t.Errorf("error should mention variable name 'x', got: %s", msg)
-}
-if errs[0].Line != 2 {
-t.Errorf("error should be on line 2, got line %d", errs[0].Line)
-}
-}
-
-func TestChecker_DuplicateShadowsStdlibConstant(t *testing.T) {
-errs := checkCode(`Declare pi to be 3.`)
-if len(errs) == 0 {
-t.Fatal("expected error for redeclaring stdlib constant 'pi', got none")
-}
-msg := errs[0].Error()
-if !strings.Contains(msg, "pi") {
-t.Errorf("error should mention 'pi', got: %s", msg)
-}
-}
-
-func TestChecker_DuplicateLetSyntax(t *testing.T) {
-errs := checkCode(`let x be 1.
-let x be 2.`)
-if len(errs) == 0 {
-t.Fatal("expected a duplicate-variable error, got none")
-}
-if errs[0].Line != 2 {
-t.Errorf("error should be on line 2, got line %d", errs[0].Line)
-}
-}
-
-func TestChecker_NoDuplicateInDifferentScopes(t *testing.T) {
-// Same name in an inner scope (if body) must NOT be flagged.
-errs := checkCode(`Declare x to be 1.
-If yes, then
-    Declare x to be 2.
-thats it.`)
-for _, e := range errs {
-if strings.Contains(e.Error(), "x") {
-t.Errorf("unexpected error for shadowing in inner scope: %s", e.Error())
-}
-}
-}
-
-func TestChecker_NoDuplicateForUniqueNames(t *testing.T) {
-errs := checkCode(`Declare a to be 1.
-Declare b to be 2.
-Declare c to be 3.`)
-if len(errs) != 0 {
-t.Errorf("expected no errors for distinct names, got: %v", errs)
-}
-}
-
-// ============================================
 // EVALUATOR REDEFINITION → COMPILE ERROR
 // ============================================
 
@@ -2939,38 +2867,86 @@ func TestEvaluator_TypedRedefinitionIsTypeError(t *testing.T) {
 	}
 }
 
-// TestChecker_FollowsImports verifies that the checker reads and validates
-// imported .abc files, catching stdlib-constant shadowing at compile time so
-// that `english run` never partially executes a program with a compile error.
-func TestChecker_FollowsImports(t *testing.T) {
-	// Write a temporary library that redefines the stdlib constant "pi".
-	libFile, err := os.CreateTemp(t.TempDir(), "lib_*.abc")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := libFile.WriteString("Declare pi to always be 3.14159.\n"); err != nil {
-		t.Fatal(err)
-	}
-	libFile.Close()
+// TestCompileErrorIsNotCatchable covers a type error escaping analysis and
+// reaching the evaluator: a handler must not swallow it. Catching one would
+// let a program carry on past a type violation it never fixed.
+func TestCompileErrorIsNotCatchable(t *testing.T) {
+	// Redeclaring a stdlib constant is reported by the evaluator as a
+	// TypeError, which is a compile error discovered late.
+	_, err := evaluate(`Try doing the following:
+    Declare pi to be 3.
+on error:
+    Print "caught".
+thats it.`)
 
-	// The main program just imports that library.
-	errs := checkCode(`Import "` + libFile.Name() + `".`)
-	if len(errs) == 0 {
-		t.Fatal("expected a compile error for importing a file that shadows 'pi', got none")
+	if err == nil {
+		t.Fatal("the handler swallowed a compile error")
 	}
-	e := errs[0]
-	msg := e.Error()
-	if !strings.Contains(msg, "pi") {
-		t.Errorf("error should mention 'pi', got: %s", msg)
+	if _, ok := err.(*vm.TypeError); !ok {
+		t.Errorf("expected the TypeError to propagate, got %T: %v", err, err)
 	}
-	if !strings.Contains(msg, "shadows") {
-		t.Errorf("error should say 'shadows', got: %s", msg)
+}
+
+// TestRuntimeErrorsStillCatchable guards the change above: an ordinary runtime
+// failure must still be catchable.
+func TestRuntimeErrorsStillCatchable(t *testing.T) {
+	out := captureOutput(func() {
+		_, err := evaluate(`Declare scores to be a lookup table.
+Try doing the following:
+    Print scores at "missing".
+on error:
+    Print "caught".
+thats it.`)
+		if err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+	})
+	if !strings.Contains(out, "caught") {
+		t.Errorf("a runtime failure should still be catchable, got %q", out)
 	}
-	// The error must identify the file it came from.
-	if e.File == "" {
-		t.Errorf("error should carry the imported file path, but File is empty")
+}
+
+// TestSelectiveImportSeesTheStandardLibrary covers an imported file's
+// environment, which was completely empty: a file that used pi, or called
+// sqrt, could not be imported at all, while the same import worked under the
+// instruction VM.
+func TestSelectiveImportSeesTheStandardLibrary(t *testing.T) {
+	dir := t.TempDir()
+	lib := filepath.Join(dir, "lib.abc")
+	if err := os.WriteFile(lib, []byte(
+		"Declare function area that takes r as number and gives back a number, and does the following:\n"+
+			"    Return pi * r * r.\n"+
+			"thats it.\n"), 0644); err != nil {
+		t.Fatalf("cannot write the library: %v", err)
 	}
-	if e.File != libFile.Name() {
-		t.Errorf("expected error File to be %q, got %q", libFile.Name(), e.File)
+
+	out := captureOutput(func() {
+		evaluate(`Import area from "` + filepath.ToSlash(lib) + `".
+Print the result of calling area with 2.`)
+	})
+	if !strings.Contains(out, "12.56") {
+		t.Errorf("the imported function produced %q; it should have used pi", strings.TrimSpace(out))
+	}
+}
+
+// TestSelectiveImportDoesNotSeeTheImporter guards the change above: the
+// imported file gets the language, not the importing file's names.
+func TestSelectiveImportDoesNotSeeTheImporter(t *testing.T) {
+	dir := t.TempDir()
+	lib := filepath.Join(dir, "lib.abc")
+	if err := os.WriteFile(lib, []byte(
+		"Declare function leak that gives back a number, and does the following:\n"+
+			"    Return secret.\n"+
+			"thats it.\n"), 0644); err != nil {
+		t.Fatalf("cannot write the library: %v", err)
+	}
+
+	out := captureOutput(func() {
+		evaluate(`Declare secret to be 42.
+Import leak from "` + filepath.ToSlash(lib) + `".
+Print the result of calling leak.`)
+	})
+	if strings.Contains(out, "42") {
+		t.Errorf("the imported file could see the importing file's variables:\n%s", out)
 	}
 }

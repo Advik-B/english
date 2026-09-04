@@ -53,9 +53,11 @@ Declare score as number.
 Set score to be 95.
 Print "score:", score.
 
-# Type enforcement: assigning wrong type is a TypeError
+# Type enforcement: assigning the wrong type is now a compile error, so it
+# cannot be demonstrated at run time. A conversion that cannot succeed is the
+# runtime equivalent.
 Try doing the following:
-    Set count to be "not a number".
+    Set count to be "not a number" cast to number.
 on error:
     Print "Caught type error:", error.
 thats it.

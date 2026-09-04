@@ -4,39 +4,17 @@ import (
 	"fmt"
 	"math"
 	"strings"
+
+	"github.com/Advik-B/english/pygen"
 )
 
-// mathConstantMap maps English stdlib math constants (registered as environment
-// variables) to their Python equivalents. When an Identifier with one of these
-// names is encountered, math is imported and the Python name is emitted.
-var mathConstantMap = map[string]string{
-	"pi":       "math.pi",
-	"e":        "math.e",
-	"infinity": "math.inf",
-}
+// mathConstantMap maps the English math constants to their Python
+// equivalents. Shared with the bytecode decompiler.
+var mathConstantMap = pygen.MathConstants
 
-// pythonKeywords is the set of Python reserved words that cannot be used as
-// bare identifiers. Any English identifier that matches a keyword is suffixed
-// with an underscore (PEP 8 convention, e.g. "class" → "class_").
-var pythonKeywords = map[string]bool{
-	"False": true, "None": true, "True": true,
-	"and": true, "as": true, "assert": true, "async": true, "await": true,
-	"break": true, "class": true, "continue": true, "def": true, "del": true,
-	"elif": true, "else": true, "except": true, "finally": true, "for": true,
-	"from": true, "global": true, "if": true, "import": true, "in": true,
-	"is": true, "lambda": true, "nonlocal": true, "not": true, "or": true,
-	"pass": true, "raise": true, "return": true, "try": true, "type": true,
-	"while": true, "with": true, "yield": true,
-}
-
-// sanitizeIdent escapes a Python reserved word used as a user-defined identifier
-// by appending a trailing underscore, following PEP 8 conventions.
-func sanitizeIdent(name string) string {
-	if pythonKeywords[name] {
-		return name + "_"
-	}
-	return name
-}
+// sanitizeIdent escapes a Python reserved word used as an identifier.
+// The rule and the word list are shared with the bytecode decompiler.
+func sanitizeIdent(name string) string { return pygen.SanitizeIdent(name) }
 
 // ─── Python helper function definitions ──────────────────────────────────────
 //
@@ -44,76 +22,12 @@ func sanitizeIdent(name string) string {
 // when the corresponding English stdlib call is used and there is no single
 // Python expression that exactly reproduces the behaviour.
 
-// helperDefs maps a helper name to its Python source (no trailing newline).
-var helperDefs = map[string]string{
-	"_program_start": "_program_start = time.time()",
-
-	"_table_remove": `def _table_remove(d, k):
-    result = dict(d)
-    result.pop(k, None)
-    return result`,
-
-	"_flatten": `def _flatten(lst):
-    return [item for sublist in lst for item in sublist]`,
-
-	"_read_file": `def _read_file(path):
-    with open(path, "r") as f:
-        return f.read()`,
-
-	"_write_file": `def _write_file(path, content):
-    with open(path, "w") as f:
-        f.write(str(content))`,
-
-	"_is_nan": `def _is_nan(x):
-    try:
-        return math.isnan(float(x))
-    except (TypeError, ValueError):
-        return True`,
-
-	"_is_infinite": `def _is_infinite(x):
-    try:
-        return math.isinf(float(x))
-    except (TypeError, ValueError):
-        return False`,
-
-	"_sign": `def _sign(x):
-    if x > 0:
-        return 1
-    elif x < 0:
-        return -1
-    return 0`,
-
-	"_unique": `def _unique(lst):
-    seen = []
-    for item in lst:
-        if item not in seen:
-            seen.append(item)
-    return seen`,
-
-	"_product": `def _product(lst):
-    result = 1
-    for item in lst:
-        result *= item
-    return result`,
-
-	"_zip_with": `def _zip_with(a, b):
-    return [[x, y] for x, y in zip(a, b)]`,
-}
-
-// helperOrder defines the deterministic emission order for helper functions.
-var helperOrder = []string{
-	"_program_start",
-	"_table_remove",
-	"_flatten",
-	"_read_file",
-	"_write_file",
-	"_is_nan",
-	"_is_infinite",
-	"_sign",
-	"_unique",
-	"_product",
-	"_zip_with",
-}
+// The injected helper definitions and their emission order are shared with
+// the bytecode decompiler, which had its own copy that had already drifted.
+var (
+	helperDefs  = pygen.HelperDefs
+	helperOrder = pygen.HelperOrder
+)
 
 // ─── Numeric literal formatting ───────────────────────────────────────────────
 
@@ -147,13 +61,67 @@ func isIntegerLiteral(s string) bool {
 	return len(s) > 0 && (s[0] >= '0' && s[0] <= '9' || s[0] == '-')
 }
 
-// maybeInt returns expr unchanged. Python list/string indices do not require
-// explicit int() wrapping; using a non-integer index raises a clear TypeError.
+// maybeInt wraps an expression in int() where Python needs a whole number.
+//
+// English has one number type and it is a float, so an index, a length, a
+// repeat count and a range bound all arrive as floats. Python requires an int
+// for every one of those: "xs[1.0]" is a TypeError and "range(1.0)" is a
+// TypeError, so a program that ran in English failed as soon as it was
+// transpiled. This used to return its argument untouched, with a doc comment
+// asserting that no wrapping was needed, at thirteen call sites — while the
+// bytecode decompiler, the other Python back-end, wrapped correctly.
+//
+// An expression already known to be a whole number is left alone, so the
+// output stays readable: int(int(x)) and int(len(xs)) are noise.
 func maybeInt(expr string) string {
-	return expr
+	if alreadyInt(expr) {
+		return expr
+	}
+	return "int(" + expr + ")"
+}
+
+// alreadyInt reports whether an expression is certainly a Python int.
+func alreadyInt(expr string) bool {
+	expr = strings.TrimSpace(expr)
+	if isIntegerLiteral(expr) {
+		return true
+	}
+	for _, wrapper := range []string{"int(", "len(", "_round("} {
+		if wrapsWhole(expr, wrapper) {
+			return true
+		}
+	}
+	return false
+}
+
+// wrapsWhole reports whether expr is a single call to the given function —
+// "len(xs)" but not "len(xs) + len(ys)", whose parentheses close early.
+func wrapsWhole(expr, open string) bool {
+	if !strings.HasPrefix(expr, open) || !strings.HasSuffix(expr, ")") {
+		return false
+	}
+	depth := 0
+	for i := len(open) - 1; i < len(expr); i++ {
+		switch expr[i] {
+		case '(':
+			depth++
+		case ')':
+			depth--
+			if depth == 0 {
+				return i == len(expr)-1
+			}
+		}
+	}
+	return false
 }
 
 // ─── Operator / type name mapping ────────────────────────────────────────────
+
+// isRemainder reports whether an operator is English's remainder, which needs
+// a helper rather than Python's %.
+func isRemainder(op string) bool {
+	return op == "%" || op == "remainder"
+}
 
 // mapOperator converts an English operator string to the Python equivalent.
 func mapOperator(op string) string {
@@ -166,8 +134,8 @@ func mapOperator(op string) string {
 		return "*"
 	case "/":
 		return "/"
-	case "%", "remainder":
-		return "%"
+	// The remainder is not here: Python's % is a different operation, so it
+	// goes through a helper. See isRemainder.
 	case "**":
 		return "**"
 	case "is equal to", "==":
@@ -215,6 +183,11 @@ func mapTypeName(name string) string {
 // typeZeroValue returns the Python zero/default value literal for a given
 // English type name. Used when a struct field has no explicit default so that
 // struct instances can be created with no arguments.
+//
+// It matches what the interpreter starts such a field as, which for a
+// collection is an empty one — this used to answer None for those, so a field
+// declared as a list began as nothing in Python and as an empty list in
+// English, and the first thing done to it failed.
 func typeZeroValue(typeName string) string {
 	switch strings.ToLower(typeName) {
 	case "number", "float", "integer", "int", "unsigned integer":
@@ -223,6 +196,10 @@ func typeZeroValue(typeName string) string {
 		return `""`
 	case "boolean", "bool":
 		return "False"
+	case "list", "array":
+		return "[]"
+	case "lookup table", "table":
+		return "{}"
 	default:
 		return "None"
 	}

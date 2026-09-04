@@ -1,4 +1,9 @@
-# Test file to demonstrate error messages
+# Test file to demonstrate error messages.
+#
+# This program is meant NOT to compile: every statement below is a mistake, and
+# the point is to read what is reported. Every one of them is now caught before
+# the program runs, so only the first is shown at a time — comment out a line
+# to see the next.
 
 # This will cause an undefined variable error with suggestion
 Declare myVariable to be 10.
@@ -12,7 +17,7 @@ Declare PI to be always 3.14.
 Set PI to be 3.  # Error: cannot reassign constant
 
 # This will cause an argument count mismatch
-Declare function add that takes a and b and does the following:
+Declare function add that takes a as number and b as number, and gives back a number, and does the following:
     Return a + b.
 thats it.
 

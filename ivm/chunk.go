@@ -1,5 +1,7 @@
 package ivm
 
+import "github.com/Advik-B/english/types"
+
 // Instruction is a single VM instruction: an opcode plus a 32-bit operand.
 type Instruction struct {
 	Op      Opcode
@@ -80,3 +82,12 @@ func (c *Chunk) CurrentPos() int {
 func (c *Chunk) PatchJump(pos int, target uint32) {
 	c.Code[pos].Operand = target
 }
+
+// EnglishType implements types.TypeNamer for function values.
+func (f *FuncChunk) EnglishType() *types.TypeInfo {
+	return &types.TypeInfo{Kind: types.TypeFunction, Name: "function"}
+}
+
+// EnglishString implements runtime.Displayer so that the shared renderer can
+// print a function value without knowing what a body is made of.
+func (f *FuncChunk) EnglishString() string { return "<function " + f.Name + ">" }

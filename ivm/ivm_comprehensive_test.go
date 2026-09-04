@@ -6,13 +6,14 @@ package ivm_test
 // error hierarchy, stdlib functions, encoding, and more.
 
 import (
-	"github.com/Advik-B/english/ivm"
-	"github.com/Advik-B/english/stdlib"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/Advik-B/english/ivm"
+	"github.com/Advik-B/english/stdlib"
 )
 
 // ─── Continue / Break ────────────────────────────────────────────────────────
@@ -325,7 +326,7 @@ func TestStructMethodCall(t *testing.T) {
 	out := captureOutput(func() {
 		_, err := run(`declare Person as a structure with the following fields:
     name is a string.
-    let greet be a function that does the following:
+    let greet be a function that gives back nothing, and does the following:
         Print "Hello from", name.
     thats it.
 thats it.
@@ -507,7 +508,7 @@ func TestFinallyRunsOnTypeMismatchFromFunction(t *testing.T) {
 	out := captureOutput(func() {
 		_, err := run(`Declare NetworkError as an error type.
 Declare ValidationError as an error type.
-Declare function validate that takes x and does the following:
+Declare function validate that takes x as number, and gives back nothing, and does the following:
     Raise "bad value" as ValidationError.
 thats it.
 Try doing the following:
@@ -987,7 +988,7 @@ Print the value of loc.`)
 
 func TestFunctionMultipleParams(t *testing.T) {
 	out := captureOutput(func() {
-		_, err := run(`Declare function add that takes a and b and does the following:
+		_, err := run(`Declare function add that takes a as number and b as number, and gives back a number, and does the following:
     Return a + b.
 thats it.
 Declare r to be 0.
@@ -1004,7 +1005,7 @@ Print the value of r.`)
 
 func TestFunctionRecursion(t *testing.T) {
 	out := captureOutput(func() {
-		_, err := run(`Declare function fact that takes n and does the following:
+		_, err := run(`Declare function fact that takes n as number, and gives back a number, and does the following:
     If n is less than or equal to 1, then
         Return 1.
     thats it.
@@ -1026,7 +1027,7 @@ Print the value of r.`)
 
 func TestFunctionNoParams(t *testing.T) {
 	out := captureOutput(func() {
-		_, err := run(`Declare function greet and does the following:
+		_, err := run(`Declare function greet that gives back nothing, and does the following:
     Print "hello from function".
 thats it.
 call greet.`)
@@ -1042,7 +1043,7 @@ call greet.`)
 func TestFunctionClosures(t *testing.T) {
 	out := captureOutput(func() {
 		_, err := run(`Declare base to be 10.
-Declare function addBase that takes n and does the following:
+Declare function addBase that takes n as number, and gives back a number, and does the following:
     Return n + base.
 thats it.
 Declare r to be 0.
@@ -1068,7 +1069,7 @@ func TestImportBasic(t *testing.T) {
 
 	libPath := filepath.Join(tmpDir, "mylib.abc")
 	if err := os.WriteFile(libPath, []byte(`
-Declare function square that takes n and does the following:
+Declare function square that takes n as number, and gives back a number, and does the following:
     Return n * n.
 thats it.
 Declare MY_CONST to always be 42.
@@ -1105,7 +1106,7 @@ func TestSelectiveImport(t *testing.T) {
 
 	libPath := filepath.Join(tmpDir, "lib.abc")
 	if err := os.WriteFile(libPath, []byte(`
-Declare function add that takes a and b and does the following:
+Declare function add that takes a as number and b as number, and gives back a number, and does the following:
     Return a + b.
 thats it.
 `), 0644); err != nil {
@@ -1287,7 +1288,7 @@ Print the item at position 99 in arr.`)
 }
 
 func TestFunctionArgCountError(t *testing.T) {
-	_, err := run(`Declare function add that takes a and b and does the following:
+	_, err := run(`Declare function add that takes a as number and b as number, and gives back a number, and does the following:
     Return a + b.
 thats it.
 Declare result to be 0.
@@ -1394,7 +1395,7 @@ Print "".`)
 // ─── Regression: correct output matches tree-walk evaluator ─────────────────
 
 func TestRegressionFibonacci(t *testing.T) {
-	src := `Declare function fib that takes n and does the following:
+	src := `Declare function fib that takes n as number, and gives back a number, and does the following:
     If n is less than or equal to 1, then
         Return n.
     thats it.
@@ -1508,241 +1509,239 @@ thats it.`
 	}
 }
 
-
-
 // ─── Time stdlib ─────────────────────────────────────────────────────────────
 
 func TestCurrentTime(t *testing.T) {
-out := captureOutput(func() {
-_, err := run(`Declare ts to be current_time().
+	out := captureOutput(func() {
+		_, err := run(`Declare ts to be current_time().
 Print the value of ts.`)
-if err != nil {
-t.Errorf("unexpected error: %v", err)
-}
-})
-// current_time() returns a date-time string like "2006-01-02 15:04:05"
-if len(strings.TrimSpace(out)) < 10 {
-t.Errorf("expected non-empty time string, got: %q", out)
-}
+		if err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+	})
+	// current_time() returns a date-time string like "2006-01-02 15:04:05"
+	if len(strings.TrimSpace(out)) < 10 {
+		t.Errorf("expected non-empty time string, got: %q", out)
+	}
 }
 
 func TestElapsedTime(t *testing.T) {
-out := captureOutput(func() {
-_, err := run(`Declare elapsed to be elapsed_time().
+	out := captureOutput(func() {
+		_, err := run(`Declare elapsed to be elapsed_time().
 Print the value of elapsed.`)
-if err != nil {
-t.Errorf("unexpected error: %v", err)
-}
-})
-if strings.TrimSpace(out) == "" {
-t.Errorf("expected elapsed time value, got empty output")
-}
+		if err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+	})
+	if strings.TrimSpace(out) == "" {
+		t.Errorf("expected elapsed time value, got empty output")
+	}
 }
 
 // ─── Sleep / Wait statement ───────────────────────────────────────────────────
 
 func TestSleepMs(t *testing.T) {
-_, err := run(`Sleep for 10ms.`)
-if err != nil {
-t.Fatalf("unexpected error from 'Sleep for 10ms.': %v", err)
-}
+	_, err := run(`Sleep for 10ms.`)
+	if err != nil {
+		t.Fatalf("unexpected error from 'Sleep for 10ms.': %v", err)
+	}
 }
 
 func TestSleepShortFormUnits(t *testing.T) {
-cases := []string{
-`Sleep for 0s.`,
-`Sleep for 0m.`,
-`Sleep for 0h.`,
-}
-for _, src := range cases {
-_, err := run(src)
-if err != nil {
-t.Errorf("%q: unexpected error: %v", src, err)
-}
-}
+	cases := []string{
+		`Sleep for 0s.`,
+		`Sleep for 0m.`,
+		`Sleep for 0h.`,
+	}
+	for _, src := range cases {
+		_, err := run(src)
+		if err != nil {
+			t.Errorf("%q: unexpected error: %v", src, err)
+		}
+	}
 }
 
 func TestSleepLongFormUnits(t *testing.T) {
-cases := []string{
-`Sleep for 0 milliseconds.`,
-`Sleep for 0 millisecond.`,
-`Sleep for 0 seconds.`,
-`Sleep for 0 second.`,
-`Sleep for 0 minutes.`,
-`Sleep for 0 minute.`,
-`Sleep for 0 hours.`,
-`Sleep for 0 hour.`,
-}
-for _, src := range cases {
-_, err := run(src)
-if err != nil {
-t.Errorf("%q: unexpected error: %v", src, err)
-}
-}
+	cases := []string{
+		`Sleep for 0 milliseconds.`,
+		`Sleep for 0 millisecond.`,
+		`Sleep for 0 seconds.`,
+		`Sleep for 0 second.`,
+		`Sleep for 0 minutes.`,
+		`Sleep for 0 minute.`,
+		`Sleep for 0 hours.`,
+		`Sleep for 0 hour.`,
+	}
+	for _, src := range cases {
+		_, err := run(src)
+		if err != nil {
+			t.Errorf("%q: unexpected error: %v", src, err)
+		}
+	}
 }
 
 func TestWaitAlias(t *testing.T) {
-cases := []string{
-`Wait for 0ms.`,
-`Wait for 0 seconds.`,
-}
-for _, src := range cases {
-_, err := run(src)
-if err != nil {
-t.Errorf("%q: unexpected error: %v", src, err)
-}
-}
+	cases := []string{
+		`Wait for 0ms.`,
+		`Wait for 0 seconds.`,
+	}
+	for _, src := range cases {
+		_, err := run(src)
+		if err != nil {
+			t.Errorf("%q: unexpected error: %v", src, err)
+		}
+	}
 }
 
 func TestSleepNaturalShorthand(t *testing.T) {
-// "a second" and "an hour" shorthands (0-second versions for test speed)
-// "Sleep for a second." sleeps 1s which is too slow for unit tests,
-// so we only verify the parse succeeds via a 0-duration equivalent.
-_, err := run(`Sleep for 0 seconds.`)
-if err != nil {
-t.Fatalf("unexpected error: %v", err)
-}
+	// "a second" and "an hour" shorthands (0-second versions for test speed)
+	// "Sleep for a second." sleeps 1s which is too slow for unit tests,
+	// so we only verify the parse succeeds via a 0-duration equivalent.
+	_, err := run(`Sleep for 0 seconds.`)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 }
 
 func TestSleepBadUnit(t *testing.T) {
-_, err := run(`Sleep for 1x.`)
-if err == nil {
-t.Fatal("expected parse error for unknown time unit")
-}
+	_, err := run(`Sleep for 1x.`)
+	if err == nil {
+		t.Fatal("expected parse error for unknown time unit")
+	}
 }
 
 func TestSleepMissingFor(t *testing.T) {
-_, err := run(`Sleep 1s.`)
-if err == nil {
-t.Fatal("expected parse error when 'for' keyword is missing")
-}
+	_, err := run(`Sleep 1s.`)
+	if err == nil {
+		t.Fatal("expected parse error when 'for' keyword is missing")
+	}
 }
 
 func TestSleepInsideLoop(t *testing.T) {
-_, err := run(`Declare i to be 0.
+	_, err := run(`Declare i to be 0.
 Repeat the following 2 times:
     Sleep for 0ms.
     Set i to be i + 1.
 thats it.`)
-if err != nil {
-t.Fatalf("unexpected error sleeping inside loop: %v", err)
-}
+	if err != nil {
+		t.Fatalf("unexpected error sleeping inside loop: %v", err)
+	}
 }
 
 func TestSleepInsideFunction(t *testing.T) {
-_, err := run(`Declare function pause that does the following:
+	_, err := run(`Declare function pause that gives back nothing, and does the following:
     Sleep for 0ms.
 thats it.
 Call pause.`)
-if err != nil {
-t.Fatalf("unexpected error sleeping inside function: %v", err)
-}
+	if err != nil {
+		t.Fatalf("unexpected error sleeping inside function: %v", err)
+	}
 }
 
 // ─── Politeness (parser-level) ────────────────────────────────────────────────
 
 func TestPolitePrefix_Please(t *testing.T) {
-out := captureOutput(func() {
-_, err := run(`Please print "Hello".`)
-if err != nil {
-t.Errorf("unexpected error: %v", err)
-}
-})
-if !strings.Contains(out, "Hello") {
-t.Errorf("expected 'Hello' in output, got: %q", out)
-}
+	out := captureOutput(func() {
+		_, err := run(`Please print "Hello".`)
+		if err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+	})
+	if !strings.Contains(out, "Hello") {
+		t.Errorf("expected 'Hello' in output, got: %q", out)
+	}
 }
 
 func TestPolitePrefix_Kindly(t *testing.T) {
-out := captureOutput(func() {
-_, err := run(`Kindly print "World".`)
-if err != nil {
-t.Errorf("unexpected error: %v", err)
-}
-})
-if !strings.Contains(out, "World") {
-t.Errorf("expected 'World' in output, got: %q", out)
-}
+	out := captureOutput(func() {
+		_, err := run(`Kindly print "World".`)
+		if err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+	})
+	if !strings.Contains(out, "World") {
+		t.Errorf("expected 'World' in output, got: %q", out)
+	}
 }
 
 func TestPolitePrefix_CouldYou(t *testing.T) {
-out := captureOutput(func() {
-_, err := run(`Could you print "CouldYou".`)
-if err != nil {
-t.Errorf("unexpected error: %v", err)
-}
-})
-if !strings.Contains(out, "CouldYou") {
-t.Errorf("expected 'CouldYou' in output, got: %q", out)
-}
+	out := captureOutput(func() {
+		_, err := run(`Could you print "CouldYou".`)
+		if err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+	})
+	if !strings.Contains(out, "CouldYou") {
+		t.Errorf("expected 'CouldYou' in output, got: %q", out)
+	}
 }
 
 func TestPolitePrefix_WouldYouKindly(t *testing.T) {
-out := captureOutput(func() {
-_, err := run(`Would you kindly print "WouldYouKindly".`)
-if err != nil {
-t.Errorf("unexpected error: %v", err)
-}
-})
-if !strings.Contains(out, "WouldYouKindly") {
-t.Errorf("expected 'WouldYouKindly' in output, got: %q", out)
-}
+	out := captureOutput(func() {
+		_, err := run(`Would you kindly print "WouldYouKindly".`)
+		if err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+	})
+	if !strings.Contains(out, "WouldYouKindly") {
+		t.Errorf("expected 'WouldYouKindly' in output, got: %q", out)
+	}
 }
 
 func TestPolitePrefix_InsideLoop(t *testing.T) {
-out := captureOutput(func() {
-_, err := run(`Please declare i to be 0.
+	out := captureOutput(func() {
+		_, err := run(`Please declare i to be 0.
 Please repeat the following 3 times:
     Please set i to be i + 1.
 thats it.
 Please print the value of i.`)
-if err != nil {
-t.Errorf("unexpected error: %v", err)
-}
-})
-if !strings.Contains(out, "3") {
-t.Errorf("expected '3' in output, got: %q", out)
-}
+		if err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+	})
+	if !strings.Contains(out, "3") {
+		t.Errorf("expected '3' in output, got: %q", out)
+	}
 }
 
 func TestPolitePrefix_InsideFunction(t *testing.T) {
-out := captureOutput(func() {
-_, err := run(`Please declare function greet that does the following:
+	out := captureOutput(func() {
+		_, err := run(`Please declare function greet that gives back nothing, and does the following:
     Please print "Hi".
 thats it.
 Please call greet.`)
-if err != nil {
-t.Errorf("unexpected error: %v", err)
-}
-})
-if !strings.Contains(out, "Hi") {
-t.Errorf("expected 'Hi' in output, got: %q", out)
-}
+		if err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+	})
+	if !strings.Contains(out, "Hi") {
+		t.Errorf("expected 'Hi' in output, got: %q", out)
+	}
 }
 
 func TestPolitenessStats_AllPolite(t *testing.T) {
-// All statements polite – should compile and run fine.
-_, err := run(`Please print "A".
+	// All statements polite – should compile and run fine.
+	_, err := run(`Please print "A".
 Please print "B".`)
-if err != nil {
-t.Fatalf("unexpected error: %v", err)
-}
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 }
 
 func TestPolitenessStats_NonePolite(t *testing.T) {
-// No politeness prefix – still parses/runs fine (prefix is always optional).
-_, err := run(`Print "A".
+	// No politeness prefix – still parses/runs fine (prefix is always optional).
+	_, err := run(`Print "A".
 Print "B".`)
-if err != nil {
-t.Fatalf("unexpected error: %v", err)
-}
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 }
 
 func TestPolitenessStats_CommentsExcluded(t *testing.T) {
-// Comments should not count toward the politeness tally.
-_, err := run(`# This is a comment.
+	// Comments should not count toward the politeness tally.
+	_, err := run(`# This is a comment.
 Please print "Hello".`)
-if err != nil {
-t.Fatalf("unexpected error: %v", err)
-}
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 }

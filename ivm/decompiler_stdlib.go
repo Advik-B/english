@@ -175,8 +175,6 @@ func (d *decompiler) fmtFuncCall(name string, args []string) string {
 		return fmt.Sprintf("list(reversed(%s))", a(0))
 	case "append":
 		return fmt.Sprintf("%s + [%s]", a(0), a(1))
-	case "pop":
-		return fmt.Sprintf("%s[:-1]", a(0))
 	case "remove":
 		return fmt.Sprintf("[v for i, v in enumerate(%s) if i != int(%s)]", a(0), a(1))
 	case "insert":
@@ -224,12 +222,22 @@ func (d *decompiler) fmtFuncCall(name string, args []string) string {
 	// I/O
 	case "ask":
 		return fmt.Sprintf("input(%s)", a(0))
-	case "read_file":
-		d.helpers["_read_file"] = true
-		return fmt.Sprintf("_read_file(%s)", a(0))
-	case "write_file":
-		d.helpers["_write_file"] = true
-		return fmt.Sprintf("_write_file(%s, %s)", a(0), a(1))
+
+	// Time
+	//
+	// The whole module was missing here, so decompiling a stripped bytecode
+	// file that called one of these emitted a bare name that does not exist
+	// in Python.
+	case "sleep":
+		d.needsTime = true
+		return fmt.Sprintf("time.sleep(%s)", a(0))
+	case "current_time":
+		d.needsTime = true
+		return "time.strftime(\"%Y-%m-%d %H:%M:%S\")"
+	case "elapsed_time":
+		d.needsTime = true
+		d.helpers["_program_start"] = true
+		return "(time.time() - _program_start)"
 	}
 	return fmt.Sprintf("%s(%s)", sanitizeDecompIdent(name), joined)
 }

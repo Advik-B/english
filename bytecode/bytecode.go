@@ -7,14 +7,11 @@ package bytecode
 import (
 	"bytes"
 	"encoding/binary"
-	"github.com/Advik-B/english/ast"
 	"fmt"
 	"io"
 	"math"
-	"os"
-	"path/filepath"
 
-	"github.com/dchest/siphash"
+	"github.com/Advik-B/english/ast"
 )
 
 // Magic bytes to identify .101 files (binary identifier)
@@ -22,15 +19,6 @@ var MagicBytes = []byte{0x10, 0x1E, 0x4E, 0x47}
 
 // Version of the bytecode format
 const FormatVersion uint8 = 1
-
-// Cache configuration
-const (
-	// CacheHashBytes is the number of bytes from SipHash used for cache filenames.
-	// SipHash produces an 8-byte (64-bit) hash, which provides good collision resistance
-	// while being much faster than cryptographic hashes like SHA-256.
-	// Using the full 8 bytes as per PEP 552 recommendations.
-	CacheHashBytes = 8
-)
 
 // Node type identifiers
 const (
@@ -158,7 +146,7 @@ func (e *Encoder) encodeStatement(stmt ast.Statement) error {
 	case *ast.TypedVariableDecl:
 		e.buf.WriteByte(NodeTypedVariableDecl)
 		e.writeString(s.Name)
-		e.writeString(s.TypeName)
+		e.writeString(ast.TypeName(s.Type))
 		e.writeBool(s.IsConstant)
 		return e.encodeExpression(s.Value)
 
@@ -176,8 +164,9 @@ func (e *Encoder) encodeStatement(stmt ast.Statement) error {
 	case *ast.FunctionDecl:
 		e.buf.WriteByte(NodeFunctionDecl)
 		e.writeString(s.Name)
-		e.writeUint32(uint32(len(s.Parameters)))
-		for _, param := range s.Parameters {
+		paramNames := s.ParamNames()
+		e.writeUint32(uint32(len(paramNames)))
+		for _, param := range paramNames {
 			e.writeString(param)
 		}
 		body := filterComments(s.Body)
@@ -190,6 +179,11 @@ func (e *Encoder) encodeStatement(stmt ast.Statement) error {
 		return nil
 
 	case *ast.CallStatement:
+		if s.FunctionCall == nil {
+			// The statement holds a MethodCall, which this format cannot
+			// represent. Report it instead of dereferencing a nil pointer.
+			return fmt.Errorf("bytecode: method calls are not supported by format version %d", FormatVersion)
+		}
 		e.buf.WriteByte(NodeCallStatement)
 		return e.encodeFunctionCall(s.FunctionCall)
 
@@ -425,8 +419,44 @@ func (e *Encoder) encodeExpression(expr ast.Expression) error {
 
 // Decoder deserializes binary bytecode to AST
 type Decoder struct {
-	reader io.Reader
+	reader *bytes.Reader
+	// depth guards against a crafted file whose nested statements/expressions
+	// recurse deeply enough to exhaust the Go stack, which is a fatal,
+	// unrecoverable error rather than something a caller can handle.
+	depth int
 }
+
+// maxDecodeDepth bounds statement/expression nesting in a bytecode file.
+const maxDecodeDepth = 1000
+
+// remaining reports how many bytes of input are still unread. It is the budget
+// used to sanity-check length prefixes before allocating.
+func (d *Decoder) remaining() int { return d.reader.Len() }
+
+// checkCount rejects an element count that cannot possibly be satisfied by the
+// bytes left in the file. Every element costs at least one byte, so a count
+// larger than the remaining input is corrupt. Without this, a hostile or
+// truncated file could name a count of 4 billion and trigger a multi-gigabyte
+// allocation before the truncation was ever noticed.
+func (d *Decoder) checkCount(count uint32, what string) error {
+	if int64(count) > int64(d.remaining()) {
+		return fmt.Errorf("corrupt bytecode: %s count %d exceeds %d remaining byte(s)",
+			what, count, d.remaining())
+	}
+	return nil
+}
+
+// enter increments the recursion depth, refusing to go deeper than maxDecodeDepth.
+func (d *Decoder) enter() error {
+	d.depth++
+	if d.depth > maxDecodeDepth {
+		return fmt.Errorf("corrupt bytecode: nesting deeper than %d levels", maxDecodeDepth)
+	}
+	return nil
+}
+
+// leave undoes enter.
+func (d *Decoder) leave() { d.depth-- }
 
 // NewDecoder creates a new bytecode decoder
 func NewDecoder(data []byte) *Decoder {
@@ -469,6 +499,9 @@ func (d *Decoder) readByte() (byte, error) {
 func (d *Decoder) readString() (string, error) {
 	length, err := d.readUint32()
 	if err != nil {
+		return "", err
+	}
+	if err := d.checkCount(length, "string length"); err != nil {
 		return "", err
 	}
 	data := make([]byte, length)
@@ -516,6 +549,9 @@ func (d *Decoder) decodeProgram() (*ast.Program, error) {
 		return nil, err
 	}
 
+	if err := d.checkCount(count, "statements"); err != nil {
+		return nil, err
+	}
 	statements := make([]ast.Statement, count)
 	for i := uint32(0); i < count; i++ {
 		stmt, err := d.decodeStatement()
@@ -529,6 +565,11 @@ func (d *Decoder) decodeProgram() (*ast.Program, error) {
 }
 
 func (d *Decoder) decodeStatement() (ast.Statement, error) {
+	if err := d.enter(); err != nil {
+		return nil, err
+	}
+	defer d.leave()
+
 	nodeType, err := d.readByte()
 	if err != nil {
 		return nil, err
@@ -567,7 +608,7 @@ func (d *Decoder) decodeStatement() (ast.Statement, error) {
 		if err != nil {
 			return nil, err
 		}
-		return &ast.TypedVariableDecl{Name: name, TypeName: typeName, IsConstant: isConstant, Value: value}, nil
+		return &ast.TypedVariableDecl{Name: name, Type: ast.NewTypeExpr(typeName), IsConstant: isConstant, Value: value}, nil
 
 	case NodeErrorTypeDecl:
 		name, err := d.readString()
@@ -600,6 +641,9 @@ func (d *Decoder) decodeStatement() (ast.Statement, error) {
 		if err != nil {
 			return nil, err
 		}
+		if err := d.checkCount(paramCount, "params"); err != nil {
+			return nil, err
+		}
 		params := make([]string, paramCount)
 		for i := uint32(0); i < paramCount; i++ {
 			params[i], err = d.readString()
@@ -611,6 +655,9 @@ func (d *Decoder) decodeStatement() (ast.Statement, error) {
 		if err != nil {
 			return nil, err
 		}
+		if err := d.checkCount(bodyCount, "body"); err != nil {
+			return nil, err
+		}
 		body := make([]ast.Statement, bodyCount)
 		for i := uint32(0); i < bodyCount; i++ {
 			body[i], err = d.decodeStatement()
@@ -618,7 +665,7 @@ func (d *Decoder) decodeStatement() (ast.Statement, error) {
 				return nil, err
 			}
 		}
-		return &ast.FunctionDecl{Name: name, Parameters: params, Body: body}, nil
+		return &ast.FunctionDecl{Name: name, Params: ast.ParamsFromNames(params), Body: body}, nil
 
 	case NodeCallStatement:
 		fc, err := d.decodeFunctionCall()
@@ -636,6 +683,9 @@ func (d *Decoder) decodeStatement() (ast.Statement, error) {
 		if err != nil {
 			return nil, err
 		}
+		if err := d.checkCount(thenCount, "thenBody"); err != nil {
+			return nil, err
+		}
 		thenBody := make([]ast.Statement, thenCount)
 		for i := uint32(0); i < thenCount; i++ {
 			thenBody[i], err = d.decodeStatement()
@@ -647,6 +697,9 @@ func (d *Decoder) decodeStatement() (ast.Statement, error) {
 		if err != nil {
 			return nil, err
 		}
+		if err := d.checkCount(elseIfCount, "elseIfParts"); err != nil {
+			return nil, err
+		}
 		elseIfParts := make([]*ast.ElseIfPart, elseIfCount)
 		for i := uint32(0); i < elseIfCount; i++ {
 			elseIfParts[i], err = d.decodeElseIfPart()
@@ -656,6 +709,9 @@ func (d *Decoder) decodeStatement() (ast.Statement, error) {
 		}
 		elseCount, err := d.readUint32()
 		if err != nil {
+			return nil, err
+		}
+		if err := d.checkCount(elseCount, "elseBody"); err != nil {
 			return nil, err
 		}
 		elseBody := make([]ast.Statement, elseCount)
@@ -676,6 +732,9 @@ func (d *Decoder) decodeStatement() (ast.Statement, error) {
 		if err != nil {
 			return nil, err
 		}
+		if err := d.checkCount(bodyCount, "body"); err != nil {
+			return nil, err
+		}
 		body := make([]ast.Statement, bodyCount)
 		for i := uint32(0); i < bodyCount; i++ {
 			body[i], err = d.decodeStatement()
@@ -692,6 +751,9 @@ func (d *Decoder) decodeStatement() (ast.Statement, error) {
 		}
 		bodyCount, err := d.readUint32()
 		if err != nil {
+			return nil, err
+		}
+		if err := d.checkCount(bodyCount, "body"); err != nil {
 			return nil, err
 		}
 		body := make([]ast.Statement, bodyCount)
@@ -714,6 +776,9 @@ func (d *Decoder) decodeStatement() (ast.Statement, error) {
 		}
 		bodyCount, err := d.readUint32()
 		if err != nil {
+			return nil, err
+		}
+		if err := d.checkCount(bodyCount, "body"); err != nil {
 			return nil, err
 		}
 		body := make([]ast.Statement, bodyCount)
@@ -753,6 +818,9 @@ func (d *Decoder) decodeStatement() (ast.Statement, error) {
 		if err != nil {
 			return nil, err
 		}
+		if err := d.checkCount(count, "values"); err != nil {
+			return nil, err
+		}
 		values := make([]ast.Expression, count)
 		for i := uint32(0); i < count; i++ {
 			value, err := d.decodeExpression()
@@ -785,6 +853,9 @@ func (d *Decoder) decodeStatement() (ast.Statement, error) {
 		}
 		itemCount, err := d.readUint32()
 		if err != nil {
+			return nil, err
+		}
+		if err := d.checkCount(itemCount, "items"); err != nil {
 			return nil, err
 		}
 		items := make([]string, itemCount)
@@ -831,6 +902,9 @@ func (d *Decoder) decodeElseIfPart() (*ast.ElseIfPart, error) {
 	if err != nil {
 		return nil, err
 	}
+	if err := d.checkCount(bodyCount, "body"); err != nil {
+		return nil, err
+	}
 	body := make([]ast.Statement, bodyCount)
 	for i := uint32(0); i < bodyCount; i++ {
 		body[i], err = d.decodeStatement()
@@ -858,6 +932,9 @@ func (d *Decoder) decodeFunctionCall() (*ast.FunctionCall, error) {
 	if err != nil {
 		return nil, err
 	}
+	if err := d.checkCount(argCount, "args"); err != nil {
+		return nil, err
+	}
 	args := make([]ast.Expression, argCount)
 	for i := uint32(0); i < argCount; i++ {
 		args[i], err = d.decodeExpression()
@@ -869,6 +946,11 @@ func (d *Decoder) decodeFunctionCall() (*ast.FunctionCall, error) {
 }
 
 func (d *Decoder) decodeExpression() (ast.Expression, error) {
+	if err := d.enter(); err != nil {
+		return nil, err
+	}
+	defer d.leave()
+
 	nodeType, err := d.readByte()
 	if err != nil {
 		return nil, err
@@ -899,6 +981,9 @@ func (d *Decoder) decodeExpression() (ast.Expression, error) {
 	case NodeListLiteral:
 		count, err := d.readUint32()
 		if err != nil {
+			return nil, err
+		}
+		if err := d.checkCount(count, "elements"); err != nil {
 			return nil, err
 		}
 		elements := make([]ast.Expression, count)
@@ -953,6 +1038,9 @@ func (d *Decoder) decodeExpression() (ast.Expression, error) {
 		if err != nil {
 			return nil, err
 		}
+		if err := d.checkCount(argCount, "args"); err != nil {
+			return nil, err
+		}
 		args := make([]ast.Expression, argCount)
 		for i := uint32(0); i < argCount; i++ {
 			args[i], err = d.decodeExpression()
@@ -1001,113 +1089,4 @@ func (d *Decoder) decodeExpression() (ast.Expression, error) {
 	default:
 		return nil, fmt.Errorf("unknown expression node type: %d", nodeType)
 	}
-}
-
-// Cache management functions for __engcache__ directory
-
-const CacheDir = "__engcache__"
-
-// GetCachePath returns the cache file path for a given source file.
-// For example: "examples/math_library.abc" -> "__engcache__/39ccbccfa9db97df_math_library.abc.101"
-// Uses SipHash for fast, non-cryptographic hashing as per PEP 552.
-func GetCachePath(sourcePath string) string {
-	// Use SipHash for fast hashing (as recommended by PEP 552)
-	// Using fixed keys for deterministic hashing across runs (required for cache persistence)
-	key0 := uint64(0x0706050403020100)
-	key1 := uint64(0x0f0e0d0c0b0a0908)
-
-	// Compute SipHash of the source path
-	hash := siphash.Hash(key0, key1, []byte(sourcePath))
-
-	// Convert hash to hex string directly (more efficient than byte array conversion)
-	hashStr := fmt.Sprintf("%016x", hash)
-
-	// Get the base name for readability
-	baseName := filepath.Base(sourcePath)
-
-	// Create cache filename: <hash>_<basename>.101
-	cacheFileName := fmt.Sprintf("%s_%s.101", hashStr, baseName)
-	return filepath.Join(CacheDir, cacheFileName)
-}
-
-// IsCacheValid checks if the cached bytecode is up-to-date by comparing modification times.
-// Returns true if the cache exists and is newer than or equal to the source file.
-func IsCacheValid(sourcePath, cachePath string) bool {
-	sourceInfo, err := os.Stat(sourcePath)
-	if err != nil {
-		return false
-	}
-
-	cacheInfo, err := os.Stat(cachePath)
-	if err != nil {
-		return false
-	}
-
-	// Cache is valid if it's newer than or equal to the source
-	return !cacheInfo.ModTime().Before(sourceInfo.ModTime())
-}
-
-// WriteBytecodeCache writes bytecode to the cache directory.
-// Creates the cache directory if it doesn't exist.
-func WriteBytecodeCache(cachePath string, data []byte) error {
-	// Create cache directory if it doesn't exist
-	cacheDir := filepath.Dir(cachePath)
-	if err := os.MkdirAll(cacheDir, 0755); err != nil {
-		return fmt.Errorf("failed to create cache directory: %w", err)
-	}
-
-	// Write bytecode to cache file
-	if err := os.WriteFile(cachePath, data, 0644); err != nil {
-		return fmt.Errorf("failed to write cache file: %w", err)
-	}
-
-	return nil
-}
-
-// ReadBytecodeCache reads bytecode from the cache.
-func ReadBytecodeCache(cachePath string) ([]byte, error) {
-	data, err := os.ReadFile(cachePath)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read cache file: %w", err)
-	}
-	return data, nil
-}
-
-// LoadCachedOrParse attempts to load bytecode from cache, or parses the source file if cache is invalid.
-// The parseFunc parameter receives the sourcePath and should parse it into an AST Program.
-// Returns the parsed Program AST and a boolean indicating whether cache was used.
-func LoadCachedOrParse(sourcePath string, parseFunc func(string) (*ast.Program, error)) (*ast.Program, bool, error) {
-	cachePath := GetCachePath(sourcePath)
-
-	// Check if cache is valid
-	if IsCacheValid(sourcePath, cachePath) {
-		// Try to load from cache
-		data, err := ReadBytecodeCache(cachePath)
-		if err == nil {
-			decoder := NewDecoder(data)
-			program, err := decoder.Decode()
-			if err == nil {
-				// Successfully loaded from cache
-				return program, true, nil
-			}
-			// Cache is corrupted, will re-parse and cache
-		}
-	}
-
-	// Cache miss or invalid - parse the source file
-	program, err := parseFunc(sourcePath)
-	if err != nil {
-		return nil, false, err
-	}
-
-	// Encode and cache the bytecode
-	encoder := NewEncoder()
-	data, err := encoder.Encode(program)
-	if err == nil {
-		// Ignore cache write errors - caching is an optimization, not critical for correctness
-		// Failures might occur due to permissions, disk space, etc., but shouldn't block execution
-		_ = WriteBytecodeCache(cachePath, data)
-	}
-
-	return program, false, nil
 }

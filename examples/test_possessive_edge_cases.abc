@@ -4,7 +4,7 @@ declare Book as a structure with the following fields:
     title is a string.
     author is a string.
     
-    let describe be a function that does the following:
+    let describe be a function that gives back nothing, and does the following:
         print "Book:", title, "by", author.
     thats it.
 thats it.

@@ -1,16 +1,16 @@
 package cmd
 
 import (
-	"github.com/Advik-B/english/bytecode"
-	"github.com/Advik-B/english/bytecode/disasm"
-	"github.com/Advik-B/english/ivm"
-	"github.com/Advik-B/english/parser"
-	"github.com/Advik-B/english/stacktraces"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 
+	"github.com/Advik-B/english/bytecode"
+	"github.com/Advik-B/english/bytecode/disasm"
+	"github.com/Advik-B/english/ivm"
+	"github.com/Advik-B/english/parser"
+	"github.com/Advik-B/english/stacktraces"
 	"github.com/spf13/cobra"
 )
 
@@ -62,9 +62,9 @@ becomes __tmp0 = f3(0); __tmp1 = f2(__tmp0); x = f1(__tmp1)).  Use
 				os.Exit(1)
 			}
 
-			// Try ivm v2 format first; if recognised, extract the embedded
-			// source and show the AST-level view from it (inspect = AST view).
-			if len(data) >= 5 && data[4] == ivm.InstructionFormatVersion {
+			// The instruction format carries the original source; extract it
+			// and show the AST-level view from that (inspect = AST view).
+			if ivm.IsInstructionFormat(data) {
 				_, embeddedSrc, decodeErr := ivm.DecodeFileAll(data)
 				if decodeErr != nil {
 					fmt.Fprintf(os.Stderr, "Error decoding bytecode: %v\n", decodeErr)
@@ -84,7 +84,7 @@ becomes __tmp0 = f3(0); __tmp1 = f2(__tmp0); x = f1(__tmp1)).  Use
 				p := parser.NewParser(tokens)
 				program, parseErr := p.Parse()
 				if parseErr != nil {
-					stacktraces.Print(parseErr)
+					report(parseErr)
 					os.Exit(1)
 				}
 				fmt.Print(disasm.Disassemble(program, filename, useColor, inspectFriendly, inspectImportDepth, inspectUnrollDepth))
@@ -113,7 +113,7 @@ becomes __tmp0 = f3(0); __tmp1 = f2(__tmp0); x = f1(__tmp1)).  Use
 		p := parser.NewParser(tokens)
 		program, err := p.Parse()
 		if err != nil {
-			stacktraces.Print(err)
+			report(err)
 			os.Exit(1)
 		}
 		fmt.Print(disasm.Disassemble(program, filename, useColor, inspectFriendly, inspectImportDepth, inspectUnrollDepth))

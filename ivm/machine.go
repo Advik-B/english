@@ -1,823 +1,926 @@
 package ivm
 
 import (
-"bufio"
-"github.com/Advik-B/english/astvm/types"
-"fmt"
-"os"
-"strings"
+	"fmt"
+	"strings"
+
+	"github.com/Advik-B/english/runtime"
+	"github.com/Advik-B/english/types"
 )
 
 // ─── Machine ──────────────────────────────────────────────────────────────────
 
 type tryFrame struct {
-catchOffset   uint32
-finallyOffset uint32 // 0 = no finally block; otherwise offset of the finally body start
-errorType     string // "" = catch-all; otherwise the required error type name
-stackHeight   int
-envDepth      int // number of envs on envStack when TRY_BEGIN was emitted
+	catchOffset   uint32
+	finallyOffset uint32 // 0 = no finally block; otherwise offset of the finally body start
+	errorType     string // "" = catch-all; otherwise the required error type name
+	stackHeight   int
+	envDepth      int // number of envs on envStack when TRY_BEGIN was emitted
 }
 
 type callFrame struct {
-chunk        *Chunk
-ip           int
-stack        []interface{}
-env          *ivmEnv
-envStack     []*ivmEnv // scopes pushed during this frame
-tryStack     []tryFrame
-line         int
-name         string
-// pendingError is set to the *types.ErrorValue that needs to be re-raised after a
-// finally block runs.  This is used when a typed catch handler did not match the
-// error: handleError jumps to the finally body and stores the original error here;
-// OP_RERAISE_PENDING reads and clears it at the end of the finally body.
-pendingError *types.ErrorValue
+	chunk    *Chunk
+	ip       int
+	stack    []interface{}
+	env      *ivmEnv
+	envStack []*ivmEnv // scopes pushed during this frame
+	tryStack []tryFrame
+	line     int
+	name     string
+	// pendingError is set to the *types.ErrorValue that needs to be re-raised after a
+	// finally block runs.  This is used when a typed catch handler did not match the
+	// error: handleError jumps to the finally body and stores the original error here;
+	// OP_RERAISE_PENDING reads and clears it at the end of the finally body.
+	pendingError *types.ErrorValue
 }
 
 // Machine executes a compiled Chunk.
 type Machine struct {
-frames  []*callFrame
-cur     *callFrame
-builtin BuiltinFunc
-// importHandler is called for OP_IMPORT; if nil, imports are silently skipped.
-importHandler func(path string, items []interface{}, importAll, isSafe bool, env *ivmEnv) error
+	frames  []*callFrame
+	cur     *callFrame
+	builtin BuiltinFunc
+	// importHandler is called for OP_IMPORT; if nil, imports are silently skipped.
+	importHandler func(path string, items []interface{}, importAll, isSafe bool, env *ivmEnv) error
+	// stackFault is set when an instruction popped an empty operand stack or
+	// scope stack, which only a corrupt chunk can cause. step converts it into
+	// a runtime error instead of letting the VM panic.
+	stackFault bool
 }
 
 func newMachine(builtin BuiltinFunc) *Machine {
-return &Machine{builtin: builtin}
+	return &Machine{builtin: builtin}
 }
 
 func (m *Machine) push(v interface{}) {
-m.cur.stack = append(m.cur.stack, v)
+	m.cur.stack = append(m.cur.stack, v)
 }
 
+// pop removes and returns the top of the operand stack.
+//
+// A well-formed chunk never pops an empty stack, but a corrupt or truncated one
+// can. Rather than panicking — which no caller could recover from — an
+// underflow records a fault that step turns into an ordinary runtime error.
 func (m *Machine) pop() interface{} {
-n := len(m.cur.stack) - 1
-v := m.cur.stack[n]
-m.cur.stack = m.cur.stack[:n]
-return v
+	n := len(m.cur.stack) - 1
+	if n < 0 {
+		m.stackFault = true
+		return nil
+	}
+	v := m.cur.stack[n]
+	m.cur.stack = m.cur.stack[:n]
+	return v
 }
 
+// peek returns the top of the operand stack without removing it, recording a
+// fault rather than panicking if the stack is empty.
 func (m *Machine) peek() interface{} {
-return m.cur.stack[len(m.cur.stack)-1]
+	if len(m.cur.stack) == 0 {
+		m.stackFault = true
+		return nil
+	}
+	return m.cur.stack[len(m.cur.stack)-1]
 }
 
 func (m *Machine) env() *ivmEnv {
-return m.cur.env
+	return m.cur.env
 }
 
 func (m *Machine) pushEnv() {
-child := m.cur.env.newChild()
-m.cur.envStack = append(m.cur.envStack, m.cur.env)
-m.cur.env = child
+	child := m.cur.env.newChild()
+	m.cur.envStack = append(m.cur.envStack, m.cur.env)
+	m.cur.env = child
 }
 
+// popEnv leaves the innermost scope, recording a fault rather than panicking if
+// a corrupt chunk pops more scopes than it pushed.
 func (m *Machine) popEnv() {
-n := len(m.cur.envStack) - 1
-m.cur.env = m.cur.envStack[n]
-m.cur.envStack = m.cur.envStack[:n]
+	n := len(m.cur.envStack) - 1
+	if n < 0 {
+		m.stackFault = true
+		return
+	}
+	m.cur.env = m.cur.envStack[n]
+	m.cur.envStack = m.cur.envStack[:n]
 }
 
 func (m *Machine) runtimeErr(msg string) error {
-return &machineError{message: msg, line: m.cur.line, frame: m.cur.name}
+	return &machineError{message: msg, line: m.cur.line, frames: m.callStack()}
 }
 
 type machineError struct {
-message string
-line    int
-frame   string
+	message string
+	line    int
+	// frames are the call frames, innermost first. A single frame name used to
+	// be kept, so a failure several calls deep reported only the one it
+	// happened in.
+	frames []string
 }
 
 func (e *machineError) Error() string {
-if e.line > 0 {
-return fmt.Sprintf("Runtime Error at line %d: %s", e.line, e.message)
+	if e.line > 0 {
+		return fmt.Sprintf("Runtime Error at line %d: %s", e.line, e.message)
+	}
+	return fmt.Sprintf("Runtime Error: %s", e.message)
 }
-return fmt.Sprintf("Runtime Error: %s", e.message)
+
+// The three methods below make this a stacktraces.RuntimeError, so that a
+// failure from this engine is rendered as a runtime error with its location
+// and call frame, the way the other engine's already was. Without them the
+// renderer fell back to printing "Error: " and the bare message, so the same
+// failure looked different depending on which engine produced it.
+
+// RuntimeMessage implements stacktraces.RuntimeError.
+func (e *machineError) RuntimeMessage() string { return e.message }
+
+// RuntimeLine implements stacktraces.RuntimeError.
+func (e *machineError) RuntimeLine() int { return e.line }
+
+// RuntimeCallStack implements stacktraces.RuntimeError.
+func (e *machineError) RuntimeCallStack() []string {
+	if e.frames == nil {
+		return []string{}
+	}
+	return e.frames
 }
 
 // execute runs the machine until the outermost frame returns.
 func (m *Machine) execute(env *ivmEnv) (interface{}, error) {
-for {
-frame := m.cur
-if frame.ip >= len(frame.chunk.Code) {
-// Implicit return nil at end of top-level code
-if len(m.frames) == 0 {
-return nil, nil
-}
-// If somehow frames remain, pop and continue
-m.cur = m.frames[len(m.frames)-1]
-m.frames = m.frames[:len(m.frames)-1]
-m.push(interface{}(nil))
-continue
-}
+	for {
+		frame := m.cur
+		if frame.ip >= len(frame.chunk.Code) {
+			// Implicit return nil at end of top-level code
+			if len(m.frames) == 0 {
+				return nil, nil
+			}
+			// If somehow frames remain, pop and continue
+			m.cur = m.frames[len(m.frames)-1]
+			m.frames = m.frames[:len(m.frames)-1]
+			m.push(interface{}(nil))
+			continue
+		}
 
-instr := frame.chunk.Code[frame.ip]
-frame.ip++
+		instr := frame.chunk.Code[frame.ip]
+		frame.ip++
 
-result, stop, err := m.step(instr, frame.chunk)
-if err != nil {
-// errCaughtByParent means callFuncChunk detected that handleError()
-// already set m.cur to this frame's catch handler.  Just continue.
-if _, ok := err.(errCaughtByParent); ok {
-continue
-}
-// Check if there's a try frame to catch this
-caught, jumpErr := m.handleError(err)
-if jumpErr != nil {
-return nil, jumpErr
-}
-if caught {
-continue
-}
-return nil, err
-}
-if stop {
-return result, nil
-}
-}
+		result, stop, err := m.step(instr, frame.chunk)
+		if err != nil {
+			// errCaughtByParent means callFuncChunk detected that handleError()
+			// already set m.cur to this frame's catch handler.  Just continue.
+			if _, ok := err.(errCaughtByParent); ok {
+				continue
+			}
+			// Check if there's a try frame to catch this
+			caught, jumpErr := m.handleError(err)
+			if jumpErr != nil {
+				return nil, jumpErr
+			}
+			if caught {
+				continue
+			}
+			return nil, err
+		}
+		if stop {
+			return result, nil
+		}
+	}
 }
 
 func (m *Machine) handleError(err error) (bool, error) {
-// Walk up the call stack looking for a try frame
-for {
-frame := m.cur
-if len(frame.tryStack) > 0 {
-tf := frame.tryStack[len(frame.tryStack)-1]
-frame.tryStack = frame.tryStack[:len(frame.tryStack)-1]
+	// Walk up the call stack looking for a try frame
+	for {
+		frame := m.cur
+		if len(frame.tryStack) > 0 {
+			tf := frame.tryStack[len(frame.tryStack)-1]
+			frame.tryStack = frame.tryStack[:len(frame.tryStack)-1]
 
-// Restore stack to height at TRY_BEGIN
-frame.stack = frame.stack[:tf.stackHeight]
+			// Restore stack to height at TRY_BEGIN
+			frame.stack = frame.stack[:tf.stackHeight]
 
-// Restore env scopes to depth at TRY_BEGIN
-for len(frame.envStack) > tf.envDepth {
-m.popEnv()
-}
+			// Restore env scopes to depth at TRY_BEGIN
+			for len(frame.envStack) > tf.envDepth {
+				m.popEnv()
+			}
 
-// Convert error to ErrorValue
-var ev *types.ErrorValue
-switch e := err.(type) {
-case *types.ErrorValue:
-ev = e
-case *machineError:
-ev = &types.ErrorValue{Message: e.message, ErrorType: "RuntimeError"}
-default:
-ev = &types.ErrorValue{Message: err.Error(), ErrorType: "RuntimeError"}
-}
+			// Convert error to ErrorValue
+			var ev *types.ErrorValue
+			switch e := err.(type) {
+			case *types.ErrorValue:
+				ev = e
+			case *machineError:
+				ev = &types.ErrorValue{Message: e.message, ErrorType: "RuntimeError"}
+			default:
+				ev = &types.ErrorValue{Message: err.Error(), ErrorType: "RuntimeError"}
+			}
 
-// If this try frame has a type filter, check it now.
-if tf.errorType != "" && !m.env().isSubtypeOf(ev.ErrorType, tf.errorType) {
-// Error type does not match this handler.
-if tf.finallyOffset != 0 {
-// There IS a finally block: run it, then re-raise.
-// Store the error so OP_RERAISE_PENDING can re-raise it after finally.
-frame.pendingError = ev
-frame.ip = int(tf.finallyOffset)
-return true, nil
-}
-// No finally block: keep searching up the call stack.
-continue
-}
+			// If this try frame has a type filter, check it now.
+			if tf.errorType != "" && !m.env().isSubtypeOf(ev.ErrorType, tf.errorType) {
+				// Error type does not match this handler.
+				if tf.finallyOffset != 0 {
+					// There IS a finally block: run it, then re-raise.
+					// Store the error so OP_RERAISE_PENDING can re-raise it after finally.
+					frame.pendingError = ev
+					frame.ip = int(tf.finallyOffset)
+					return true, nil
+				}
+				// No finally block: keep searching up the call stack.
+				continue
+			}
 
-// Type matches (or no type filter): route to the catch handler.
-m.push(ev)
-frame.ip = int(tf.catchOffset)
-return true, nil
-}
+			// Type matches (or no type filter): route to the catch handler.
+			m.push(ev)
+			frame.ip = int(tf.catchOffset)
+			return true, nil
+		}
 
-// No try frame in current frame; pop frame and propagate
-if len(m.frames) == 0 {
-return false, nil
-}
-// Pop the current frame and continue looking
-m.cur = m.frames[len(m.frames)-1]
-m.frames = m.frames[:len(m.frames)-1]
-}
+		// No try frame in current frame; pop frame and propagate
+		if len(m.frames) == 0 {
+			return false, nil
+		}
+		// Pop the current frame and continue looking
+		m.cur = m.frames[len(m.frames)-1]
+		m.frames = m.frames[:len(m.frames)-1]
+	}
 }
 
 func (m *Machine) step(instr Instruction, chunk *Chunk) (result interface{}, stop bool, err error) {
-op := instr.Op
-operand := instr.Operand
+	op := instr.Op
+	operand := instr.Operand
 
-switch op {
-case OP_LOAD_CONST:
-m.push(chunk.Constants[operand])
-
-case OP_LOAD_NOTHING:
-m.push(nil)
-
-case OP_LOAD_VAR:
-name := chunk.Names[operand]
-val, ok := m.env().getVar(name)
-if !ok {
-return nil, false, m.runtimeErr(fmt.Sprintf("undefined variable '%s'", name))
-}
-m.push(val)
-
-case OP_STORE_VAR:
-name := chunk.Names[operand]
-val := m.pop()
-if err := m.env().setVar(name, val); err != nil {
-return nil, false, m.runtimeErr(err.Error())
-}
-
-case OP_DEFINE_VAR:
-name := chunk.Names[operand]
-val := m.pop()
-if err := m.env().defineVar(name, val, false); err != nil {
-return nil, false, m.runtimeErr(err.Error())
-}
-
-case OP_DEFINE_CONST:
-name := chunk.Names[operand]
-val := m.pop()
-if err := m.env().defineVar(name, val, true); err != nil {
-return nil, false, m.runtimeErr(err.Error())
-}
-
-case OP_DEFINE_TYPED:
-name := chunk.Names[operand]
-val := m.pop()
-typeName, ok := m.pop().(string)
-if !ok {
-return nil, false, m.runtimeErr("DEFINE_TYPED: expected type name string on stack")
-}
-if err := m.env().defineTypedVar(name, typeName, val, false); err != nil {
-return nil, false, m.runtimeErr(err.Error())
-}
-
-case OP_DEFINE_TYPED_CONST:
-name := chunk.Names[operand]
-val := m.pop()
-typeName, ok := m.pop().(string)
-if !ok {
-return nil, false, m.runtimeErr("DEFINE_TYPED_CONST: expected type name string on stack")
-}
-if err := m.env().defineTypedVar(name, typeName, val, true); err != nil {
-return nil, false, m.runtimeErr(err.Error())
-}
-
-case OP_TOGGLE_VAR:
-name := chunk.Names[operand]
-val, ok := m.env().getVar(name)
-if !ok {
-return nil, false, m.runtimeErr(fmt.Sprintf("undefined variable '%s'", name))
-}
-b, ok := val.(bool)
-if !ok {
-return nil, false, m.runtimeErr(fmt.Sprintf("toggle: '%s' is not a boolean", name))
-}
-if err := m.env().setVar(name, !b); err != nil {
-return nil, false, m.runtimeErr(err.Error())
-}
-
-case OP_BINARY_OP:
-right := m.pop()
-left := m.pop()
-res, err := doBinaryOp(BinOp(operand), left, right)
-if err != nil {
-return nil, false, m.runtimeErr(err.Error())
-}
-m.push(res)
-
-case OP_UNARY_OP:
-val := m.pop()
-res, err := doUnaryOp(UnaryOp(operand), val)
-if err != nil {
-return nil, false, m.runtimeErr(err.Error())
-}
-m.push(res)
-
-case OP_JUMP:
-m.cur.ip = int(operand)
-
-case OP_JUMP_IF_FALSE:
-val := m.pop()
-b, err := ivmToBool(val)
-if err != nil {
-return nil, false, m.runtimeErr(err.Error())
-}
-if !b {
-m.cur.ip = int(operand)
-}
-
-case OP_JUMP_IF_TRUE:
-val := m.pop()
-b, err := ivmToBool(val)
-if err != nil {
-return nil, false, m.runtimeErr(err.Error())
-}
-if b {
-m.cur.ip = int(operand)
-}
-
-case OP_PUSH_SCOPE:
-m.pushEnv()
-
-case OP_POP_SCOPE:
-m.popEnv()
-
-case OP_DEFINE_FUNC:
-fc := chunk.Funcs[operand]
-m.env().defineFunc(fc.Name, fc)
-
-case OP_CALL:
-argc := int(operand >> 16)
-nameIdx := operand & 0xFFFF
-name := chunk.Names[nameIdx]
-args := make([]interface{}, argc)
-for i := argc - 1; i >= 0; i-- {
-args[i] = m.pop()
-}
-res, err := m.callFunction(name, args, chunk)
-if err != nil {
-return nil, false, err
-}
-m.push(res)
-
-case OP_CALL_METHOD:
-argc := int(operand >> 16)
-methodNameIdx := operand & 0xFFFF
-methodName := chunk.Names[methodNameIdx]
-args := make([]interface{}, argc)
-for i := argc - 1; i >= 0; i-- {
-args[i] = m.pop()
-}
-obj := m.pop()
-res, err := m.callMethod(obj, methodName, args, chunk)
-if err != nil {
-return nil, false, err
-}
-m.push(res)
-
-case OP_RETURN:
-var retVal interface{}
-if len(m.cur.stack) > 0 {
-retVal = m.pop()
-}
-// Always signal stop; each loop (execute/callFuncChunk) handles frame restoration
-return retVal, true, nil
-
-case OP_PRINT:
-newline := operand & 1
-count := int(operand >> 1)
-parts := make([]string, count)
-for i := count - 1; i >= 0; i-- {
-parts[i] = ivmToString(m.pop())
-}
-text := strings.Join(parts, " ")
-if newline == 1 {
-fmt.Println(text)
-} else {
-fmt.Print(text)
-}
-
-case OP_BUILD_LIST:
-count := int(operand)
-elems := make([]interface{}, count)
-for i := count - 1; i >= 0; i-- {
-elems[i] = m.pop()
-}
-m.push(elems)
-
-case OP_BUILD_RANGE:
-	hasCustomStep := operand == 1
-	var stepVal interface{}
-	if hasCustomStep {
-		stepVal = m.pop()
+	// A fault recorded by the previous instruction means the chunk is corrupt;
+	// stop before executing anything further on a desynchronised stack.
+	if m.stackFault {
+		return nil, false, m.runtimeErr("corrupt bytecode: operand stack underflow")
 	}
-	endVal := m.pop()
-	startVal := m.pop()
-	start, ok1 := startVal.(float64)
-	end, ok2 := endVal.(float64)
-	if !ok1 || !ok2 {
-		return nil, false, m.runtimeErr("BUILD_RANGE: start and end must be numbers")
-	}
-
-	// Check if a custom step is provided
-	if hasCustomStep {
-		step, ok3 := stepVal.(float64)
-		if !ok3 {
-			return nil, false, m.runtimeErr("BUILD_RANGE: step must be a number")
+	defer func() {
+		if m.stackFault && err == nil {
+			err = m.runtimeErr("corrupt bytecode: operand stack underflow")
 		}
-		if step == 0 {
-			return nil, false, m.runtimeErr("BUILD_RANGE: step cannot be zero")
+	}()
+
+	switch op {
+	case OP_LOAD_CONST:
+		m.push(chunk.Constants[operand])
+
+	case OP_LOAD_NOTHING:
+		m.push(nil)
+
+	case OP_LOAD_VAR:
+		name := chunk.Names[operand]
+		val, ok := m.env().getVar(name)
+		if !ok {
+			return nil, false, m.runtimeErr(fmt.Sprintf("undefined variable '%s'", name))
 		}
-		m.push(types.NewRangeWithStep(start, end, step))
-	} else {
-		// Create a RangeValue with default step
-		m.push(types.NewRange(start, end))
+		m.push(val)
+
+	case OP_STORE_VAR:
+		name := chunk.Names[operand]
+		val := m.pop()
+		if err := m.env().setVar(name, val); err != nil {
+			return nil, false, m.runtimeErr(err.Error())
+		}
+
+	case OP_DEFINE_VAR:
+		name := chunk.Names[operand]
+		val := m.pop()
+		if err := m.env().defineVar(name, val, false); err != nil {
+			return nil, false, m.runtimeErr(err.Error())
+		}
+
+	case OP_DEFINE_CONST:
+		name := chunk.Names[operand]
+		val := m.pop()
+		if err := m.env().defineVar(name, val, true); err != nil {
+			return nil, false, m.runtimeErr(err.Error())
+		}
+
+	case OP_DEFINE_TYPED:
+		name := chunk.Names[operand]
+		val := m.pop()
+		typeName, ok := m.pop().(string)
+		if !ok {
+			return nil, false, m.runtimeErr("DEFINE_TYPED: expected type name string on stack")
+		}
+		if err := m.env().defineTypedVar(name, typeName, val, false); err != nil {
+			return nil, false, m.runtimeErr(err.Error())
+		}
+
+	case OP_DEFINE_TYPED_CONST:
+		name := chunk.Names[operand]
+		val := m.pop()
+		typeName, ok := m.pop().(string)
+		if !ok {
+			return nil, false, m.runtimeErr("DEFINE_TYPED_CONST: expected type name string on stack")
+		}
+		if err := m.env().defineTypedVar(name, typeName, val, true); err != nil {
+			return nil, false, m.runtimeErr(err.Error())
+		}
+
+	case OP_TOGGLE_VAR:
+		name := chunk.Names[operand]
+		val, ok := m.env().getVar(name)
+		if !ok {
+			return nil, false, m.runtimeErr(fmt.Sprintf("undefined variable '%s'", name))
+		}
+		b, ok := val.(bool)
+		if !ok {
+			return nil, false, m.runtimeErr(fmt.Sprintf("toggle: '%s' is not a boolean", name))
+		}
+		if err := m.env().setVar(name, !b); err != nil {
+			return nil, false, m.runtimeErr(err.Error())
+		}
+
+	case OP_BINARY_OP:
+		right := m.pop()
+		left := m.pop()
+		res, err := doBinaryOp(BinOp(operand), left, right)
+		if err != nil {
+			return nil, false, m.runtimeErr(err.Error())
+		}
+		m.push(res)
+
+	case OP_UNARY_OP:
+		val := m.pop()
+		res, err := doUnaryOp(UnaryOp(operand), val)
+		if err != nil {
+			return nil, false, m.runtimeErr(err.Error())
+		}
+		m.push(res)
+
+	case OP_JUMP:
+		m.cur.ip = int(operand)
+
+	case OP_JUMP_IF_FALSE:
+		val := m.pop()
+		b, err := ivmToBool(val)
+		if err != nil {
+			return nil, false, m.runtimeErr(err.Error())
+		}
+		if !b {
+			m.cur.ip = int(operand)
+		}
+
+	case OP_JUMP_IF_TRUE:
+		val := m.pop()
+		b, err := ivmToBool(val)
+		if err != nil {
+			return nil, false, m.runtimeErr(err.Error())
+		}
+		if b {
+			m.cur.ip = int(operand)
+		}
+
+	case OP_PUSH_SCOPE:
+		m.pushEnv()
+
+	case OP_POP_SCOPE:
+		m.popEnv()
+
+	case OP_DEFINE_FUNC:
+		fc := chunk.Funcs[operand]
+		m.env().defineFunc(fc.Name, fc)
+
+	case OP_CALL:
+		argc := int(operand >> 16)
+		nameIdx := operand & 0xFFFF
+		name := chunk.Names[nameIdx]
+		args := make([]interface{}, argc)
+		for i := argc - 1; i >= 0; i-- {
+			args[i] = m.pop()
+		}
+		res, err := m.callFunction(name, args, chunk)
+		if err != nil {
+			return nil, false, err
+		}
+		m.push(res)
+
+	case OP_CALL_METHOD:
+		argc := int(operand >> 16)
+		methodNameIdx := operand & 0xFFFF
+		methodName := chunk.Names[methodNameIdx]
+		args := make([]interface{}, argc)
+		for i := argc - 1; i >= 0; i-- {
+			args[i] = m.pop()
+		}
+		obj := m.pop()
+		res, err := m.callMethod(obj, methodName, args, chunk)
+		if err != nil {
+			return nil, false, err
+		}
+		m.push(res)
+
+	case OP_RETURN:
+		var retVal interface{}
+		if len(m.cur.stack) > 0 {
+			retVal = m.pop()
+		}
+		// Always signal stop; each loop (execute/callFuncChunk) handles frame restoration
+		return retVal, true, nil
+
+	case OP_PRINT:
+		newline := operand & 1
+		count := int(operand >> 1)
+		parts := make([]string, count)
+		for i := count - 1; i >= 0; i-- {
+			parts[i] = ivmToString(m.pop())
+		}
+		text := strings.Join(parts, " ")
+		if newline == 1 {
+			fmt.Println(text)
+		} else {
+			fmt.Print(text)
+		}
+
+	case OP_BUILD_LIST:
+		count := int(operand)
+		elems := make([]interface{}, count)
+		for i := count - 1; i >= 0; i-- {
+			elems[i] = m.pop()
+		}
+		m.push(elems)
+
+	case OP_BUILD_RANGE:
+		hasCustomStep := operand == 1
+		var stepVal interface{}
+		if hasCustomStep {
+			stepVal = m.pop()
+		}
+		endVal := m.pop()
+		startVal := m.pop()
+		start, ok1 := startVal.(float64)
+		end, ok2 := endVal.(float64)
+		if !ok1 || !ok2 {
+			return nil, false, m.runtimeErr("BUILD_RANGE: start and end must be numbers")
+		}
+
+		// Check if a custom step is provided
+		if hasCustomStep {
+			step, ok3 := stepVal.(float64)
+			if !ok3 {
+				return nil, false, m.runtimeErr("BUILD_RANGE: step must be a number")
+			}
+			if step == 0 {
+				return nil, false, m.runtimeErr("BUILD_RANGE: step cannot be zero")
+			}
+			m.push(types.NewRangeWithStep(start, end, step))
+		} else {
+			// Create a RangeValue with default step
+			m.push(types.NewRange(start, end))
+		}
+
+	case OP_BUILD_ARRAY:
+		count := int(operand)
+		typeName, ok := m.pop().(string)
+		if !ok {
+			return nil, false, m.runtimeErr("BUILD_ARRAY: expected type name string")
+		}
+		elems := make([]interface{}, count)
+		for i := count - 1; i >= 0; i-- {
+			elems[i] = m.pop()
+		}
+		elemKind := types.Parse(typeName)
+		m.push(&types.ArrayValue{ElementType: elemKind, Elements: elems})
+
+	case OP_BUILD_LOOKUP:
+		m.push(&types.LookupTableValue{
+			Entries:  make(map[string]interface{}),
+			KeyOrder: []string{},
+		})
+
+	case OP_INDEX_GET:
+		index := m.pop()
+		container := m.pop()
+		res, err := doIndexGet(container, index)
+		if err != nil {
+			return nil, false, m.runtimeErr(err.Error())
+		}
+		m.push(res)
+
+	case OP_INDEX_SET:
+		name := chunk.Names[operand]
+		val := m.pop()
+		index := m.pop()
+		container, ok := m.env().getVar(name)
+		if !ok {
+			return nil, false, m.runtimeErr(fmt.Sprintf("undefined variable '%s'", name))
+		}
+		if err := doIndexSet(container, index, val); err != nil {
+			return nil, false, m.runtimeErr(err.Error())
+		}
+
+	case OP_LENGTH:
+		val := m.pop()
+		n, err := doLength(val)
+		if err != nil {
+			return nil, false, m.runtimeErr(err.Error())
+		}
+		m.push(n)
+
+	case OP_LOOKUP_GET:
+		key := m.pop()
+		table := m.pop()
+		res, err := doLookupGet(table, key)
+		if err != nil {
+			return nil, false, m.runtimeErr(err.Error())
+		}
+		m.push(res)
+
+	case OP_LOOKUP_SET:
+		name := chunk.Names[operand]
+		val := m.pop()
+		key := m.pop()
+		tableVal, ok := m.env().getVar(name)
+		if !ok {
+			return nil, false, m.runtimeErr(fmt.Sprintf("undefined variable '%s'", name))
+		}
+		lt, ok := tableVal.(*types.LookupTableValue)
+		if !ok {
+			return nil, false, m.runtimeErr(fmt.Sprintf("'%s' is not a lookup table", name))
+		}
+		k, err := types.SerializeKey(key)
+		if err != nil {
+			return nil, false, m.runtimeErr(err.Error())
+		}
+		if _, exists := lt.Entries[k]; !exists {
+			lt.KeyOrder = append(lt.KeyOrder, k)
+		}
+		lt.Entries[k] = val
+
+	case OP_LOOKUP_HAS:
+		key := m.pop()
+		table := m.pop()
+		lt, ok := table.(*types.LookupTableValue)
+		if !ok {
+			return nil, false, m.runtimeErr("LOOKUP_HAS: not a lookup table")
+		}
+		k, err := types.SerializeKey(key)
+		if err != nil {
+			return nil, false, m.runtimeErr(err.Error())
+		}
+		_, has := lt.Entries[k]
+		m.push(has)
+
+	case OP_TYPEOF:
+		val := m.pop()
+		m.push(types.Describe(val).String())
+
+	case OP_CAST:
+		typeName := chunk.Names[operand]
+		val := m.pop()
+		target := types.Parse(typeName)
+		var res interface{}
+		if target == types.TypeString {
+			res = ivmToString(val)
+		} else {
+			var castErr error
+			res, castErr = types.Cast(val, target)
+			if castErr != nil {
+				return nil, false, &types.ErrorValue{
+					Message:   castErr.Error(),
+					ErrorType: "TypeError",
+					CallStack: m.callStack(),
+				}
+			}
+		}
+		m.push(res)
+
+	case OP_NIL_CHECK:
+		val := m.pop()
+		if operand == 1 { // is_something
+			m.push(val != nil)
+		} else { // is_nothing
+			m.push(val == nil)
+		}
+
+	case OP_ERROR_TYPE_CHECK:
+		typeName := chunk.Names[operand]
+		val := m.pop()
+		ev, ok := val.(*types.ErrorValue)
+		if !ok {
+			m.push(false)
+		} else {
+			m.push(m.env().isSubtypeOf(ev.ErrorType, typeName))
+		}
+
+	case OP_ASK:
+		if operand == 1 {
+			p := m.pop()
+			fmt.Print(ivmToString(p))
+		}
+		m.push(runtime.ReadLine())
+
+	case OP_LOCATION:
+		name := chunk.Names[operand]
+		val, ok := m.env().getVar(name)
+		if !ok {
+			return nil, false, m.runtimeErr(fmt.Sprintf("undefined variable '%s'", name))
+		}
+		m.push(fmt.Sprintf("%p", &val))
+
+	case OP_DEFINE_STRUCT:
+		sd := chunk.StructDefs[operand]
+		m.env().defineStructDef(sd.Name, sd)
+
+	case OP_NEW_STRUCT:
+		fieldCount := int(operand >> 16)
+		snIdx := operand & 0xFFFF
+		structName := chunk.Names[snIdx]
+		sd, ok := m.env().getStructDef(structName)
+		if !ok {
+			return nil, false, m.runtimeErr(fmt.Sprintf("undefined struct '%s'", structName))
+		}
+
+		// Each written field arrives as a name followed by its value, so bind
+		// them by name rather than by position.
+		written := make(map[string]interface{}, fieldCount)
+		order := make([]string, fieldCount)
+		for i := fieldCount - 1; i >= 0; i-- {
+			value := m.pop()
+			name, ok := m.pop().(string)
+			if !ok {
+				return nil, false, m.runtimeErr("corrupt bytecode: struct field name is not text")
+			}
+			written[name] = value
+			order[i] = name
+		}
+
+		inst := &StructInstance{
+			DefName: structName,
+			DefRef:  sd,
+			Fields:  make(map[string]interface{}, len(sd.Fields)),
+		}
+
+		// A field the struct does not declare is a mistake, not something to
+		// quietly add.
+		declared := make(map[string]bool, len(sd.Fields))
+		for _, fd := range sd.Fields {
+			declared[fd.Name] = true
+		}
+		for _, name := range order {
+			if !declared[name] {
+				return nil, false, m.runtimeErr(fmt.Sprintf(
+					"struct '%s' has no field named '%s'", structName, name))
+			}
+		}
+
+		for _, fd := range sd.Fields {
+			fval, given := written[fd.Name]
+			if !given || fval == nil {
+				if fd.DefaultExprChunk != nil {
+					var defErr error
+					fval, defErr = m.executeDefaultChunk(fd.DefaultExprChunk)
+					if defErr != nil {
+						return nil, false, m.runtimeErr(defErr.Error())
+					}
+				}
+			}
+			if fval == nil {
+				fval = typeDefault(fd.TypeName)
+			}
+			if err := checkFieldType(structName, fd, fval); err != nil {
+				return nil, false, m.runtimeErr(err.Error())
+			}
+			inst.Fields[fd.Name] = fval
+		}
+		m.push(inst)
+
+	case OP_GET_FIELD:
+		fieldName := chunk.Names[operand]
+		obj := m.pop()
+		si, ok := obj.(*StructInstance)
+		if !ok {
+			return nil, false, m.runtimeErr(fmt.Sprintf("GET_FIELD: not a struct instance (got %T)", obj))
+		}
+		val, exists := si.Fields[fieldName]
+		if !exists {
+			return nil, false, m.runtimeErr(fmt.Sprintf("struct '%s' has no field '%s'", si.DefName, fieldName))
+		}
+		m.push(val)
+
+	case OP_SET_FIELD:
+		fieldName := chunk.Names[operand]
+		newVal := m.pop()
+		obj := m.pop()
+		si, ok := obj.(*StructInstance)
+		if !ok {
+			return nil, false, m.runtimeErr(fmt.Sprintf(
+				"cannot set a field on %s; expected a struct", runtime.NameOf(obj)))
+		}
+		// A field the struct does not declare used to be created here, so a
+		// misspelled name silently added a field instead of reporting one.
+		field := si.field(fieldName)
+		if field == nil {
+			return nil, false, m.runtimeErr(fmt.Sprintf(
+				"struct '%s' has no field named '%s'", si.DefName, fieldName))
+		}
+		if err := checkFieldType(si.DefName, field, newVal); err != nil {
+			return nil, false, m.runtimeErr(err.Error())
+		}
+		si.Fields[fieldName] = newVal
+
+	case OP_RAISE:
+		msg := ivmToString(m.pop())
+		var errType string
+		if operand > 0 && int(operand-1) < len(chunk.Names) {
+			errType = chunk.Names[operand-1]
+		} else {
+			errType = "RuntimeError"
+		}
+		return nil, false, &types.ErrorValue{Message: msg, ErrorType: errType}
+
+	case OP_TRY_BEGIN:
+		tf := tryFrame{
+			catchOffset: operand,
+			stackHeight: len(m.cur.stack),
+			envDepth:    len(m.cur.envStack),
+		}
+		m.cur.tryStack = append(m.cur.tryStack, tf)
+
+	case OP_TRY_END:
+		// Pop the try frame (no error occurred)
+		if len(m.cur.tryStack) > 0 {
+			m.cur.tryStack = m.cur.tryStack[:len(m.cur.tryStack)-1]
+		}
+		// Jump past the catch body to the finally/end section
+		m.cur.ip = int(operand)
+
+	case OP_TRY_SET_ERRORTYPE:
+		// Set the error-type filter on the top try frame.
+		// operand = nameIdx+1 (0 means catch-all / no filter).
+		idx := len(m.cur.tryStack) - 1
+		if idx >= 0 && operand > 0 {
+			m.cur.tryStack[idx].errorType = chunk.Names[operand-1]
+		}
+
+	case OP_TRY_SET_FINALLY:
+		// Record where the finally body starts in the top try frame.
+		idx := len(m.cur.tryStack) - 1
+		if idx >= 0 {
+			m.cur.tryStack[idx].finallyOffset = operand
+		}
+
+	case OP_CATCH:
+		// The error value is on top of stack (pushed by handleError).
+		// The type check has already been performed in handleError, so we just
+		// bind the error variable and pop the error from the stack.
+		errVarIdx := operand
+
+		errVal, ok := m.peek().(*types.ErrorValue)
+		if !ok {
+			// Not a typed error — pop and move on (shouldn't normally happen)
+			m.pop()
+			break
+		}
+
+		// Bind error to variable
+		if errVarIdx < uint32(len(chunk.Names)) {
+			errVarName := chunk.Names[errVarIdx]
+			if errVarName != "" {
+				_ = m.pop()
+				m.env().defineVar(errVarName, errVal, false)
+			} else {
+				m.pop()
+			}
+		} else {
+			m.pop()
+		}
+
+	case OP_RERAISE_PENDING:
+		// Re-raise frame.pendingError if it was set by a finally-on-mismatch path.
+		if m.cur.pendingError != nil {
+			reraise := m.cur.pendingError
+			m.cur.pendingError = nil
+			return nil, false, reraise
+		}
+
+	case OP_DEFINE_ERROR_TYPE:
+		nameIdx := operand >> 16
+		parentIdx := operand & 0xFFFF
+		name := chunk.Names[nameIdx]
+		var parent string
+		if parentIdx > 0 {
+			parent = chunk.Names[parentIdx-1]
+		}
+		m.env().defineErrorType(name, parent)
+
+	case OP_MAKE_REFERENCE:
+		name := chunk.Names[operand]
+		_, ok := m.env().getVar(name)
+		if !ok {
+			return nil, false, m.runtimeErr(fmt.Sprintf("undefined variable '%s'", name))
+		}
+		m.push(&ReferenceValue{Name: name, Env: m.env()})
+
+	case OP_MAKE_COPY:
+		val := m.pop()
+		m.push(deepCopyValue(val))
+
+	case OP_SWAP_VARS:
+		n1Idx := operand >> 16
+		n2Idx := operand & 0xFFFF
+		name1 := chunk.Names[n1Idx]
+		name2 := chunk.Names[n2Idx]
+		v1, ok1 := m.env().getVar(name1)
+		if !ok1 {
+			return nil, false, m.runtimeErr(fmt.Sprintf("undefined variable '%s'", name1))
+		}
+		v2, ok2 := m.env().getVar(name2)
+		if !ok2 {
+			return nil, false, m.runtimeErr(fmt.Sprintf("undefined variable '%s'", name2))
+		}
+		if err := m.env().setVar(name1, v2); err != nil {
+			return nil, false, m.runtimeErr(err.Error())
+		}
+		if err := m.env().setVar(name2, v1); err != nil {
+			return nil, false, m.runtimeErr(err.Error())
+		}
+
+	case OP_IMPORT:
+		flags := operand
+		hasItems := flags&1 != 0
+		isSafe := flags&2 != 0
+		importAll := flags&4 != 0
+
+		var items []interface{}
+		if hasItems {
+			itemsVal := m.pop()
+			items, _ = itemsVal.([]interface{})
+		}
+		path, ok := m.pop().(string)
+		if !ok {
+			return nil, false, m.runtimeErr("IMPORT: expected path string on stack")
+		}
+
+		if m.importHandler == nil {
+			// An import with no handler installed used to be dropped without a
+			// word, so a program that depended on one ran on regardless and
+			// failed later on a name that should have been there.
+			return nil, false, m.runtimeErr(fmt.Sprintf(
+				"cannot import '%s': this engine was started without import support", path))
+		}
+		if err := m.importHandler(path, items, importAll, isSafe, m.env()); err != nil {
+			return nil, false, m.runtimeErr(err.Error())
+		}
+
+	case OP_SET_LINE:
+		m.cur.line = int(operand)
+
+	case OP_TO_BOOL:
+		b, err := runtime.ToBool(m.pop())
+		if err != nil {
+			return nil, false, m.runtimeErr(err.Error())
+		}
+		m.push(b)
+
+	case OP_ITER_GET:
+		index := m.pop()
+		collection := m.pop()
+		item, err := runtime.Element(collection, index)
+		if err != nil {
+			return nil, false, m.runtimeErr(err.Error())
+		}
+		m.push(item)
+
+	case OP_POP:
+		if len(m.cur.stack) > 0 {
+			m.pop()
+		}
+
+	default:
+		return nil, false, m.runtimeErr(fmt.Sprintf("unknown opcode: %d (%s)", op, OpName(op)))
 	}
 
-case OP_BUILD_ARRAY:
-count := int(operand)
-typeName, ok := m.pop().(string)
-if !ok {
-return nil, false, m.runtimeErr("BUILD_ARRAY: expected type name string")
-}
-elems := make([]interface{}, count)
-for i := count - 1; i >= 0; i-- {
-elems[i] = m.pop()
-}
-elemKind := types.Parse(typeName)
-m.push(&types.ArrayValue{ElementType: elemKind, Elements: elems})
-
-case OP_BUILD_LOOKUP:
-m.push(&types.LookupTableValue{
-Entries:  make(map[string]interface{}),
-KeyOrder: []string{},
-})
-
-case OP_INDEX_GET:
-index := m.pop()
-container := m.pop()
-res, err := doIndexGet(container, index)
-if err != nil {
-return nil, false, m.runtimeErr(err.Error())
-}
-m.push(res)
-
-case OP_INDEX_SET:
-name := chunk.Names[operand]
-val := m.pop()
-index := m.pop()
-container, ok := m.env().getVar(name)
-if !ok {
-return nil, false, m.runtimeErr(fmt.Sprintf("undefined variable '%s'", name))
-}
-if err := doIndexSet(container, index, val); err != nil {
-return nil, false, m.runtimeErr(err.Error())
-}
-
-case OP_LENGTH:
-val := m.pop()
-n, err := doLength(val)
-if err != nil {
-return nil, false, m.runtimeErr(err.Error())
-}
-m.push(n)
-
-case OP_LOOKUP_GET:
-key := m.pop()
-table := m.pop()
-res, err := doLookupGet(table, key)
-if err != nil {
-return nil, false, m.runtimeErr(err.Error())
-}
-m.push(res)
-
-case OP_LOOKUP_SET:
-name := chunk.Names[operand]
-val := m.pop()
-key := m.pop()
-tableVal, ok := m.env().getVar(name)
-if !ok {
-return nil, false, m.runtimeErr(fmt.Sprintf("undefined variable '%s'", name))
-}
-lt, ok := tableVal.(*types.LookupTableValue)
-if !ok {
-return nil, false, m.runtimeErr(fmt.Sprintf("'%s' is not a lookup table", name))
-}
-k, err := types.SerializeKey(key)
-if err != nil {
-return nil, false, m.runtimeErr(err.Error())
-}
-if _, exists := lt.Entries[k]; !exists {
-lt.KeyOrder = append(lt.KeyOrder, k)
-}
-lt.Entries[k] = val
-
-case OP_LOOKUP_HAS:
-key := m.pop()
-table := m.pop()
-lt, ok := table.(*types.LookupTableValue)
-if !ok {
-return nil, false, m.runtimeErr("LOOKUP_HAS: not a lookup table")
-}
-k, err := types.SerializeKey(key)
-if err != nil {
-return nil, false, m.runtimeErr(err.Error())
-}
-_, has := lt.Entries[k]
-m.push(has)
-
-case OP_TYPEOF:
-val := m.pop()
-m.push(ivmGetTypeName(val))
-
-case OP_CAST:
-typeName := chunk.Names[operand]
-val := m.pop()
-target := types.Parse(typeName)
-var res interface{}
-if target == types.TypeString {
-res = ivmToString(val)
-} else {
-var castErr error
-res, castErr = types.Cast(val, target)
-if castErr != nil {
-return nil, false, &types.ErrorValue{Message: castErr.Error(), ErrorType: "TypeError"}
-}
-}
-m.push(res)
-
-case OP_NIL_CHECK:
-val := m.pop()
-if operand == 1 { // is_something
-m.push(val != nil)
-} else { // is_nothing
-m.push(val == nil)
-}
-
-case OP_ERROR_TYPE_CHECK:
-typeName := chunk.Names[operand]
-val := m.pop()
-ev, ok := val.(*types.ErrorValue)
-if !ok {
-m.push(false)
-} else {
-m.push(m.env().isSubtypeOf(ev.ErrorType, typeName))
-}
-
-case OP_ASK:
-if operand == 1 {
-p := m.pop()
-fmt.Print(ivmToString(p))
-}
-scanner := bufio.NewScanner(os.Stdin)
-if scanner.Scan() {
-m.push(scanner.Text())
-} else {
-m.push("")
-}
-
-case OP_LOCATION:
-name := chunk.Names[operand]
-val, ok := m.env().getVar(name)
-if !ok {
-return nil, false, m.runtimeErr(fmt.Sprintf("undefined variable '%s'", name))
-}
-m.push(fmt.Sprintf("%p", &val))
-
-case OP_DEFINE_STRUCT:
-sd := chunk.StructDefs[operand]
-m.env().defineStructDef(sd.Name, sd)
-
-case OP_NEW_STRUCT:
-fieldCount := int(operand >> 16)
-snIdx := operand & 0xFFFF
-structName := chunk.Names[snIdx]
-sd, ok := m.env().getStructDef(structName)
-if !ok {
-return nil, false, m.runtimeErr(fmt.Sprintf("undefined struct '%s'", structName))
-}
-
-// Pop field values in reverse order (last field pushed = top of stack)
-fieldVals := make([]interface{}, fieldCount)
-for i := fieldCount - 1; i >= 0; i-- {
-fieldVals[i] = m.pop()
-}
-
-inst := &StructInstance{
-DefName: structName,
-DefRef:  sd,
-Fields:  make(map[string]interface{}),
-}
-
-// Assign fields in FieldOrder from StructInstantiation (same order as compiled)
-// The fieldCount fields were compiled from FieldOrder, so we use sd.Fields for defaults
-// and the compiled values for specified ones.
-// Since we compile in FieldOrder (from StructInstantiation), we need to map them back.
-// However, the compiler pushes them in the FieldOrder from the instantiation,
-// not necessarily the struct definition order.
-// We store them positionally, so we need the same order.
-// For simplicity: if fieldCount > 0, use fieldVals as-is in the order they were compiled.
-// The struct definition's field order is in sd.Fields (slice).
-// The instantiation's field order is what was compiled. We don't have that info here.
-// Solution: compile ALL struct fields in struct definition order (see compileStructInstantiation).
-
-// We reconstruct by matching against sd.Fields order
-for i, fd := range sd.Fields {
-var fval interface{}
-if i < fieldCount {
-fval = fieldVals[i]
-}
-if fval == nil && fd.DefaultExprChunk != nil {
-// Execute default expression chunk
-var defErr error
-fval, defErr = m.executeDefaultChunk(fd.DefaultExprChunk)
-if defErr != nil {
-return nil, false, m.runtimeErr(defErr.Error())
-}
-}
-if fval == nil {
-// Use type default
-fval = typeDefault(fd.TypeName)
-}
-inst.Fields[fd.Name] = fval
-}
-m.push(inst)
-
-case OP_GET_FIELD:
-fieldName := chunk.Names[operand]
-obj := m.pop()
-si, ok := obj.(*StructInstance)
-if !ok {
-return nil, false, m.runtimeErr(fmt.Sprintf("GET_FIELD: not a struct instance (got %T)", obj))
-}
-val, exists := si.Fields[fieldName]
-if !exists {
-return nil, false, m.runtimeErr(fmt.Sprintf("struct '%s' has no field '%s'", si.DefName, fieldName))
-}
-m.push(val)
-
-case OP_SET_FIELD:
-fieldName := chunk.Names[operand]
-newVal := m.pop()
-obj := m.pop()
-si, ok := obj.(*StructInstance)
-if !ok {
-return nil, false, m.runtimeErr(fmt.Sprintf("SET_FIELD: not a struct instance (got %T)", obj))
-}
-si.Fields[fieldName] = newVal
-
-case OP_RAISE:
-msg := ivmToString(m.pop())
-var errType string
-if operand > 0 && int(operand-1) < len(chunk.Names) {
-errType = chunk.Names[operand-1]
-} else {
-errType = "RuntimeError"
-}
-return nil, false, &types.ErrorValue{Message: msg, ErrorType: errType}
-
-case OP_TRY_BEGIN:
-tf := tryFrame{
-catchOffset: operand,
-stackHeight: len(m.cur.stack),
-envDepth:    len(m.cur.envStack),
-}
-m.cur.tryStack = append(m.cur.tryStack, tf)
-
-case OP_TRY_END:
-// Pop the try frame (no error occurred)
-if len(m.cur.tryStack) > 0 {
-m.cur.tryStack = m.cur.tryStack[:len(m.cur.tryStack)-1]
-}
-// Jump past the catch body to the finally/end section
-m.cur.ip = int(operand)
-
-case OP_TRY_SET_ERRORTYPE:
-// Set the error-type filter on the top try frame.
-// operand = nameIdx+1 (0 means catch-all / no filter).
-idx := len(m.cur.tryStack) - 1
-if idx >= 0 && operand > 0 {
-m.cur.tryStack[idx].errorType = chunk.Names[operand-1]
-}
-
-case OP_TRY_SET_FINALLY:
-// Record where the finally body starts in the top try frame.
-idx := len(m.cur.tryStack) - 1
-if idx >= 0 {
-m.cur.tryStack[idx].finallyOffset = operand
-}
-
-case OP_CATCH:
-// The error value is on top of stack (pushed by handleError).
-// The type check has already been performed in handleError, so we just
-// bind the error variable and pop the error from the stack.
-errVarIdx := operand
-
-errVal, ok := m.peek().(*types.ErrorValue)
-if !ok {
-// Not a typed error — pop and move on (shouldn't normally happen)
-m.pop()
-break
-}
-
-// Bind error to variable
-if errVarIdx < uint32(len(chunk.Names)) {
-errVarName := chunk.Names[errVarIdx]
-if errVarName != "" {
-_ = m.pop()
-m.env().defineVar(errVarName, errVal, false)
-} else {
-m.pop()
-}
-} else {
-m.pop()
-}
-
-case OP_RERAISE_PENDING:
-// Re-raise frame.pendingError if it was set by a finally-on-mismatch path.
-if m.cur.pendingError != nil {
-reraise := m.cur.pendingError
-m.cur.pendingError = nil
-return nil, false, reraise
-}
-
-case OP_DEFINE_ERROR_TYPE:
-nameIdx := operand >> 16
-parentIdx := operand & 0xFFFF
-name := chunk.Names[nameIdx]
-var parent string
-if parentIdx > 0 {
-parent = chunk.Names[parentIdx-1]
-}
-m.env().defineErrorType(name, parent)
-
-case OP_MAKE_REFERENCE:
-name := chunk.Names[operand]
-_, ok := m.env().getVar(name)
-if !ok {
-return nil, false, m.runtimeErr(fmt.Sprintf("undefined variable '%s'", name))
-}
-m.push(&ReferenceValue{Name: name, Env: m.env()})
-
-case OP_MAKE_COPY:
-val := m.pop()
-m.push(deepCopyValue(val))
-
-case OP_SWAP_VARS:
-n1Idx := operand >> 16
-n2Idx := operand & 0xFFFF
-name1 := chunk.Names[n1Idx]
-name2 := chunk.Names[n2Idx]
-v1, ok1 := m.env().getVar(name1)
-if !ok1 {
-return nil, false, m.runtimeErr(fmt.Sprintf("undefined variable '%s'", name1))
-}
-v2, ok2 := m.env().getVar(name2)
-if !ok2 {
-return nil, false, m.runtimeErr(fmt.Sprintf("undefined variable '%s'", name2))
-}
-if err := m.env().setVar(name1, v2); err != nil {
-return nil, false, m.runtimeErr(err.Error())
-}
-if err := m.env().setVar(name2, v1); err != nil {
-return nil, false, m.runtimeErr(err.Error())
-}
-
-case OP_IMPORT:
-flags := operand
-hasItems := flags&1 != 0
-isSafe := flags&2 != 0
-importAll := flags&4 != 0
-
-var items []interface{}
-if hasItems {
-itemsVal := m.pop()
-items, _ = itemsVal.([]interface{})
-}
-path, ok := m.pop().(string)
-if !ok {
-return nil, false, m.runtimeErr("IMPORT: expected path string on stack")
-}
-
-if m.importHandler != nil {
-if err := m.importHandler(path, items, importAll, isSafe, m.env()); err != nil {
-return nil, false, m.runtimeErr(err.Error())
-}
-}
-// If no handler, silently skip import
-
-case OP_SET_LINE:
-m.cur.line = int(operand)
-
-case OP_POP:
-if len(m.cur.stack) > 0 {
-m.pop()
-}
-
-default:
-return nil, false, m.runtimeErr(fmt.Sprintf("unknown opcode: %d (%s)", op, OpName(op)))
-}
-
-return nil, false, nil
+	return nil, false, nil
 }
 
 func (m *Machine) callFunction(name string, args []interface{}, callerChunk *Chunk) (interface{}, error) {
-// Look up user-defined function
-fn, ok := m.env().getFunc(name)
-if ok {
-return m.callFuncChunk(fn, args, nil)
-}
-// Fall back to builtin
-if m.builtin != nil {
-res, err := m.builtin(name, args)
-if err != nil {
-// stdlib.Eval returns "unknown built-in function: X" for names it
-// doesn't recognise. That message is misleading when the function
-// was supposed to be user-defined (e.g. imported but import was
-// skipped). Normalise to "undefined function" so the user gets a
-// clear, actionable error.
-if strings.Contains(err.Error(), "unknown built-in function:") {
-return nil, m.runtimeErr(fmt.Sprintf("undefined function '%s'", name))
-}
-return nil, err
-}
-return res, nil
-}
-return nil, m.runtimeErr(fmt.Sprintf("undefined function '%s'", name))
+	// Look up user-defined function
+	fn, ok := m.env().getFunc(name)
+	if ok {
+		return m.callFuncChunk(fn, args, nil)
+	}
+	// Fall back to builtin
+	if m.builtin != nil {
+		res, err := m.builtin(name, args)
+		if err != nil {
+			// stdlib.Eval returns "unknown built-in function: X" for names it
+			// doesn't recognise. That message is misleading when the function
+			// was supposed to be user-defined (e.g. imported but import was
+			// skipped). Normalise to "undefined function" so the user gets a
+			// clear, actionable error.
+			if strings.Contains(err.Error(), "unknown built-in function:") {
+				return nil, m.runtimeErr(fmt.Sprintf("undefined function '%s'", name))
+			}
+			// A failure inside the standard library belongs to the call site.
+			// The library's own error carried a call stack of just "<stdlib>",
+			// which replaced the real one.
+			if ev, ok := err.(*types.ErrorValue); ok {
+				return nil, ev // a raised value the program may catch
+			}
+			return nil, m.runtimeErr(stripRuntimePrefix(err.Error()))
+		}
+		return res, nil
+	}
+	return nil, m.runtimeErr(fmt.Sprintf("undefined function '%s'", name))
 }
 
 // errCaughtByParent is a sentinel returned by callFuncChunk when an error
@@ -831,126 +934,165 @@ type errCaughtByParent struct{}
 func (errCaughtByParent) Error() string { return "caught by parent frame" }
 
 func (m *Machine) callFuncChunk(fn *FuncChunk, args []interface{}, selfEnv *ivmEnv) (interface{}, error) {
-if len(args) != len(fn.Params) {
-return nil, m.runtimeErr(fmt.Sprintf("function '%s' expects %d argument(s), got %d", fn.Name, len(fn.Params), len(args)))
-}
+	if len(args) != len(fn.Params) {
+		return nil, m.runtimeErr(fmt.Sprintf("function '%s' expects %d argument(s), got %d", fn.Name, len(fn.Params), len(args)))
+	}
+	// Bound the call depth. Without this, runaway recursion grows the frame
+	// slice until the process is killed, with no diagnostic for the user.
+	if len(m.frames) >= types.MaxCallDepth {
+		return nil, &types.ErrorValue{
+			ErrorType: types.StackOverflowErrorType,
+			Message:   fmt.Sprintf(types.StackOverflowMessage, types.MaxCallDepth, fn.Name),
+		}
+	}
 
-// Create a new environment for the function call
-var parentEnv *ivmEnv
-if selfEnv != nil {
-parentEnv = selfEnv
-} else {
-// Use the current env's root as the closure env (simple lexical scoping)
-parentEnv = m.env()
-}
-funcEnv := parentEnv.newChild()
-for i, param := range fn.Params {
-funcEnv.defineVar(param, args[i], false)
-}
+	// Create a new environment for the function call
+	var parentEnv *ivmEnv
+	if selfEnv != nil {
+		parentEnv = selfEnv
+	} else {
+		// Use the current env's root as the closure env (simple lexical scoping)
+		parentEnv = m.env()
+	}
+	funcEnv := parentEnv.newChild()
+	for i, param := range fn.Params {
+		funcEnv.defineVar(param, args[i], false)
+	}
 
-// Push current frame, start new frame.
-// Remember which frame belongs to this function so we can detect if
-// handleError() has swapped m.cur to a parent frame.
-m.frames = append(m.frames, m.cur)
-funcFrame := &callFrame{
-chunk: fn.Body,
-ip:    0,
-stack: []interface{}{},
-env:   funcEnv,
-name:  fn.Name,
-}
-m.cur = funcFrame
+	// Push current frame, start new frame.
+	// Remember which frame belongs to this function so we can detect if
+	// handleError() has swapped m.cur to a parent frame.
+	m.frames = append(m.frames, m.cur)
+	funcFrame := &callFrame{
+		chunk: fn.Body,
+		ip:    0,
+		stack: []interface{}{},
+		env:   funcEnv,
+		name:  fn.Name,
+	}
+	m.cur = funcFrame
 
-// Run until RETURN or end of code
-for {
-frame := m.cur
-if frame != funcFrame {
-// m.cur was changed to a parent frame by handleError (catch handler
-// found in a parent frame).  Return the sentinel; execute() will
-// continue at the catch handler.
-return nil, errCaughtByParent{}
-}
-if frame.ip >= len(frame.chunk.Code) {
-// Implicit nil return at end of function; restore caller frame.
-m.cur = m.frames[len(m.frames)-1]
-m.frames = m.frames[:len(m.frames)-1]
-return nil, nil
-}
+	// Run until RETURN or end of code
+	for {
+		frame := m.cur
+		if frame != funcFrame {
+			// m.cur was changed to a parent frame by handleError (catch handler
+			// found in a parent frame).  Return the sentinel; execute() will
+			// continue at the catch handler.
+			return nil, errCaughtByParent{}
+		}
+		if frame.ip >= len(frame.chunk.Code) {
+			// Implicit nil return at end of function; restore caller frame.
+			m.cur = m.frames[len(m.frames)-1]
+			m.frames = m.frames[:len(m.frames)-1]
+			return nil, nil
+		}
 
-instr := frame.chunk.Code[frame.ip]
-frame.ip++
+		instr := frame.chunk.Code[frame.ip]
+		frame.ip++
 
-result, stop, err := m.step(instr, frame.chunk)
-if err != nil {
-// Propagate the sentinel without calling handleError again.
-if _, ok := err.(errCaughtByParent); ok {
-return nil, err
-}
-caught, jumpErr := m.handleError(err)
-if jumpErr != nil {
-return nil, jumpErr
-}
-if caught {
-// If the handler is in a parent frame, m.cur has been updated.
-// The sentinel check at the top of the loop will catch this.
-continue
-}
-// Error was not caught anywhere.  handleError has already unwound
-// m.cur and m.frames; do NOT touch them again.
-return nil, err
-}
-if stop {
-// OP_RETURN: restore caller frame, return the value.
-m.cur = m.frames[len(m.frames)-1]
-m.frames = m.frames[:len(m.frames)-1]
-return result, nil
-}
-}
+		result, stop, err := m.step(instr, frame.chunk)
+		if err != nil {
+			// Propagate the sentinel without calling handleError again.
+			if _, ok := err.(errCaughtByParent); ok {
+				return nil, err
+			}
+			caught, jumpErr := m.handleError(err)
+			if jumpErr != nil {
+				return nil, jumpErr
+			}
+			if caught {
+				// If the handler is in a parent frame, m.cur has been updated.
+				// The sentinel check at the top of the loop will catch this.
+				continue
+			}
+			// Error was not caught anywhere.  handleError has already unwound
+			// m.cur and m.frames; do NOT touch them again.
+			return nil, err
+		}
+		if stop {
+			// OP_RETURN: restore caller frame, return the value.
+			m.cur = m.frames[len(m.frames)-1]
+			m.frames = m.frames[:len(m.frames)-1]
+			return result, nil
+		}
+	}
 }
 
 func (m *Machine) callMethod(obj interface{}, methodName string, args []interface{}, callerChunk *Chunk) (interface{}, error) {
-// Check if it's a struct instance
-si, ok := obj.(*StructInstance)
-if ok {
-// Look up method in struct definition
-if si.DefRef != nil {
-for _, method := range si.DefRef.Methods {
-if method.Name == methodName {
-// Create env with struct fields accessible
-structFieldEnv := m.env().newChild()
-for k, v := range si.Fields {
-structFieldEnv.defineVar(k, v, false)
-}
-res, err := m.callFuncChunk(method, args, structFieldEnv)
-if err != nil {
-return nil, err
-}
-// Update struct fields from method execution
-for k := range si.Fields {
-if val, exists := structFieldEnv.vars[k]; exists {
-si.Fields[k] = val.value
-}
-}
-return res, nil
-}
-}
-}
-return nil, m.runtimeErr(fmt.Sprintf("struct '%s' has no method '%s'", si.DefName, methodName))
-}
+	// Check if it's a struct instance
+	si, ok := obj.(*StructInstance)
+	if ok {
+		// Look up method in struct definition
+		if si.DefRef != nil {
+			for _, method := range si.DefRef.Methods {
+				if method.Name == methodName {
+					// Create env with struct fields accessible
+					structFieldEnv := m.env().newChild()
+					for k, v := range si.Fields {
+						structFieldEnv.defineVar(k, v, false)
+					}
+					res, err := m.callFuncChunk(method, args, structFieldEnv)
+					if err != nil {
+						return nil, err
+					}
+					// Update struct fields from method execution
+					for k := range si.Fields {
+						if val, exists := structFieldEnv.vars[k]; exists {
+							si.Fields[k] = val.value
+						}
+					}
+					return res, nil
+				}
+			}
+		}
+		return nil, m.runtimeErr(fmt.Sprintf("struct '%s' has no method '%s'", si.DefName, methodName))
+	}
 
-// Non-struct: fall back to calling function with obj as first argument
-allArgs := append([]interface{}{obj}, args...)
-return m.callFunction(methodName, allArgs, callerChunk)
+	// Non-struct: fall back to calling function with obj as first argument
+	allArgs := append([]interface{}{obj}, args...)
+	return m.callFunction(methodName, allArgs, callerChunk)
 }
 
 func (m *Machine) executeDefaultChunk(chunk *Chunk) (interface{}, error) {
-subMachine := &Machine{builtin: m.builtin}
-env := m.env().newChild()
-subMachine.cur = &callFrame{
-chunk: chunk,
-ip:    0,
-stack: []interface{}{},
-env:   env,
+	subMachine := &Machine{builtin: m.builtin}
+	env := m.env().newChild()
+	subMachine.cur = &callFrame{
+		chunk: chunk,
+		ip:    0,
+		stack: []interface{}{},
+		env:   env,
+	}
+	return subMachine.execute(env)
 }
-return subMachine.execute(env)
+
+// topLevelFrame is the name of the outermost call frame, matching what the
+// other engine calls it so that a call stack reads identically.
+const topLevelFrame = "<main>"
+
+// callStack returns the frame names, innermost first, for an error value.
+//
+// A raised or failed-cast error from this engine carried no stack, so the same
+// failure printed with one under the other engine and without one here.
+func (m *Machine) callStack() []string {
+	stack := make([]string, 0, len(m.frames)+1)
+	if m.cur != nil && m.cur.name != "" {
+		stack = append(stack, m.cur.name)
+	}
+	for i := len(m.frames) - 1; i >= 0; i-- {
+		if m.frames[i] != nil && m.frames[i].name != "" {
+			stack = append(stack, m.frames[i].name)
+		}
+	}
+	return stack
+}
+
+// stripRuntimePrefix removes the envelope the standard library's own error
+// constructor adds, so that re-wrapping does not stack two of them.
+func stripRuntimePrefix(msg string) string {
+	msg = strings.TrimPrefix(msg, "Runtime Error: ")
+	if i := strings.Index(msg, "\nCall Stack"); i >= 0 {
+		msg = msg[:i]
+	}
+	return strings.TrimSpace(msg)
 }

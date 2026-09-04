@@ -10,8 +10,6 @@ import "fmt"
 // Any other type returns a non-nil error.
 func SerializeKey(v interface{}) (string, error) {
 	switch val := v.(type) {
-	case float64:
-		return fmt.Sprintf("n:%v", val), nil
 	case string:
 		return "s:" + val, nil
 	case bool:
@@ -19,11 +17,15 @@ func SerializeKey(v interface{}) (string, error) {
 			return "b:true", nil
 		}
 		return "b:false", nil
-	default:
-		return "", fmt.Errorf(
-			"TypeError: lookup table keys must be number, text, or boolean; got %T", v,
-		)
 	}
+	// Any numeric representation is a valid key. Only float64 was accepted
+	// before, so a value that had been through a cast to a sized numeric type
+	// could not be used as a key at all.
+	if f, ok := numeric(v); ok {
+		return fmt.Sprintf("n:%v", f), nil
+	}
+	return "", fmt.Errorf(
+		"a lookup table key must be a number, text or a boolean; got %s", NameOf(v))
 }
 
 // DeserializeKey recovers the original value from a serialised key string.

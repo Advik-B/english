@@ -1,9 +1,10 @@
 package stdlib
 
 import (
-	"github.com/Advik-B/english/astvm"
 	"fmt"
 	"time"
+
+	vm "github.com/Advik-B/english/astvm"
 )
 
 // programStart records the time the stdlib was first loaded.
@@ -33,10 +34,4 @@ func evalTime(name string, args []vm.Value) (vm.Value, error) {
 		return nil, nil
 	}
 	return nil, vm.NewRuntimeError("unknown time function: " + name)
-}
-
-func registerTimeFunctions(env *vm.Environment) {
-	env.DefineFunction("current_time", &vm.FunctionValue{Name: "current_time", Parameters: []string{}, Body: nil, Closure: env})
-	env.DefineFunction("elapsed_time", &vm.FunctionValue{Name: "elapsed_time", Parameters: []string{}, Body: nil, Closure: env})
-	env.DefineFunction("sleep", &vm.FunctionValue{Name: "sleep", Parameters: []string{"seconds"}, Body: nil, Closure: env})
 }

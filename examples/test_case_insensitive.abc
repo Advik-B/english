@@ -12,12 +12,12 @@ print "x is now:".
 Print the value of x.
 
 # Mixed case function
-DECLARE FUNCTION greet THAT TAKES name AND DOES THE FOLLOWING:
+DECLARE FUNCTION greet THAT TAKES name AS TEXT, AND GIVES BACK NOTHING, AND DOES THE FOLLOWING:
     print "Hello, ".
     Print the value of name.
 THATS IT.
 
-SET result TO BE the result of CALLING greet WITH "World".
+CALL greet WITH "World".
 
 # Test loops
 REPEAT the following 3 TIMES:

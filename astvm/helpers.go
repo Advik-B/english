@@ -4,10 +4,6 @@ import (
 	"strings"
 )
 
-// maxSafeInteger is the largest integer that can be exactly represented as float64
-// This corresponds to 2^53 - 1 in JavaScript/IEEE 754 double precision
-const maxSafeInteger = 9007199254740991
-
 // levenshteinDistance calculates the Levenshtein distance between two strings
 func levenshteinDistance(s1, s2 string) int {
 	if len(s1) == 0 {
@@ -49,40 +45,21 @@ func levenshteinDistance(s1, s2 string) int {
 func findSimilarName(name string, candidates []string) string {
 	name = strings.ToLower(name)
 
-	// Simple similarity check (case-insensitive match or one-char difference)
+	// The closest candidate, and the first alphabetically among equally close
+	// ones. This used to return the first candidate within distance 2, and its
+	// callers collect candidates by iterating a Go map, whose order is
+	// deliberately randomised — so the suggestion for a typo could differ
+	// between two runs of the same program.
+	best, bestDistance := "", 0
 	for _, candidate := range candidates {
-		if strings.ToLower(candidate) == name {
-			return candidate
+		distance := levenshteinDistance(strings.ToLower(candidate), name)
+		if distance > 2 {
+			continue
 		}
-		if levenshteinDistance(strings.ToLower(candidate), name) <= 2 {
-			return candidate
+		if best == "" || distance < bestDistance ||
+			(distance == bestDistance && candidate < best) {
+			best, bestDistance = candidate, distance
 		}
 	}
-
-	return ""
-}
-
-// getTypeName returns the type name for a value
-func getTypeName(v Value) string {
-	switch val := v.(type) {
-	case float64:
-		// Check if it's a whole number (integer)
-		// Use a safe range check to avoid precision issues with large numbers
-		if val >= -maxSafeInteger && val <= maxSafeInteger && val == float64(int64(val)) {
-			return "i32"
-		}
-		return "f64"
-	case string:
-		return "string"
-	case bool:
-		return "bool"
-	case []interface{}:
-		return "list"
-	case *FunctionValue:
-		return "function"
-	case nil:
-		return "nil"
-	default:
-		return "unknown"
-	}
+	return best
 }

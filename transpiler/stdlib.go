@@ -1,9 +1,10 @@
 package transpiler
 
 import (
-	"github.com/Advik-B/english/ast"
 	"fmt"
 	"strings"
+
+	"github.com/Advik-B/english/ast"
 )
 
 // ─── stdlib function call translation ────────────────────────────────────────
@@ -45,7 +46,8 @@ func (t *Transpiler) transpileFuncCallExpr(e *ast.FunctionCall) string {
 	case "ceil":
 		return fmt.Sprintf("math.ceil(%s)", a(0))
 	case "round":
-		return fmt.Sprintf("round(%s)", a(0))
+		// Not Python's round(), which rounds half to even.
+		return fmt.Sprintf("_round(%s)", a(0))
 	case "min":
 		return fmt.Sprintf("min(%s, %s)", a(0), a(1))
 	case "max":
@@ -116,10 +118,9 @@ func (t *Transpiler) transpileFuncCallExpr(e *ast.FunctionCall) string {
 	case "index_of":
 		return fmt.Sprintf("%s.find(%s)", a(0), a(1))
 	case "substring":
-		// substring(s, start, length) → s[start : start+length]
-		start := a(1)
-		length := a(2)
-		return fmt.Sprintf("%s[%s:%s+%s]", a(0), maybeInt(start), maybeInt(start), maybeInt(length))
+		// A helper rather than "s[start:start+length]", which names start
+		// twice and so evaluates it twice.
+		return fmt.Sprintf("_substring(%s, %s, %s)", a(0), a(1), a(2))
 	case "str_repeat":
 		return fmt.Sprintf("%s * %s", a(0), maybeInt(a(1)))
 	case "count_occurrences":
@@ -144,7 +145,9 @@ func (t *Transpiler) transpileFuncCallExpr(e *ast.FunctionCall) string {
 	case "to_number":
 		return fmt.Sprintf("float(%s)", a(0))
 	case "to_string":
-		return fmt.Sprintf("str(%s)", a(0))
+		// English's renderer, not Python's: a whole number has no decimal
+		// point, a boolean is lower case and nothing is "nothing".
+		return fmt.Sprintf("_show(%s)", a(0))
 	case "is_empty":
 		return fmt.Sprintf("(len(%s) == 0)", a(0))
 	case "is_digit":
@@ -176,20 +179,18 @@ func (t *Transpiler) transpileFuncCallExpr(e *ast.FunctionCall) string {
 	case "append":
 		// append(list, item) → list + [item]
 		return fmt.Sprintf("%s + [%s]", a(0), a(1))
-	case "pop":
-		return fmt.Sprintf("%s[:-1]", a(0))
 	case "remove":
-		// remove(list, index) → list without element at index
-		return fmt.Sprintf("[v for i, v in enumerate(%s) if i != %s]", a(0), maybeInt(a(1)))
+		return fmt.Sprintf("_remove_at(%s, %s)", a(0), a(1))
 	case "insert":
-		// insert(list, index, item) → new list with item inserted at index
-		return fmt.Sprintf("(%s[:%s] + [%s] + %s[%s:])", a(0), maybeInt(a(1)), a(2), a(0), maybeInt(a(1)))
+		// A helper rather than "xs[:i] + [v] + xs[i:]", which names the list
+		// and the index twice each and so evaluates them twice.
+		return fmt.Sprintf("_insert(%s, %s, %s)", a(0), a(1), a(2))
 	case "sum":
 		return fmt.Sprintf("sum(%s)", a(0))
 	case "product":
 		return fmt.Sprintf("_product(%s)", a(0))
 	case "average":
-		return fmt.Sprintf("(sum(%s) / len(%s))", a(0), a(0))
+		return fmt.Sprintf("_average(%s)", a(0))
 	case "min_value":
 		return fmt.Sprintf("min(%s)", a(0))
 	case "max_value":
@@ -226,10 +227,6 @@ func (t *Transpiler) transpileFuncCallExpr(e *ast.FunctionCall) string {
 	// ── I/O ───────────────────────────────────────────────────────────────────
 	case "ask":
 		return fmt.Sprintf("input(%s)", a(0))
-	case "read_file":
-		return fmt.Sprintf("_read_file(%s)", a(0))
-	case "write_file":
-		return fmt.Sprintf("_write_file(%s, %s)", a(0), a(1))
 
 	// ── Time ──────────────────────────────────────────────────────────────────
 	case "sleep":

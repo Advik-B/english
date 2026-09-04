@@ -1,43 +1,40 @@
 package repl
 
-import "strings"
+import (
+	"strings"
 
-// isBlockOpener reports whether a trimmed, lower-cased line opens a new block.
+	"github.com/Advik-B/english/parser"
+)
+
+// needsMoreInput reports whether what has been typed so far is the beginning
+// of a block rather than a finished statement or a mistake.
 //
-// Block-openers:
-//   - Any line that contains "following" and ends with ":" covers all forms:
-//     "do the following:", "does the following:",
-//     "repeat the following while …:", "Try doing the following:", etc.
-//   - Any line that ends with " then" (covers "If …, then")
+// It asks the parser, which is the only thing that knows. The answer used to
+// come from searching the text of each line: a line containing "following" and
+// ending in ":" opened a block, a line ending in " then" opened a block, and a
+// line containing "thats it." closed one. None of those can tell code from the
+// inside of a string or a comment, so
 //
-// Exception: lines that start with "otherwise" are continuations of an
-// existing if-else chain and do not open a new depth level, even when they
-// themselves end with " then" (e.g. "otherwise if …, then").
-// Similarly, "on ErrorType:" and "but finally:" are catch/finally clauses
-// inside an existing try block and do not affect depth.
-func isBlockOpener(lower string) bool {
-	// Continuation branches never open a new block level.
-	if strings.HasPrefix(lower, "otherwise") {
+//	Print "thats it.".
+//
+// inside a loop ended the block early and sent half a loop to be executed,
+// while
+//
+//	# do the following:
+//
+// opened a block that no "thats it." would ever close. The heuristic also had
+// to carry its own exception list for "otherwise", "on ...:" and "but
+// finally:", which are continuations rather than openers — a second grammar,
+// maintained by hand, next to the real one.
+//
+// A statement that is merely unfinished, like "Declare x to be", is not
+// treated as more-to-come: it is reported straight away rather than leaving
+// the prompt waiting for a line that cannot help.
+func needsMoreInput(code string) bool {
+	if strings.TrimSpace(code) == "" {
 		return false
 	}
-	if strings.HasPrefix(lower, "on ") && strings.HasSuffix(lower, ":") {
-		return false
-	}
-	if strings.HasPrefix(lower, "but finally") {
-		return false
-	}
-
-	// "do the following:", "repeat the following while …:", etc.
-	if strings.Contains(lower, "following") && strings.HasSuffix(lower, ":") {
-		return true
-	}
-	if strings.HasSuffix(lower, " then") {
-		return true
-	}
-	return false
-}
-
-// isBlockCloser reports whether a trimmed, lower-cased line closes a block.
-func isBlockCloser(lower string) bool {
-	return strings.Contains(lower, "thats it.") || strings.Contains(lower, "that's it.")
+	lexer := parser.NewLexer(code)
+	_, err := parser.NewParser(lexer.TokenizeAll()).Parse()
+	return parser.IsTruncated(err)
 }

@@ -2,6 +2,8 @@ package ivm
 
 import (
 	"strings"
+
+	"github.com/Advik-B/english/pygen"
 )
 
 // ─── helper utilities ─────────────────────────────────────────────────────────
@@ -218,55 +220,8 @@ func extractListLiteral(s string) []string {
 
 // helperDefs mirrors the definitions in transpiler/helpers.go so the decompiler
 // can inject the same helper functions when needed.
-var helperDefs = map[string]string{
-	"_table_remove": `def _table_remove(d, k):
-    result = dict(d)
-    result.pop(k, None)
-    return result`,
-
-	"_flatten": `def _flatten(lst):
-    return [item for sublist in lst for item in sublist]`,
-
-	"_read_file": `def _read_file(path):
-    with open(path, "r") as f:
-        return f.read()`,
-
-	"_write_file": `def _write_file(path, content):
-    with open(path, "w") as f:
-        f.write(str(content))`,
-
-	"_is_nan": `def _is_nan(x):
-    try:
-        return math.isnan(float(x))
-    except (TypeError, ValueError):
-        return True`,
-
-	"_is_infinite": `def _is_infinite(x):
-    try:
-        return math.isinf(float(x))
-    except (TypeError, ValueError):
-        return False`,
-
-	"_sign": `def _sign(x):
-    if x > 0:
-        return 1
-    elif x < 0:
-        return -1
-    return 0`,
-
-	"_unique": `def _unique(lst):
-    seen = []
-    for item in lst:
-        if item not in seen:
-            seen.append(item)
-    return seen`,
-
-	"_product": `def _product(lst):
-    result = 1
-    for item in lst:
-        result *= item
-    return result`,
-
-	"_zip_with": `def _zip_with(a, b):
-    return [[x, y] for x, y in zip(a, b)]`,
-}
+// helperDefs is the shared table of injected Python helpers. This package
+// used to keep its own copy, which was already missing an entry the AST
+// transpiler had, so a decompiled program could refer to something never
+// defined.
+var helperDefs = pygen.HelperDefs

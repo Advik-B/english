@@ -1,11 +1,13 @@
 package bytecode
 
 import (
-	"github.com/Advik-B/english/ast"
+	"bytes"
 	"os"
 	"path/filepath"
 	"testing"
 	"time"
+
+	"github.com/Advik-B/english/ast"
 )
 
 func TestGetCachePath(t *testing.T) {
@@ -35,91 +37,112 @@ func TestGetCachePath(t *testing.T) {
 	}
 }
 
-func TestIsCacheValid(t *testing.T) {
-	// Create a temporary directory for testing
-	tmpDir, err := os.MkdirTemp("", "engcache_test")
-	if err != nil {
-		t.Fatalf("Failed to create temp dir: %v", err)
-	}
-	defer os.RemoveAll(tmpDir)
-
-	// Create a source file
+// TestCacheValidityFollowsContent covers cache invalidation, which compared
+// modification times: a cache file not older than its source was used.
+//
+// That is wrong in the dangerous direction. A checkout, a restore from a
+// backup or an archive extraction can leave a source file older than a cache
+// built from different text, and the stale cache was then used silently — the
+// program you edited was not the program that ran.
+func TestCacheValidityFollowsContent(t *testing.T) {
+	tmpDir := t.TempDir()
 	sourcePath := filepath.Join(tmpDir, "source.abc")
-	if err := os.WriteFile(sourcePath, []byte("Print \"hello\"."), 0644); err != nil {
-		t.Fatalf("Failed to create source file: %v", err)
+	cachePath := filepath.Join(tmpDir, CacheDir, "test.101")
+
+	original := []byte(`Print "hello".`)
+	if err := os.WriteFile(sourcePath, original, 0644); err != nil {
+		t.Fatalf("cannot write the source: %v", err)
 	}
 
-	// Create cache directory
-	cacheDir := filepath.Join(tmpDir, CacheDir)
-	if err := os.MkdirAll(cacheDir, 0755); err != nil {
-		t.Fatalf("Failed to create cache dir: %v", err)
-	}
-
-	cachePath := filepath.Join(cacheDir, "test.101")
-
-	// Test 1: Cache doesn't exist
+	// Nothing cached yet.
 	if IsCacheValid(sourcePath, cachePath) {
-		t.Error("Cache should not be valid when it doesn't exist")
+		t.Error("a cache that does not exist is reported as valid")
 	}
 
-	// Create cache file (newer than source)
-	time.Sleep(10 * time.Millisecond)
-	if err := os.WriteFile(cachePath, []byte("test"), 0644); err != nil {
-		t.Fatalf("Failed to create cache file: %v", err)
+	stamp, err := StampOfSource(sourcePath)
+	if err != nil {
+		t.Fatalf("cannot stamp the source: %v", err)
 	}
-
-	// Test 2: Cache is newer than source
+	if err := WriteBytecodeCache(cachePath, stamp, []byte("payload")); err != nil {
+		t.Fatalf("cannot write the cache: %v", err)
+	}
 	if !IsCacheValid(sourcePath, cachePath) {
-		t.Error("Cache should be valid when it's newer than source")
+		t.Error("a cache built from this exact source is reported as stale")
 	}
 
-	// Update source file to be newer than cache
-	time.Sleep(10 * time.Millisecond)
-	if err := os.WriteFile(sourcePath, []byte("Print \"updated\"."), 0644); err != nil {
-		t.Fatalf("Failed to update source file: %v", err)
+	// The source changes, and its modification time is deliberately set
+	// *older* than the cache file — the case timestamps get wrong.
+	if err := os.WriteFile(sourcePath, []byte(`Print "goodbye".`), 0644); err != nil {
+		t.Fatalf("cannot update the source: %v", err)
 	}
-
-	// Test 3: Source is newer than cache
+	past := time.Now().Add(-time.Hour)
+	if err := os.Chtimes(sourcePath, past, past); err != nil {
+		t.Fatalf("cannot backdate the source: %v", err)
+	}
 	if IsCacheValid(sourcePath, cachePath) {
-		t.Error("Cache should not be valid when source is newer")
+		t.Error("a cache built from different text is reported as valid because it is newer")
+	}
+
+	// Restoring the original text makes the same cache entry current again,
+	// whatever the timestamps say.
+	if err := os.WriteFile(sourcePath, original, 0644); err != nil {
+		t.Fatalf("cannot restore the source: %v", err)
+	}
+	if !IsCacheValid(sourcePath, cachePath) {
+		t.Error("a cache built from this exact source is reported as stale")
+	}
+}
+
+// TestCacheRejectsAForeignStamp covers the other half: nothing recorded which
+// build wrote a cache file, so an entry written by an older compiler was
+// decoded by a newer one whose node numbering may have changed since.
+func TestCacheRejectsAForeignStamp(t *testing.T) {
+	tmpDir := t.TempDir()
+	sourcePath := filepath.Join(tmpDir, "source.abc")
+	cachePath := filepath.Join(tmpDir, CacheDir, "test.101")
+
+	if err := os.WriteFile(sourcePath, []byte(`Print "hello".`), 0644); err != nil {
+		t.Fatalf("cannot write the source: %v", err)
+	}
+	if err := WriteBytecodeCache(cachePath, CacheStamp([]byte("something else")), []byte("payload")); err != nil {
+		t.Fatalf("cannot write the cache: %v", err)
+	}
+	if IsCacheValid(sourcePath, cachePath) {
+		t.Error("a cache stamped for other source is reported as valid")
+	}
+
+	// A file that is not a cache envelope at all is rejected rather than
+	// read as bytecode.
+	if err := os.WriteFile(cachePath, []byte{0x10, 0x1E, 0x4E, 0x47, 0x01}, 0644); err != nil {
+		t.Fatalf("cannot write the cache: %v", err)
+	}
+	if _, _, err := ReadBytecodeCache(cachePath); err == nil {
+		t.Error("a compiled .101 file was accepted as a cache envelope")
 	}
 }
 
 func TestWriteAndReadBytecodeCache(t *testing.T) {
-	// Create a temporary directory for testing
-	tmpDir, err := os.MkdirTemp("", "engcache_test")
-	if err != nil {
-		t.Fatalf("Failed to create temp dir: %v", err)
-	}
-	defer os.RemoveAll(tmpDir)
-
+	tmpDir := t.TempDir()
 	cachePath := filepath.Join(tmpDir, CacheDir, "test.101")
-	testData := []byte{0x10, 0x1E, 0x4E, 0x47, 0x01, 0x02, 0x03}
+	payload := []byte{0x10, 0x1E, 0x4E, 0x47, 0x01, 0x02, 0x03}
+	stamp := CacheStamp([]byte(`Print "hello".`))
 
-	// Test writing cache
-	if err := WriteBytecodeCache(cachePath, testData); err != nil {
+	if err := WriteBytecodeCache(cachePath, stamp, payload); err != nil {
 		t.Fatalf("WriteBytecodeCache failed: %v", err)
 	}
-
-	// Verify cache directory was created
 	if _, err := os.Stat(filepath.Join(tmpDir, CacheDir)); os.IsNotExist(err) {
-		t.Error("Cache directory was not created")
+		t.Error("the cache directory was not created")
 	}
 
-	// Test reading cache
-	readData, err := ReadBytecodeCache(cachePath)
+	readPayload, readStamp, err := ReadBytecodeCache(cachePath)
 	if err != nil {
 		t.Fatalf("ReadBytecodeCache failed: %v", err)
 	}
-
-	// Verify data matches
-	if len(readData) != len(testData) {
-		t.Errorf("Data length mismatch: got %d, want %d", len(readData), len(testData))
+	if readStamp != stamp {
+		t.Errorf("the stamp came back as %016x, want %016x", readStamp, stamp)
 	}
-	for i := range testData {
-		if readData[i] != testData[i] {
-			t.Errorf("Data mismatch at index %d: got %x, want %x", i, readData[i], testData[i])
-		}
+	if !bytes.Equal(readPayload, payload) {
+		t.Errorf("the payload came back as %x, want %x", readPayload, payload)
 	}
 }
 
@@ -184,8 +207,7 @@ func TestLoadCachedOrParse(t *testing.T) {
 		t.Errorf("Parse function should still be called once, got %d", parseCallCount)
 	}
 
-	// Update source file to invalidate cache
-	time.Sleep(10 * time.Millisecond)
+	// The source changes, so the cache entry no longer describes it.
 	if err := os.WriteFile(sourcePath, []byte("Print \"updated\"."), 0644); err != nil {
 		t.Fatalf("Failed to update source file: %v", err)
 	}

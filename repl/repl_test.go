@@ -282,7 +282,7 @@ func TestIfOtherwiseIfBlock(t *testing.T) {
 
 func TestFunctionDeclarationAndCall(t *testing.T) {
 	out := runLoop(join(
-		"Declare function double that takes n and does the following:",
+		"Declare function double that takes n as number, and gives back a number, and does the following:",
 		"    Return n * 2.",
 		"thats it.",
 		"Declare result to be 0.",
@@ -294,7 +294,7 @@ func TestFunctionDeclarationAndCall(t *testing.T) {
 
 func TestFunctionWithMultipleParams(t *testing.T) {
 	out := runLoop(join(
-		"Declare function add that takes a and b and does the following:",
+		"Declare function add that takes a as number and b as number, and gives back a number, and does the following:",
 		"    Return a + b.",
 		"thats it.",
 		"Declare s to be 0.",
@@ -306,11 +306,10 @@ func TestFunctionWithMultipleParams(t *testing.T) {
 
 func TestFunctionPrintOutput(t *testing.T) {
 	out := runLoop(join(
-		"Declare function greet that takes name and does the following:",
+		"Declare function greet that takes name as text, and gives back nothing, and does the following:",
 		"    Print \"Hello,\", the value of name.",
 		"thats it.",
-		"Declare dummy to be 0.",
-		"Set dummy to be the result of calling greet with \"World\".",
+		"Call greet with \"World\".",
 	))
 	assertContains(t, out, "Hello,")
 	assertContains(t, out, "World")
@@ -438,7 +437,7 @@ func TestFibonacci(t *testing.T) {
 
 func TestFactorial(t *testing.T) {
 	out := runLoop(join(
-		"Declare function factorial that takes n and does the following:",
+		"Declare function factorial that takes n as number, and gives back a number, and does the following:",
 		"    If n is less than or equal to 1, then",
 		"        Return 1.",
 		"    thats it.",
@@ -509,7 +508,7 @@ func TestBlankLinesInsideBlock(t *testing.T) {
 
 func TestFunctionWithNestedIf(t *testing.T) {
 	out := runLoop(join(
-		"Declare function classify that takes n and does the following:",
+		"Declare function classify that takes n as number, and gives back nothing, and does the following:",
 		"    If n is greater than 0, then",
 		"        Print \"positive\".",
 		"    otherwise if n is less than 0, then",
@@ -518,14 +517,55 @@ func TestFunctionWithNestedIf(t *testing.T) {
 		"        Print \"zero\".",
 		"    thats it.",
 		"thats it.",
-		"Declare dummy to be 0.",
-		"Set dummy to be the result of calling classify with 5.",
-		"Set dummy to be the result of calling classify with 0.",
-		"Set dummy to be the result of calling classify with -3.",
+		"Call classify with 5.",
+		"Call classify with 0.",
+		"Call classify with -3.",
 	))
 	assertContains(t, out, "positive")
 	assertContains(t, out, "zero")
 	assertContains(t, out, "negative")
+}
+
+// ── Block detection ──────────────────────────────────────────────────────────
+
+// TestBlockCloserInsideTextIsNotACloser covers where a block ends, which the
+// REPL decided by searching each line's text for "thats it.". Printing that
+// text inside a loop ended the block early, so half a loop was executed and
+// the rest of it became a stray "thats it." at the top level.
+func TestBlockCloserInsideTextIsNotACloser(t *testing.T) {
+	out := runLoop(join(
+		"For each n in [1, 2], do the following:",
+		"    Print \"thats it.\".",
+		"    Print n.",
+		"thats it.",
+	))
+	// The loop ran twice and printed both lines each time.
+	if got := strings.Count(out, "thats it."); got != 2 {
+		t.Errorf("the loop body printed the text %d time(s), want 2\nfull output:\n%s", got, out)
+	}
+	assertContains(t, out, "1", "2")
+	assertNotContains(t, out, "Syntax Error")
+}
+
+// TestBlockOpenerInsideACommentIsNotAnOpener covers the other half: a line
+// containing "following" and ending in ":" opened a block, so a comment
+// describing one left the prompt waiting for a "thats it." that belonged to
+// nothing.
+func TestBlockOpenerInsideACommentIsNotAnOpener(t *testing.T) {
+	out := runLoop(join(
+		"# do the following:",
+		"Print \"after the comment\".",
+	))
+	assertContains(t, out, "after the comment")
+	assertNotContains(t, out, "Syntax Error")
+}
+
+// TestUnfinishedStatementIsReportedNotAwaited covers the prompt's other
+// obligation: a statement that no further line can complete is a mistake, and
+// waiting for more input would hide it.
+func TestUnfinishedStatementIsReportedNotAwaited(t *testing.T) {
+	out := runLoop(join("Declare x to be"))
+	assertContains(t, out, "Syntax Error")
 }
 
 // ── join helper ───────────────────────────────────────────────────────────────

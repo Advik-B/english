@@ -6,11 +6,11 @@
 package stacktraces
 
 import (
-	"github.com/Advik-B/english/highlight"
 	"fmt"
 	"os"
 	"strings"
 
+	"github.com/Advik-B/english/highlight"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/mattn/go-isatty"
 	"github.com/muesli/termenv"
@@ -144,6 +144,56 @@ type CompileFileError interface {
 	CompileFile() string
 }
 
+// CompileColumnError is an optional extension implemented by compile errors
+// that know the column as well as the line. Type errors could only report a
+// line until every AST node carried a full position.
+type CompileColumnError interface {
+	CompileError
+	CompileCol() int
+}
+
+// CompileHintError is an optional extension implemented by compile errors that
+// carry guidance towards a fix, as syntax errors already do.
+type CompileHintError interface {
+	CompileError
+	CompileHint() string
+}
+
+// compileLocation renders the "where" part of a compile error.
+func compileLocation(ce CompileError) string {
+	file := ""
+	if cfe, ok := ce.(CompileFileError); ok {
+		file = cfe.CompileFile()
+	}
+	col := 0
+	if cce, ok := ce.(CompileColumnError); ok {
+		col = cce.CompileCol()
+	}
+	line := ce.CompileLine()
+
+	switch {
+	case file != "" && line > 0 && col > 0:
+		return fmt.Sprintf("%s, line %d, column %d", file, line, col)
+	case file != "" && line > 0:
+		return fmt.Sprintf("%s, line %d", file, line)
+	case line > 0 && col > 0:
+		return fmt.Sprintf("line %d, column %d", line, col)
+	case line > 0:
+		return fmt.Sprintf("line %d", line)
+	case file != "":
+		return file
+	}
+	return ""
+}
+
+// compileHint returns a compile error's hint, if it has one.
+func compileHint(ce CompileError) string {
+	if che, ok := ce.(CompileHintError); ok {
+		return che.CompileHint()
+	}
+	return ""
+}
+
 // SyntaxError is the interface satisfied by parser.SyntaxError.
 // It carries a user-friendly message, the source line/column, and an optional
 // hint to guide the programmer towards a fix.
@@ -172,10 +222,36 @@ func RenderWithColor(err error, color bool) string {
 	if err == nil {
 		return ""
 	}
+	err = renderable(err)
 	if !color {
 		return renderPlain(err)
 	}
 	return renderColored(err)
+}
+
+// renderable digs out the error this knows how to lay out.
+//
+// The renderers dispatch on what an error *is*, so an error that merely wraps
+// one of them — a parse that collected several syntax errors, say — would fall
+// through to the plain "Error: …" form and lose its header, its position and
+// its hint. Unwrapping finds the one inside.
+func renderable(err error) error {
+	for err != nil {
+		switch err.(type) {
+		case RuntimeError, SyntaxError, CompileError:
+			return err
+		}
+		unwrapped, ok := err.(interface{ Unwrap() error })
+		if !ok {
+			return err
+		}
+		next := unwrapped.Unwrap()
+		if next == nil {
+			return err
+		}
+		err = next
+	}
+	return err
 }
 
 // Print writes the formatted error to stderr.
@@ -221,6 +297,18 @@ func renderPlain(err error) string {
 		return sb.String()
 	}
 
+	if ce, ok := err.(CompileError); ok {
+		where := compileLocation(ce)
+		if where != "" {
+			sb.WriteString(fmt.Sprintf("Compile Error at %s: %s\n", where, ce.CompileMessage()))
+		} else {
+			sb.WriteString(fmt.Sprintf("Compile Error: %s\n", ce.CompileMessage()))
+		}
+		if hint := compileHint(ce); hint != "" {
+			sb.WriteString("Hint: " + hint + "\n")
+		}
+		return sb.String()
+	}
 	if ce, ok := err.(CompileError); ok {
 		file := ""
 		if cfe, ok := err.(CompileFileError); ok {
@@ -326,27 +414,18 @@ func renderCompileError(sb *strings.Builder, ce CompileError) {
 	sb.WriteString(sep)
 	sb.WriteString("\n\n")
 
-	file := ""
-	if cfe, ok := ce.(CompileFileError); ok {
-		file = cfe.CompileFile()
+	sb.WriteString("  ")
+	if where := compileLocation(ce); where != "" {
+		sb.WriteString(compileLabelStyle.Render(where + ": "))
 	}
-
-	if line := ce.CompileLine(); line > 0 {
-		sb.WriteString("  ")
-		if file != "" {
-			sb.WriteString(compileLabelStyle.Render(fmt.Sprintf("%s, Line %d: ", file, line)))
-		} else {
-			sb.WriteString(compileLabelStyle.Render(fmt.Sprintf("Line %d: ", line)))
-		}
-		sb.WriteString(compileMessageStyle.Render(ce.CompileMessage()))
-	} else {
-		sb.WriteString("  ")
-		if file != "" {
-			sb.WriteString(compileLabelStyle.Render(fmt.Sprintf("%s: ", file)))
-		}
-		sb.WriteString(compileMessageStyle.Render(ce.CompileMessage()))
-	}
+	sb.WriteString(compileMessageStyle.Render(ce.CompileMessage()))
 	sb.WriteString("\n")
+
+	if hint := compileHint(ce); hint != "" {
+		sb.WriteString("\n  ")
+		sb.WriteString(hintStyle.Render("Hint: " + hint))
+		sb.WriteString("\n")
+	}
 
 	sb.WriteString(sep)
 	sb.WriteString("\n\n")

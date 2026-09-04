@@ -121,4 +121,3 @@ func (r *REPL) printDetailedHelp(entry *help.HelpEntry) {
 		fmt.Fprintf(r.out, "See also: %s\n", strings.Join(entry.SeeAlso, ", "))
 	}
 }
-

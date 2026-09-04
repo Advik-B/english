@@ -38,7 +38,7 @@ type fakeCompileError struct {
 	line int
 }
 
-func (e *fakeCompileError) Error() string       { return e.msg }
+func (e *fakeCompileError) Error() string          { return e.msg }
 func (e *fakeCompileError) CompileMessage() string { return e.msg }
 func (e *fakeCompileError) CompileLine() int       { return e.line }
 
@@ -297,7 +297,7 @@ type fakeSyntaxError struct {
 	hint string
 }
 
-func (e *fakeSyntaxError) Error() string       { return "Syntax Error: " + e.msg }
+func (e *fakeSyntaxError) Error() string         { return "Syntax Error: " + e.msg }
 func (e *fakeSyntaxError) SyntaxMessage() string { return e.msg }
 func (e *fakeSyntaxError) SyntaxLine() int       { return e.line }
 func (e *fakeSyntaxError) SyntaxCol() int        { return e.col }

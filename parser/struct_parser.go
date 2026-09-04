@@ -1,9 +1,10 @@
 package parser
 
 import (
+	"fmt"
+
 	"github.com/Advik-B/english/ast"
 	"github.com/Advik-B/english/token"
-	"fmt"
 )
 
 // parseStructDeclaration parses a struct declaration
@@ -77,21 +78,11 @@ func (p *Parser) parseStructDeclaration() (ast.Statement, error) {
 	}
 	p.nextToken()
 
-	// Skip optional newline
-	if p.curToken.Type == token.NEWLINE {
-		p.nextToken()
-	}
-
 	// Parse fields and methods
 	var fields []*ast.StructField
 	var methods []*ast.FunctionDecl
 
 	for p.curToken.Type != token.THATS && p.curToken.Type != token.EOF {
-		// Skip newlines and indentation
-		for p.curToken.Type == token.NEWLINE {
-			p.nextToken()
-		}
-
 		if p.curToken.Type == token.THATS {
 			break
 		}
@@ -114,20 +105,9 @@ func (p *Parser) parseStructDeclaration() (ast.Statement, error) {
 	}
 
 	// Expect "thats it."
-	if err := p.expectToken(token.THATS); err != nil {
+	if err := p.expectBlockEnd(); err != nil {
 		return nil, err
 	}
-	p.nextToken()
-
-	if err := p.expectToken(token.IT); err != nil {
-		return nil, err
-	}
-	p.nextToken()
-
-	if err := p.expectToken(token.PERIOD); err != nil {
-		return nil, err
-	}
-	p.nextToken()
 
 	return &ast.StructDecl{
 		Name:    nameToken.Value,
@@ -156,31 +136,12 @@ func (p *Parser) parseStructField() (*ast.StructField, error) {
 	}
 	p.nextToken()
 
-	// Skip optional "a" or "an"
-	if p.curToken.Type == token.IDENTIFIER && (p.curToken.Value == "a" || p.curToken.Value == "an") {
-		p.nextToken()
+	// parseTypeName skips an optional article and handles multi-word names such
+	// as "unsigned integer" and "lookup table".
+	fieldType, err := p.parseTypeName()
+	if err != nil {
+		return nil, err
 	}
-
-	// Check for "unsigned"
-	isUnsigned := false
-	if p.curToken.Type == token.UNSIGNED {
-		isUnsigned = true
-		p.nextToken()
-	}
-
-	// Get type name
-	typeToken := p.curToken
-	if p.curToken.Type != token.IDENTIFIER && p.curToken.Type != token.INTEGER {
-		return nil, p.syntaxErr(
-			fmt.Sprintf(msgFmtFieldTypeName, nameToken.Value, p.curToken.Value),
-			hintFieldType,
-		)
-	}
-	typeName := typeToken.Value
-	if p.curToken.Type == token.INTEGER {
-		typeName = "integer"
-	}
-	p.nextToken()
 
 	var defaultValue ast.Expression
 
@@ -219,15 +180,16 @@ func (p *Parser) parseStructField() (*ast.StructField, error) {
 	p.nextToken()
 
 	return &ast.StructField{
+		Base:         at(nameToken),
 		Name:         nameToken.Value,
-		TypeName:     typeName,
+		Type:         fieldType,
 		DefaultValue: defaultValue,
-		IsUnsigned:   isUnsigned,
 	}, nil
 }
 
 // parseStructMethod parses a method within a struct definition
 func (p *Parser) parseStructMethod() (*ast.FunctionDecl, error) {
+	methodPos := at(p.curToken)
 	// Skip "let"
 	p.nextToken()
 
@@ -261,7 +223,7 @@ func (p *Parser) parseStructMethod() (*ast.FunctionDecl, error) {
 	}
 	p.nextToken()
 
-	var parameters []string
+	var parameters []ast.Param
 
 	// Check for "that takes" for parameters
 	if p.curToken.Type == token.THAT {
@@ -276,14 +238,31 @@ func (p *Parser) parseStructMethod() (*ast.FunctionDecl, error) {
 						hintMethodParam,
 					)
 				}
-				parameters = append(parameters, paramToken.Value)
+				param := ast.Param{Base: at(paramToken), Name: paramToken.Value}
 				p.nextToken()
+
+				// Every parameter says what it takes, in a method as in a
+				// plain function.
+				if p.curToken.Type != token.AS {
+					return nil, p.syntaxErr(
+						fmt.Sprintf(msgFmtParameterNeedsType, param.Name),
+						fmt.Sprintf(hintFmtParameterType, param.Name),
+					)
+				}
+				p.nextToken()
+				paramType, err := p.parseTypeName()
+				if err != nil {
+					return nil, err
+				}
+				param.Type = paramType
+				parameters = append(parameters, param)
 
 				if p.curToken.Type != token.AND {
 					break
 				}
-				// Check if "and" is followed by "does" (end of params) or another param
-				if p.peekToken.Type == token.DOES {
+				// "and" here either joins another parameter or introduces the
+				// rest of the declaration ("and gives back …", "and does …").
+				if p.peekToken.Type == token.DOES || p.peekWord("gives") {
 					break
 				}
 				p.nextToken()
@@ -291,15 +270,18 @@ func (p *Parser) parseStructMethod() (*ast.FunctionDecl, error) {
 		}
 	}
 
-	// Support "and does" syntax after parameters
-	if p.curToken.Type == token.AND {
-		p.nextToken()
+	// Support "and does" / "and gives back" syntax after parameters
+	p.skipOptional(token.COMMA)
+	p.skipOptional(token.AND)
+
+	// Every method says what it gives back, as every function does.
+	returnType, err := p.parseGivesBack(nameToken.Value)
+	if err != nil {
+		return nil, err
 	}
 
 	// Expect "that does" or just "does"
-	if p.curToken.Type == token.THAT {
-		p.nextToken()
-	}
+	p.skipOptional(token.THAT)
 
 	if err := p.expectToken(token.DOES); err != nil {
 		return nil, err
@@ -330,24 +312,15 @@ func (p *Parser) parseStructMethod() (*ast.FunctionDecl, error) {
 	}
 
 	// Expect "thats it." at the end of the method
-	if err := p.expectToken(token.THATS); err != nil {
+	if err := p.expectBlockEnd(); err != nil {
 		return nil, err
 	}
-	p.nextToken()
-
-	if err := p.expectToken(token.IT); err != nil {
-		return nil, err
-	}
-	p.nextToken()
-
-	if err := p.expectToken(token.PERIOD); err != nil {
-		return nil, err
-	}
-	p.nextToken()
 
 	return &ast.FunctionDecl{
+		Base:       methodPos,
 		Name:       nameToken.Value,
-		Parameters: parameters,
+		Params:     parameters,
+		ReturnType: returnType,
 		Body:       body,
 	}, nil
 }
@@ -416,18 +389,8 @@ func (p *Parser) parseStructInstantiation() (ast.Expression, error) {
 		}
 		p.nextToken()
 
-		// Skip optional newline
-		if p.curToken.Type == token.NEWLINE {
-			p.nextToken()
-		}
-
 		// Parse field assignments
 		for p.curToken.Type != token.THATS && p.curToken.Type != token.EOF {
-			// Skip newlines and indentation
-			for p.curToken.Type == token.NEWLINE {
-				p.nextToken()
-			}
-
 			if p.curToken.Type == token.THATS {
 				break
 			}
@@ -465,15 +428,9 @@ func (p *Parser) parseStructInstantiation() (ast.Expression, error) {
 		}
 
 		// Expect "thats it."
-		if err := p.expectToken(token.THATS); err != nil {
+		if err := p.expectBlockEndNoPeriod(); err != nil {
 			return nil, err
 		}
-		p.nextToken()
-
-		if err := p.expectToken(token.IT); err != nil {
-			return nil, err
-		}
-		p.nextToken()
 	}
 
 	return &ast.StructInstantiation{
@@ -504,15 +461,13 @@ func (p *Parser) parseTypedVariableDecl() (ast.Statement, error) {
 	}
 	p.nextToken()
 
-	// Read the type name (e.g. "number", "text", "boolean")
-	if p.curToken.Type != token.IDENTIFIER {
-		return nil, p.syntaxErr(
-			fmt.Sprintf(msgFmtTypedVarType, p.curToken.Value),
-			hintTypedVarType,
-		)
+	// Read the type name. parseTypeName accepts an optional article and the
+	// type names that are lexed as keywords ("integer", "array", "lookup
+	// table"), which this position used to reject.
+	declaredType, err := p.parseTypeName()
+	if err != nil {
+		return nil, err
 	}
-	typeName := p.curToken.Value
-	p.nextToken()
 
 	isConstant := false
 	var value ast.Expression
@@ -549,10 +504,10 @@ func (p *Parser) parseTypedVariableDecl() (ast.Statement, error) {
 	p.nextToken()
 
 	return &ast.TypedVariableDecl{
+		Base:       at(nameToken),
 		Name:       nameToken.Value,
-		TypeName:   typeName,
+		Type:       declaredType,
 		IsConstant: isConstant,
 		Value:      value,
-		Line:       nameToken.Line,
 	}, nil
 }

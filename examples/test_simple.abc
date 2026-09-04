@@ -15,11 +15,11 @@ Print "x after assignment:".
 Print the value of x.
 
 # Test function
-Declare function add that takes a and b and does the following:
+Declare function add that takes a as number and b as number, and gives back a number, and does the following:
 	Return a + b.
 thats it.
 
-Set result to be the result of calling add with 3 and 7.
+Declare result to be the result of calling add with 3 and 7.
 Print "3 + 7 =".
 Print the value of result.
 

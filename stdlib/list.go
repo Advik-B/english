@@ -1,10 +1,13 @@
 package stdlib
 
 import (
-	"github.com/Advik-B/english/astvm"
-	"github.com/Advik-B/english/astvm/types"
 	"fmt"
 	"sort"
+	"strings"
+
+	vm "github.com/Advik-B/english/astvm"
+	"github.com/Advik-B/english/runtime"
+	"github.com/Advik-B/english/types"
 )
 
 func evalList(name string, args []vm.Value) (vm.Value, error) {
@@ -34,7 +37,7 @@ func evalList(name string, args []vm.Value) (vm.Value, error) {
 			}
 			return &types.ArrayValue{ElementType: et, Elements: newElems}, nil
 		default:
-			return nil, fmt.Errorf("TypeError: append expects list or array, got %s", kindName(args[0]))
+			return nil, fmt.Errorf("TypeError: append expects list or array, got %s", types.NameOf(args[0]))
 		}
 	case "remove":
 		list, ok := args[0].([]interface{})
@@ -78,14 +81,7 @@ func evalList(name string, args []vm.Value) (vm.Value, error) {
 		}
 		result := make([]interface{}, len(list))
 		copy(result, list)
-		sort.Slice(result, func(i, j int) bool {
-			a, errA := vm.ToNumber(result[i])
-			b, errB := vm.ToNumber(result[j])
-			if errA == nil && errB == nil {
-				return a < b
-			}
-			return vm.ToString(result[i]) < vm.ToString(result[j])
-		})
+		sort.SliceStable(result, orderBefore(result))
 		return result, nil
 	case "reverse":
 		list, ok := args[0].([]interface{})
@@ -104,7 +100,7 @@ func evalList(name string, args []vm.Value) (vm.Value, error) {
 			for _, item := range col {
 				n, err := vm.ToNumber(item)
 				if err != nil {
-					return nil, fmt.Errorf("TypeError: sum requires a list or array of numbers, got %s element", kindName(item))
+					return nil, fmt.Errorf("TypeError: sum requires a list or array of numbers, got %s element", types.NameOf(item))
 				}
 				total += n
 			}
@@ -123,24 +119,29 @@ func evalList(name string, args []vm.Value) (vm.Value, error) {
 			}
 			return total, nil
 		default:
-			return nil, fmt.Errorf("TypeError: sum expects list or array, got %s", kindName(args[0]))
+			return nil, fmt.Errorf("TypeError: sum expects list or array, got %s", types.NameOf(args[0]))
 		}
 	case "unique":
 		list, ok := args[0].([]interface{})
 		if !ok {
 			return nil, vm.NewRuntimeError("unique expects a list")
 		}
-		seen := make(map[string]bool)
-		var result []interface{}
+		// Distinctness follows the language's own equality, which knows that
+		// the number 1 and the text "1" are different values. Keying on their
+		// rendered form made them the same, so unique([1, "1"]) returned one
+		// element.
+		result := []interface{}{}
 		for _, item := range list {
-			key := fmt.Sprintf("%v", item)
-			if !seen[key] {
-				seen[key] = true
+			duplicate := false
+			for _, kept := range result {
+				if runtime.Equals(kept, item) {
+					duplicate = true
+					break
+				}
+			}
+			if !duplicate {
 				result = append(result, item)
 			}
-		}
-		if result == nil {
-			result = []interface{}{}
 		}
 		return result, nil
 	case "first":
@@ -156,7 +157,7 @@ func evalList(name string, args []vm.Value) (vm.Value, error) {
 			}
 			return col.Elements[0], nil
 		default:
-			return nil, fmt.Errorf("TypeError: first expects list or array, got %s", kindName(args[0]))
+			return nil, fmt.Errorf("TypeError: first expects list or array, got %s", types.NameOf(args[0]))
 		}
 	case "last":
 		switch col := args[0].(type) {
@@ -171,7 +172,7 @@ func evalList(name string, args []vm.Value) (vm.Value, error) {
 			}
 			return col.Elements[len(col.Elements)-1], nil
 		default:
-			return nil, fmt.Errorf("TypeError: last expects list or array, got %s", kindName(args[0]))
+			return nil, fmt.Errorf("TypeError: last expects list or array, got %s", types.NameOf(args[0]))
 		}
 	case "flatten":
 		list, ok := args[0].([]interface{})
@@ -201,7 +202,7 @@ func evalList(name string, args []vm.Value) (vm.Value, error) {
 		case string:
 			return float64(len(col)), nil
 		default:
-			return nil, fmt.Errorf("TypeError: count expects list, array, lookup table, or text; got %s", kindName(args[0]))
+			return nil, fmt.Errorf("TypeError: count expects list, array, lookup table, or text; got %s", types.NameOf(args[0]))
 		}
 	case "slice":
 		list, ok := args[0].([]interface{})
@@ -342,13 +343,8 @@ func evalList(name string, args []vm.Value) (vm.Value, error) {
 		}
 		result := make([]interface{}, len(lst))
 		copy(result, lst)
-		sort.Slice(result, func(i, j int) bool {
-			a, errA := vm.ToNumber(result[i])
-			b, errB := vm.ToNumber(result[j])
-			if errA == nil && errB == nil {
-				return a > b
-			}
-			return vm.ToString(result[i]) > vm.ToString(result[j])
+		sort.SliceStable(result, func(i, j int) bool {
+			return compareValues(result[i], result[j]) > 0
 		})
 		return result, nil
 	case "zip_with":
@@ -373,25 +369,75 @@ func evalList(name string, args []vm.Value) (vm.Value, error) {
 	return nil, vm.NewRuntimeError("unknown list function: " + name)
 }
 
-func registerListFunctions(env *vm.Environment) {
-	env.DefineFunction("append", &vm.FunctionValue{Name: "append", Parameters: []string{"list", "item"}, Body: nil, Closure: env})
-	env.DefineFunction("remove", &vm.FunctionValue{Name: "remove", Parameters: []string{"list", "index"}, Body: nil, Closure: env})
-	env.DefineFunction("insert", &vm.FunctionValue{Name: "insert", Parameters: []string{"list", "index", "item"}, Body: nil, Closure: env})
-	env.DefineFunction("sort", &vm.FunctionValue{Name: "sort", Parameters: []string{"list"}, Body: nil, Closure: env})
-	env.DefineFunction("reverse", &vm.FunctionValue{Name: "reverse", Parameters: []string{"list"}, Body: nil, Closure: env})
-	env.DefineFunction("sum", &vm.FunctionValue{Name: "sum", Parameters: []string{"list"}, Body: nil, Closure: env})
-	env.DefineFunction("unique", &vm.FunctionValue{Name: "unique", Parameters: []string{"list"}, Body: nil, Closure: env})
-	env.DefineFunction("first", &vm.FunctionValue{Name: "first", Parameters: []string{"list"}, Body: nil, Closure: env})
-	env.DefineFunction("last", &vm.FunctionValue{Name: "last", Parameters: []string{"list"}, Body: nil, Closure: env})
-	env.DefineFunction("flatten", &vm.FunctionValue{Name: "flatten", Parameters: []string{"list"}, Body: nil, Closure: env})
-	env.DefineFunction("count", &vm.FunctionValue{Name: "count", Parameters: []string{"list"}, Body: nil, Closure: env})
-	env.DefineFunction("slice", &vm.FunctionValue{Name: "slice", Parameters: []string{"list", "start", "end"}, Body: nil, Closure: env})
-	env.DefineFunction("average", &vm.FunctionValue{Name: "average", Parameters: []string{"list"}, Body: nil, Closure: env})
-	env.DefineFunction("min_value", &vm.FunctionValue{Name: "min_value", Parameters: []string{"list"}, Body: nil, Closure: env})
-	env.DefineFunction("max_value", &vm.FunctionValue{Name: "max_value", Parameters: []string{"list"}, Body: nil, Closure: env})
-	env.DefineFunction("any_true", &vm.FunctionValue{Name: "any_true", Parameters: []string{"list"}, Body: nil, Closure: env})
-	env.DefineFunction("all_true", &vm.FunctionValue{Name: "all_true", Parameters: []string{"list"}, Body: nil, Closure: env})
-	env.DefineFunction("product", &vm.FunctionValue{Name: "product", Parameters: []string{"list"}, Body: nil, Closure: env})
-	env.DefineFunction("sorted_desc", &vm.FunctionValue{Name: "sorted_desc", Parameters: []string{"list"}, Body: nil, Closure: env})
-	env.DefineFunction("zip_with", &vm.FunctionValue{Name: "zip_with", Parameters: []string{"list", "other"}, Body: nil, Closure: env})
+// orderBefore returns the ordering predicate used by sort and sorted_desc.
+//
+// A comparison must be consistent for every pair, or the result is undefined.
+// The previous comparator decided per pair: numeric when both happened to be
+// numbers, and textual otherwise, which is not transitive on a mixed list — so
+// sort.Slice was free to produce anything at all.
+//
+// Values are ordered by type first, then within a type, so a mixed list has a
+// definite order rather than an accidental one.
+func orderBefore(items []interface{}) func(i, j int) bool {
+	return func(i, j int) bool {
+		return compareValues(items[i], items[j]) < 0
+	}
+}
+
+// compareValues orders two values: negative if a sorts before b, positive if
+// after, zero if they sort together.
+func compareValues(a, b interface{}) int {
+	ra, rb := sortRank(a), sortRank(b)
+	if ra != rb {
+		return ra - rb
+	}
+	switch ra {
+	case rankNumber:
+		x, _ := vm.ToNumber(a)
+		y, _ := vm.ToNumber(b)
+		switch {
+		case x < y:
+			return -1
+		case x > y:
+			return 1
+		}
+		return 0
+	case rankBool:
+		x, y := a.(bool), b.(bool)
+		switch {
+		case !x && y:
+			return -1
+		case x && !y:
+			return 1
+		}
+		return 0
+	case rankText:
+		return strings.Compare(a.(string), b.(string))
+	}
+	// Everything else keeps its relative order, which SliceStable preserves.
+	return 0
+}
+
+// Sort ranks: values of different types sort in this order.
+const (
+	rankNothing = iota
+	rankBool
+	rankNumber
+	rankText
+	rankOther
+)
+
+func sortRank(v interface{}) int {
+	switch v.(type) {
+	case nil:
+		return rankNothing
+	case bool:
+		return rankBool
+	case string:
+		return rankText
+	}
+	if _, err := vm.ToNumber(v); err == nil {
+		return rankNumber
+	}
+	return rankOther
 }

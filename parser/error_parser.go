@@ -1,10 +1,11 @@
 package parser
 
 import (
-	"github.com/Advik-B/english/ast"
-	"github.com/Advik-B/english/token"
 	"fmt"
 	"strings"
+
+	"github.com/Advik-B/english/ast"
+	"github.com/Advik-B/english/token"
 )
 
 // parseTryStatement parses a try/on error/but finally block
@@ -18,7 +19,7 @@ import (
 //	thats it.
 func (p *Parser) parseTryStatement() (ast.Statement, error) {
 	// Skip "try"
-	startLine := p.curToken.Line
+	startPos := at(p.curToken)
 	p.nextToken()
 
 	// Expect "doing"
@@ -115,20 +116,9 @@ func (p *Parser) parseTryStatement() (ast.Statement, error) {
 	}
 
 	// Expect "thats it."
-	if err := p.expectToken(token.THATS); err != nil {
+	if err := p.expectBlockEnd(); err != nil {
 		return nil, err
 	}
-	p.nextToken()
-
-	if err := p.expectToken(token.IT); err != nil {
-		return nil, err
-	}
-	p.nextToken()
-
-	if err := p.expectToken(token.PERIOD); err != nil {
-		return nil, err
-	}
-	p.nextToken()
 
 	return &ast.TryStatement{
 		TryBody:     tryBody,
@@ -136,7 +126,7 @@ func (p *Parser) parseTryStatement() (ast.Statement, error) {
 		ErrorType:   errorType,
 		ErrorBody:   errorBody,
 		FinallyBody: finallyBody,
-		Line:        startLine,
+		Base:        startPos,
 	}, nil
 }
 
@@ -146,7 +136,7 @@ func (p *Parser) parseTryStatement() (ast.Statement, error) {
 //	raise "error message".
 func (p *Parser) parseRaiseStatement() (ast.Statement, error) {
 	// Skip "raise"
-	startLine := p.curToken.Line
+	startPos := at(p.curToken)
 	p.nextToken()
 
 	// Parse error message expression
@@ -181,7 +171,7 @@ func (p *Parser) parseRaiseStatement() (ast.Statement, error) {
 	return &ast.RaiseStatement{
 		Message:   message,
 		ErrorType: errorType,
-		Line:      startLine,
+		Base:      startPos,
 	}, nil
 }
 
@@ -189,7 +179,7 @@ func (p *Parser) parseRaiseStatement() (ast.Statement, error) {
 // Syntax: swap a and b.
 func (p *Parser) parseSwapStatement() (ast.Statement, error) {
 	// Skip "swap"
-	startLine := p.curToken.Line
+	startPos := at(p.curToken)
 	p.nextToken()
 
 	if p.curToken.Type != token.IDENTIFIER {
@@ -225,7 +215,7 @@ func (p *Parser) parseSwapStatement() (ast.Statement, error) {
 	return &ast.SwapStatement{
 		Name1: name1,
 		Name2: name2,
-		Line:  startLine,
+		Base:  startPos,
 	}, nil
 }
 

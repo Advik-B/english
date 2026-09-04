@@ -15,14 +15,18 @@ package feature_parity_test
 
 import (
 	"bytes"
-	"github.com/Advik-B/english/astvm"
-	"github.com/Advik-B/english/stdlib"
-	"github.com/Advik-B/english/ivm"
-	"github.com/Advik-B/english/parser"
 	"io"
 	"os"
 	"strings"
 	"testing"
+
+	"github.com/Advik-B/english/ast"
+	vm "github.com/Advik-B/english/astvm"
+	"github.com/Advik-B/english/ivm"
+	"github.com/Advik-B/english/parser"
+	"github.com/Advik-B/english/runtime"
+	"github.com/Advik-B/english/sema"
+	"github.com/Advik-B/english/stdlib"
 )
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -38,6 +42,9 @@ func runAST(src string) (string, error) {
 		program, err := p.Parse()
 		if err != nil {
 			runErr = err
+			return
+		}
+		if runErr = analyse(program); runErr != nil {
 			return
 		}
 		env := vm.NewEnvironment()
@@ -61,6 +68,9 @@ func runIVM(src string) (string, error) {
 			runErr = err
 			return
 		}
+		if runErr = analyse(prog); runErr != nil {
+			return
+		}
 		chunk, err := ivm.Compile(prog)
 		if err != nil {
 			runErr = err
@@ -71,7 +81,21 @@ func runIVM(src string) (string, error) {
 	return out, runErr
 }
 
+// analyse runs semantic analysis, returning the first problem as an error.
+//
+// Both harnesses previously skipped analysis, so the parity suite exercised a
+// pipeline the real `english run` never uses: a program the compiler rejects
+// was executed here anyway, and the engines were compared on it.
+func analyse(prog *ast.Program) error {
+	diags := sema.Check(prog, sema.Config{Predefined: stdlib.PredefinedNames()})
+	if len(diags) == 0 {
+		return nil
+	}
+	return diags[0]
+}
+
 // captureStdout redirects stdout during fn and returns the captured text.
+
 func captureStdout(fn func()) string {
 	old := os.Stdout
 	r, w, _ := os.Pipe()
@@ -84,23 +108,49 @@ func captureStdout(fn func()) string {
 	return buf.String()
 }
 
-// assertParity is the core assertion: both VMs must produce the same stdout.
-// If expectErr is true, both VMs must also return a non-nil error.
+// assertParity is the core assertion: both engines must produce the same
+// output and, when a program fails, the same message.
+//
+// It used to compare only stdout and whether an error occurred, never the
+// message. That is why the two engines were free to drift: they disagreed on
+// the length of a non-ASCII string, on whether text could be indexed, on
+// whether a missing lookup key was an error, on what a type is called, and on
+// the wording of nearly every diagnostic, and the suite passed throughout.
 func assertParity(t *testing.T, src string) {
 	t.Helper()
 	astOut, astErr := runAST(src)
 	ivmOut, ivmErr := runIVM(src)
 
-	// Error agreement
 	if (astErr != nil) != (ivmErr != nil) {
-		t.Errorf("error parity mismatch:\n  astvm err: %v\n  ivm   err: %v", astErr, ivmErr)
+		t.Errorf("one engine failed and the other did not, for:\n%s\n  astvm: %v\n  ivm:   %v",
+			src, astErr, ivmErr)
+		return
 	}
-
-	// Stdout agreement
+	if astErr != nil && errorText(astErr) != errorText(ivmErr) {
+		t.Errorf("the engines report the same failure differently, for:\n%s\n  astvm: %s\n  ivm:   %s",
+			src, errorText(astErr), errorText(ivmErr))
+	}
 	if astOut != ivmOut {
 		t.Errorf("output parity mismatch for:\n%s\n\nastvm output:\n%q\n\nivm output:\n%q",
 			src, astOut, ivmOut)
 	}
+}
+
+// errorText reduces an error to the part both engines should agree on.
+//
+// Each wraps a failure in its own envelope — one adds a call stack, the other
+// a frame label — so the comparison is of the message itself.
+func errorText(err error) string {
+	if err == nil {
+		return ""
+	}
+	msg := err.Error()
+	if i := strings.Index(msg, "\nCall Stack"); i >= 0 {
+		msg = msg[:i]
+	}
+	msg = strings.TrimPrefix(msg, "Runtime Error: ")
+	msg = strings.TrimSpace(msg)
+	return msg
 }
 
 // assertParityError is like assertParity but also asserts that BOTH VMs fail.
@@ -866,4 +916,432 @@ func TestParityPredefinedConstants(t *testing.T) {
 	// Just assert parity — exact float formatting must match
 	assertParity(t, `Print pi.
 Print e.`)
+}
+
+// ─── Crash-class regressions ─────────────────────────────────────────────────
+
+// TestParityRunawayRecursion covers the crash class where unbounded recursion
+// aborted the AST evaluator with an unrecoverable Go "stack overflow" fatal
+// error and hung the instruction VM indefinitely. Both engines must now report
+// a normal, identical, language-level error.
+func TestParityRunawayRecursion(t *testing.T) {
+	src := `Declare function boom that takes n as number, and gives back a number, and does the following:
+    Return boom of n.
+thats it.
+Print boom of 1.`
+	astOut, astErr := runAST(src)
+	ivmOut, ivmErr := runIVM(src)
+
+	if astErr == nil {
+		t.Error("astvm: expected a stack-overflow error, got none")
+	}
+	if ivmErr == nil {
+		t.Error("ivm: expected a stack-overflow error, got none")
+	}
+	if astErr != nil && !strings.Contains(astErr.Error(), "maximum call depth") {
+		t.Errorf("astvm error does not mention the call-depth limit: %v", astErr)
+	}
+	if ivmErr != nil && !strings.Contains(ivmErr.Error(), "maximum call depth") {
+		t.Errorf("ivm error does not mention the call-depth limit: %v", ivmErr)
+	}
+	if astOut != ivmOut {
+		t.Errorf("output parity mismatch:\n  astvm: %q\n  ivm:   %q", astOut, ivmOut)
+	}
+}
+
+// TestParityStackOverflowIsCatchable asserts the depth limit surfaces as an
+// ordinary catchable error rather than killing the program, in both engines.
+func TestParityStackOverflowIsCatchable(t *testing.T) {
+	assertOutputContains(t, `Declare function boom that takes n as number, and gives back a number, and does the following:
+    Return boom of n.
+thats it.
+
+Try doing the following:
+    Print boom of 1.
+on StackOverflowError:
+    Print "caught".
+thats it.
+Print "still running".`, "caught")
+}
+
+// TestParityBuiltinArity covers the crash class where calling a built-in with
+// too few arguments indexed past the end of the argument slice and panicked,
+// taking down the process (and the REPL) instead of reporting a user error.
+//
+// Semantic analysis now rejects these before either engine runs, so the
+// message comes from the checker rather than the standard library; the arity
+// guard inside the library remains as the backstop for a call it cannot see.
+func TestParityBuiltinArity(t *testing.T) {
+	for _, src := range []string{
+		`Call sqrt.`,
+		`Call uppercase.`,
+		`Declare s to be "hi".
+Print s's replace.`,
+		`Print pad_left of "x".`,
+	} {
+		astOut, astErr := runAST(src)
+		ivmOut, ivmErr := runIVM(src)
+
+		if astErr == nil {
+			t.Errorf("astvm: expected an arity error for:\n%s", src)
+		}
+		if ivmErr == nil {
+			t.Errorf("ivm: expected an arity error for:\n%s", src)
+		}
+		if astOut != ivmOut {
+			t.Errorf("output parity mismatch for:\n%s\n  astvm: %q\n  ivm:   %q", src, astOut, ivmOut)
+		}
+		if astErr != nil && ivmErr != nil {
+			// Both engines are checked by the same analyser, so the message
+			// must be identical, and it must name the arity that was wrong.
+			if astErr.Error() != ivmErr.Error() {
+				t.Errorf("error message mismatch for:\n%s\n  astvm: %v\n  ivm:   %v", src, astErr, ivmErr)
+			}
+			if !strings.Contains(astErr.Error(), "argument") {
+				t.Errorf("arity not described for:\n%s\n  got: %v", src, astErr)
+			}
+		}
+	}
+}
+
+// ─── Divergences the shared runtime settled ──────────────────────────────────
+//
+// Each of these behaved differently in the two engines. The suite compared
+// only stdout and whether an error occurred, so none of them failed a test.
+
+// TestParityTextLength covers string length, which one engine measured in
+// bytes and the other in characters.
+func TestParityTextLength(t *testing.T) {
+	assertOutputContains(t, `Print the length of "héllo".`, "5")
+	assertParity(t, `Print the length of "日本語".`)
+}
+
+// TestParityTextIndexing covers indexing text, which one engine allowed and
+// the other rejected.
+func TestParityTextIndexing(t *testing.T) {
+	assertOutputContains(t, `Print the item at position 1 in "abc".`, "b")
+	assertParity(t, `Print the item at position 0 in "héllo".`)
+}
+
+// TestParityMissingLookupKey covers a key that is not present, which one
+// engine reported and the other silently answered with nothing.
+func TestParityMissingLookupKey(t *testing.T) {
+	src := `Declare scores to be a lookup table.
+Set scores at "a" to be 1.
+Print scores at "b".`
+	astOut, astErr := runAST(src)
+	ivmOut, ivmErr := runIVM(src)
+
+	if astErr == nil || ivmErr == nil {
+		t.Fatalf("both engines should report a missing key\n  astvm: %v\n  ivm:   %v", astErr, ivmErr)
+	}
+	if errorText(astErr) != errorText(ivmErr) {
+		t.Errorf("different messages:\n  astvm: %s\n  ivm:   %s", errorText(astErr), errorText(ivmErr))
+	}
+	if astOut != ivmOut {
+		t.Errorf("different output: %q vs %q", astOut, ivmOut)
+	}
+}
+
+// TestParityCopyOfArray covers "a copy of", which one engine deep-copied for
+// arrays and the other returned unchanged, so the copy aliased its source.
+func TestParityCopyOfArray(t *testing.T) {
+	assertOutputContains(t, `Declare original to be an array of number [1, 2, 3].
+Declare duplicate to be a copy of original.
+Set the item at position 0 in duplicate to be 99.
+Print original.`, "[1, 2, 3]")
+}
+
+// TestParityCollectionEquality covers Equals, which handled numbers, text and
+// booleans and answered false for everything else: two identical lists were
+// unequal, as were two identical arrays and tables.
+func TestParityCollectionEquality(t *testing.T) {
+	for _, src := range []string{
+		`Print [1, 2, 3] is equal to [1, 2, 3].`,
+		`Print [1, 2] is equal to [1, 3].`,
+		`Declare a to be an array of number [1, 2].
+Declare b to be an array of number [1, 2].
+Print a is equal to b.`,
+		`Declare x to be a lookup table.
+Declare y to be a lookup table.
+Set x at "k" to be 1.
+Set y at "k" to be 1.
+Print x is equal to y.`,
+	} {
+		assertParity(t, src)
+	}
+	assertOutputContains(t, `Print [1, 2, 3] is equal to [1, 2, 3].`, "true")
+	assertOutputContains(t, `Print [1, 2] is equal to [1, 3].`, "false")
+}
+
+// TestParityStructEquality covers two struct values with equal fields.
+func TestParityStructEquality(t *testing.T) {
+	assertOutputContains(t, `Declare Point as a structure with the following fields:
+    x is a number with 0 being the default.
+thats it.
+
+Declare a to be a new instance of Point with the following fields:
+    x is 1.
+thats it.
+Declare b to be a new instance of Point with the following fields:
+    x is 1.
+thats it.
+Print a is equal to b.`, "true")
+}
+
+// TestParityRetiredNumericTypes covers the sized numeric types, which are no
+// longer types at all.
+//
+// They were reachable only through a cast, and everything you could do with
+// the result was broken: addition rejected them while subtraction accepted
+// them, two equal values compared unequal, they could not be lookup-table
+// keys, and casting one to its own type failed. There is one number type now,
+// and asking for a narrower one says so.
+func TestParityRetiredNumericTypes(t *testing.T) {
+	for _, src := range []string{
+		`Print 7 cast to integer.`,
+		`Declare x as i32 to be 1.`,
+		`Print 1 cast to f32.`,
+	} {
+		assertParityError(t, src)
+		_, err := runAST(src)
+		if err != nil && !strings.Contains(err.Error(), "is not a type") {
+			t.Errorf("unhelpful message for %q: %v", src, err)
+		}
+	}
+}
+
+// TestParityNumberArithmetic covers the arithmetic and equality that the sized
+// types used to break, now that there is a single number type.
+func TestParityNumberArithmetic(t *testing.T) {
+	src := `Declare a to be 7.
+Declare b to be 2.
+Print a + b.
+Print a - b.
+Print a is equal to b.
+Print a is equal to 7.`
+	assertParity(t, src)
+	assertOutputContains(t, src, "9")
+}
+
+// TestParityTypeNamesInMessages covers diagnostics naming a type, which one
+// engine reported as "f64" and the other as "number".
+func TestParityTypeNamesInMessages(t *testing.T) {
+	for _, src := range []string{
+		`Declare flag to be true.
+Print flag - 1.`,
+		`Print the length of 5.`,
+		`Declare n to be 1.
+Print n's uppercase.`,
+	} {
+		assertParity(t, src)
+	}
+}
+
+// TestParityLookupTableIteration covers "for each" over a lookup table, which
+// yields its keys.
+func TestParityLookupTableIteration(t *testing.T) {
+	assertParity(t, `Declare scores to be a lookup table.
+Set scores at "a" to be 1.
+Set scores at "b" to be 2.
+For each key in scores, do the following:
+    Print key.
+thats it.`)
+}
+
+// TestParityNumberFormatting covers rendering, including the values whose
+// conversion to an integer is undefined: one engine guarded against them and
+// the other relied on undefined behaviour to produce the right answer.
+func TestParityNumberFormatting(t *testing.T) {
+	for _, src := range []string{
+		`Print 5.`,
+		`Print 10 / 2.`,
+		`Print 1 / 3.`,
+		`Print infinity.`,
+		`Print 0 - infinity.`,
+		`Print -0.5.`,
+		`Print 1000000.`,
+	} {
+		assertParity(t, src)
+	}
+}
+
+// TestParityStructFieldOrder covers silent data corruption in the instruction
+// VM: it emitted only the field values, in the order the instantiation wrote
+// them, while binding them in the order the definition declared them. Writing
+// the fields in any other order put every value in the wrong field.
+func TestParityStructFieldOrder(t *testing.T) {
+	src := `Declare Person as a structure with the following fields:
+    name is a text with "?" being the default.
+    age is a number with 0 being the default.
+thats it.
+
+Declare p to be a new instance of Person with the following fields:
+    age is 30.
+    name is "Alice".
+thats it.
+
+Print the name of p.
+Print the age of p.`
+
+	assertParity(t, src)
+	out, err := runIVM(src)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if out != "Alice\n30\n" {
+		t.Errorf("fields were bound in the wrong order: got %q, want %q", out, "Alice\n30\n")
+	}
+}
+
+// TestParityStructPartialFields covers omitting a non-final field, which used
+// to shift every field after it.
+func TestParityStructPartialFields(t *testing.T) {
+	src := `Declare Person as a structure with the following fields:
+    name is a text with "?" being the default.
+    age is a number with 7 being the default.
+    city is a text with "nowhere" being the default.
+thats it.
+
+Declare p to be a new instance of Person with the following fields:
+    city is "Paris".
+thats it.
+
+Print the name of p.
+Print the age of p.
+Print the city of p.`
+
+	assertParity(t, src)
+	assertOutputContains(t, src, "Paris")
+	out, _ := runIVM(src)
+	if out != "?\n7\nParis\n" {
+		t.Errorf("defaults were not applied correctly: got %q, want %q", out, "?\n7\nParis\n")
+	}
+}
+
+// TestParityStructUnknownField covers a field the struct does not declare,
+// which one engine rejected and the other quietly added.
+func TestParityStructUnknownField(t *testing.T) {
+	src := `Declare Point as a structure with the following fields:
+    x is a number with 0 being the default.
+thats it.
+
+Declare p to be a new instance of Point with the following fields:
+    y is 1.
+thats it.`
+	assertParityError(t, src)
+}
+
+// TestParityStructFieldType covers a field value of the wrong type, which
+// neither engine checked at run time.
+func TestParityStructFieldType(t *testing.T) {
+	src := `Declare Point as a structure with the following fields:
+    x is a number with 0 being the default.
+thats it.
+
+Declare label to be "left".
+Declare p to be a new instance of Point with the following fields:
+    x is label.
+thats it.`
+	assertParityError(t, src)
+}
+
+// TestParityStructCollectionFieldDefaults covers a field with a collection
+// type and no default, where the two engines disagreed: the instruction VM
+// started it as an empty collection and the tree-walker as nothing, because
+// the tree-walker carried its own copy of the per-type zero values and that
+// copy had no case for a lookup table or an array.
+func TestParityStructCollectionFieldDefaults(t *testing.T) {
+	assertParity(t, `Declare Store as a structure with the following fields:
+    prices is a lookup table.
+thats it.
+
+Declare shop to be a new instance of Store.
+Print the prices of shop.`)
+}
+
+// TestParityListRendering covers how a sequence is written out. A list
+// rendered without the separators an array rendered with, so the same three
+// numbers printed two different ways depending on how they were declared.
+func TestParityListRendering(t *testing.T) {
+	assertParity(t, `Declare xs to be [1, 2, 3].
+Declare ys to be an array of number [1, 2, 3].
+Print xs.
+Print ys.`)
+}
+
+// TestParityFieldAssignment covers writing to a struct field, which had no
+// syntax until now: the node was implemented by both engines and the parser
+// never built one, so nothing exercised either implementation.
+func TestParityFieldAssignment(t *testing.T) {
+	assertParity(t, `Declare Person as a structure with the following fields:
+    name is a text with "?" being the default.
+    age is a number with 0 being the default.
+thats it.
+
+Declare p to be a new instance of Person with the following fields:
+    name is "Alice".
+    age is 30.
+thats it.
+
+Set p's name to be "Bob".
+Set p's age to be 31.
+Print the name of p.
+Print the age of p.`)
+}
+
+// TestParityConsecutiveQuestions covers reading input twice. There were three
+// separate stdin readers — one per engine, one in the standard library's
+// "ask" — and each was built fresh for every read. A buffered reader reads
+// ahead as far as input is available, not as far as it was asked, so the first
+// question consumed the answer to the second and then threw it away.
+func TestParityConsecutiveQuestions(t *testing.T) {
+	src := `Ask "First: " and store in a.
+Ask "Second: " and store in b.
+Declare third to be ask("Third: ").
+Print a, b, third.`
+
+	for _, run := range []struct {
+		name string
+		fn   func(string) (string, error)
+	}{{"astvm", runAST}, {"ivm", runIVM}} {
+		runtime.SetInput(strings.NewReader("one\ntwo\nthree\n"))
+		out, err := run.fn(src)
+		if err != nil {
+			t.Errorf("%s: %v", run.name, err)
+			continue
+		}
+		if !strings.Contains(out, "one two three") {
+			t.Errorf("%s answered the questions as %q, want one, two and three", run.name, strings.TrimSpace(out))
+		}
+	}
+}
+
+// TestParityFinallyErrorIsReported covers an error raised in a "but finally"
+// block, which the tree-walking engine discarded along with the result of
+// every statement in the block: the cleanup appeared to succeed and the
+// program carried on.
+func TestParityFinallyErrorIsReported(t *testing.T) {
+	assertParityError(t, `Declare CleanupError as an error type.
+Try doing the following:
+    Print "trying".
+but finally:
+    Raise "cleanup failed" as CleanupError.
+thats it.`)
+}
+
+// TestParityEarlyReturnWithNoValue covers "Return." on its own, which finishes
+// a function that gives back nothing. A value was required after Return, so
+// such a function had no way out but to reach the end of its body.
+func TestParityEarlyReturnWithNoValue(t *testing.T) {
+	assertParity(t, `Declare function announce that takes label as text, and gives back nothing, and does the following:
+    If label is equal to "", then
+        Return.
+    thats it.
+    Print label.
+thats it.
+
+Call announce with "hi".
+Call announce with "".
+Print "done".`)
 }

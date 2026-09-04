@@ -1,11 +1,15 @@
 package parser
 
 import (
-	"github.com/Advik-B/english/ast"
-	"github.com/Advik-B/english/token"
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
+
+	"github.com/Advik-B/english/ast"
+	"github.com/Advik-B/english/token"
+	"github.com/Advik-B/english/tokeniser"
+	"github.com/Advik-B/english/types"
 )
 
 // Magic string constants used in parsing
@@ -19,6 +23,10 @@ type Parser struct {
 	position  int
 	curToken  token.Token
 	peekToken token.Token
+	// blockAtEOF records that a block body ran into the end of the input
+	// without being closed. It answers one question, for an interactive
+	// prompt: is more of this program still to come? See markTruncated.
+	blockAtEOF bool
 }
 
 // NewParser creates a new parser for the given tokens
@@ -29,7 +37,46 @@ func NewParser(tokens []token.Token) *Parser {
 	return p
 }
 
+// isWord reports whether the current token is the given filler word, matched
+// case-insensitively. English has a number of words that read naturally but
+// are not keywords — "being", "gives", "back", "a" — and they were previously
+// compared with a mix of ==, strings.ToLower and strings.EqualFold, so some
+// were accidentally case-sensitive.
+func (p *Parser) isWord(word string) bool {
+	return p.curToken.Type == token.IDENTIFIER && strings.EqualFold(p.curToken.Value, word)
+}
+
+// skipWord consumes the current token if it is the given filler word.
+func (p *Parser) skipWord(word string) bool {
+	if p.isWord(word) {
+		p.nextToken()
+		return true
+	}
+	return false
+}
+
+// peekWord reports whether the lookahead token is the given filler word.
+func (p *Parser) peekWord(word string) bool {
+	return p.peekToken.Type == token.IDENTIFIER && strings.EqualFold(p.peekToken.Value, word)
+}
+
+// skipOptional consumes the current token if it has the given type.
+func (p *Parser) skipOptional(t token.Type) bool {
+	if p.curToken.Type == t {
+		p.nextToken()
+		return true
+	}
+	return false
+}
+
+// at converts a token's location into a node position. Every AST node embeds
+// ast.Base, so this is the single place the parser records where a node starts.
+func at(t token.Token) ast.Base {
+	return ast.At(t.Line, t.Col, t.Pos)
+}
+
 func (p *Parser) nextToken() {
+
 	p.curToken = p.peekToken
 	if p.position < len(p.tokens) {
 		p.peekToken = p.tokens[p.position]
@@ -87,9 +134,21 @@ func (p *Parser) makeExpectError(expected token.Type) error {
 	}
 }
 
-// Parse parses the tokens and returns the AST
+// maxReportedSyntaxErrors caps a single parse's report. Past a certain point
+// the later errors are consequences of the earlier ones rather than separate
+// mistakes, and a wall of them is less use than a handful.
+const maxReportedSyntaxErrors = 20
+
+// Parse parses the tokens and returns the AST.
+//
+// It reports every syntax error it can find, not just the first. Stopping at
+// the first meant a file with two typos took two runs to fix, and the editor —
+// which shows one diagnostic per parse and gives up before extracting any
+// symbols — showed nothing else about a file until the last syntax error in it
+// was gone.
 func (p *Parser) Parse() (*ast.Program, error) {
 	program := &ast.Program{}
+	var errs SyntaxErrors
 
 	for p.curToken.Type != token.EOF {
 		// Check whether the upcoming statement starts with a PLEASE prefix.
@@ -105,30 +164,149 @@ func (p *Parser) Parse() (*ast.Program, error) {
 		// already consumed it above, curToken is no longer PLEASE here.
 		stmt, err := p.parseStatement()
 		if err != nil {
-			return nil, err
+			err = p.markTruncated(err)
+
+			// Input that simply ran out is not something to recover from:
+			// there is nothing after it to resynchronise on, and an
+			// interactive prompt needs to see it as "more is coming".
+			var syntaxErr *SyntaxError
+			if IsTruncated(err) || !errors.As(err, &syntaxErr) {
+				return nil, err
+			}
+
+			errs = append(errs, syntaxErr)
+			if len(errs) >= maxReportedSyntaxErrors {
+				return nil, errs
+			}
+			p.synchronise()
+			continue
 		}
-		if stmt != nil {
-			program.Statements = append(program.Statements, stmt)
-			// Comments don't count toward the politeness tally.
-			if _, isComment := stmt.(*ast.CommentStatement); !isComment {
-				program.TotalCount++
-				if polite {
-					program.PoliteCount++
-				} else {
-					line := stmtLine(stmt)
-					if line == 0 {
-						line = stmtStartLine
-					}
-					program.ImpoliteLines = append(program.ImpoliteLines, line)
+		program.Statements = append(program.Statements, stmt)
+		// Comments don't count toward the politeness tally.
+		if _, isComment := stmt.(*ast.CommentStatement); !isComment {
+			program.TotalCount++
+			if polite {
+				program.PoliteCount++
+			} else {
+				line := stmt.Pos().Line
+				if line == 0 {
+					line = stmtStartLine
 				}
+				program.ImpoliteLines = append(program.ImpoliteLines, line)
 			}
 		}
 	}
 
+	if len(errs) > 0 {
+		return nil, errs
+	}
 	return program, nil
 }
 
+// synchronise skips to where the next statement plausibly begins, after an
+// error, so that one mistake does not hide every later one.
+//
+// A statement ends with a period, so the token after one is the natural place
+// to resume; failing that, a keyword that can only begin a statement will do.
+// It always consumes at least one token, or a parser that failed on a
+// statement keyword would fail on it again forever.
+func (p *Parser) synchronise() {
+	p.nextToken()
+	for p.curToken.Type != token.EOF {
+		if p.curToken.Type == token.PERIOD {
+			p.nextToken()
+			return
+		}
+		if startsStatement(p.curToken.Type) {
+			return
+		}
+		p.nextToken()
+	}
+}
+
+// startsStatement reports whether a token can only appear at the start of a
+// statement, which makes it a safe place to resume parsing after an error.
+func startsStatement(t token.Type) bool {
+	switch t {
+	case token.PLEASE, token.COMMENT, token.IMPORT, token.DECLARE, token.LET,
+		token.BREAK, token.CONTINUE, token.SKIP, token.ASK, token.SET,
+		token.CALL, token.IF, token.REPEAT, token.FOR, token.PRINT,
+		token.WRITE, token.RETURN, token.TOGGLE, token.TRY, token.RAISE,
+		token.SWAP, token.SLEEP:
+		return true
+	}
+	return false
+}
+
+// errorTokenErr turns a lexer ERROR token into a syntax error. The lexer emits
+// one for an unterminated text literal or an unrecognised character; before
+// this the parser had no case for it and reported a confusing generic message.
+func (p *Parser) errorTokenErr() error {
+	if p.curToken.Value == tokeniser.UnterminatedString {
+		return p.syntaxErr(msgUnterminatedText, hintUnterminatedText)
+	}
+	return p.syntaxErr(
+		fmt.Sprintf(msgFmtIllegalChar, p.curToken.Value),
+		hintIllegalChar,
+	)
+}
+
+// expectBlockEnd consumes the "thats it." that closes a block.
+//
+// This epilogue was previously written out ten times: six copies in this file
+// guarded by "if p.curToken.Type == token.THATS", which made the closer
+// *optional*, and four mandatory copies elsewhere. Because parseBlock also
+// stops at EOF without complaint, a missing "thats it." was not an error at
+// all — the statements that followed were silently absorbed into the block:
+//
+//	Declare function f that does the following:
+//	    Print 1.
+//	Print 2.            <- silently became part of f's body
+//
+// It is now required everywhere, in one place.
+func (p *Parser) expectBlockEnd() error {
+	if err := p.expectBlockEndNoPeriod(); err != nil {
+		return err
+	}
+	if err := p.expectToken(token.PERIOD); err != nil {
+		return err
+	}
+	p.nextToken()
+	return nil
+}
+
+// expectBlockEndNoPeriod consumes "thats it" without the trailing period.
+// Used where the block closes an expression — a struct instantiation — and the
+// period belongs to the enclosing statement.
+func (p *Parser) expectBlockEndNoPeriod() error {
+	if err := p.expectToken(token.THATS); err != nil {
+		return err
+	}
+	p.nextToken()
+	if err := p.expectToken(token.IT); err != nil {
+		return err
+	}
+	p.nextToken()
+	return nil
+}
+
+// parseStatement parses one statement and records where it started.
+//
+// Stamping here covers every statement kind from one place, including the ones
+// that carried no position at all: imports, struct and error-type
+// declarations, break, continue and comments.
 func (p *Parser) parseStatement() (ast.Statement, error) {
+	start := at(p.curToken)
+	stmt, err := p.parseStatementInner()
+	if err != nil {
+		return nil, err
+	}
+	ast.SetPosIfUnknown(stmt, start.Position)
+	return stmt, nil
+}
+
+func (p *Parser) parseStatementInner() (ast.Statement, error) {
+
 	// A politeness prefix (please / kindly / could you / would you kindly) may
 	// appear inside blocks (loops, function bodies, if-branches) as well as at
 	// the top level.  Consuming it here means every call site automatically
@@ -184,6 +362,8 @@ func (p *Parser) parseStatement() (ast.Statement, error) {
 		return p.parseSleepStatement()
 	default:
 		switch p.curToken.Type {
+		case token.ERROR:
+			return nil, p.errorTokenErr()
 		case token.IDENTIFIER:
 			name := p.curToken.Value
 			return nil, &SyntaxError{
@@ -300,7 +480,7 @@ func (p *Parser) parseLetDeclaration() (ast.Statement, error) {
 		Name:       nameToken.Value,
 		IsConstant: isConstant,
 		Value:      value,
-		Line:       nameToken.Line,
+		Base:       at(nameToken),
 	}, nil
 }
 
@@ -351,9 +531,14 @@ func (p *Parser) parseImport() (ast.Statement, error) {
 				break
 			}
 
-			// Expect another identifier
+			// A separator promises another name. This used to break out of
+			// the loop instead, so "Import a, from "lib.abc"." silently
+			// imported only "a" and the stray comma went unmentioned.
 			if p.curToken.Type != token.IDENTIFIER {
-				break
+				return nil, p.syntaxErr(
+					fmt.Sprintf(msgFmtImportItem, tokenFriendlyValue(p.curToken.Type, p.curToken.Value)),
+					hintImportPath,
+				)
 			}
 		}
 	}
@@ -458,7 +643,7 @@ func (p *Parser) parseDeclaration() (ast.Statement, error) {
 		Name:       nameToken.Value,
 		IsConstant: isConstant,
 		Value:      value,
-		Line:       nameToken.Line,
+		Base:       at(nameToken),
 	}, nil
 }
 
@@ -513,7 +698,7 @@ func (p *Parser) parseFunctionDeclaration() (ast.Statement, error) {
 	if err := p.expectToken(token.FUNCTION); err != nil {
 		return nil, err
 	}
-	funcLine := p.curToken.Line
+	funcPos := at(p.curToken)
 	p.nextToken()
 
 	nameToken := p.curToken
@@ -525,7 +710,7 @@ func (p *Parser) parseFunctionDeclaration() (ast.Statement, error) {
 	}
 	p.nextToken()
 
-	var parameters []string
+	var parameters []ast.Param
 
 	// Skip optional "that" before "takes" or "does"
 	if p.curToken.Type == token.THAT {
@@ -542,23 +727,45 @@ func (p *Parser) parseFunctionDeclaration() (ast.Statement, error) {
 					hintParameterName,
 				)
 			}
-			parameters = append(parameters, paramToken.Value)
+			param := ast.Param{Base: at(paramToken), Name: paramToken.Value}
 			p.nextToken()
+
+			// Every parameter says what it takes: "takes x as number".
+			if p.curToken.Type != token.AS {
+				return nil, p.syntaxErr(
+					fmt.Sprintf(msgFmtParameterNeedsType, param.Name),
+					fmt.Sprintf(hintFmtParameterType, param.Name),
+				)
+			}
+			p.nextToken()
+			paramType, err := p.parseTypeName()
+			if err != nil {
+				return nil, err
+			}
+			param.Type = paramType
+			parameters = append(parameters, param)
 
 			if p.curToken.Type != token.AND {
 				break
 			}
-			// Check if "and" is followed by "does" (end of params) or another param
-			if p.peekToken.Type == token.DOES {
+			// "and" here either joins another parameter or introduces the rest
+			// of the declaration ("and gives back …", "and does …").
+			if p.peekToken.Type == token.DOES || p.peekWord("gives") {
 				break
 			}
 			p.nextToken()
 		}
 	}
 
-	// Support "and does" syntax after parameters
-	if p.curToken.Type == token.AND {
-		p.nextToken()
+	// Support "and does" / "and gives back" syntax after parameters
+	p.skipOptional(token.COMMA)
+	p.skipOptional(token.AND)
+
+	// Every function says what it gives back: "gives back a number", or
+	// "gives back nothing" when it produces no value.
+	returnType, err := p.parseGivesBack(nameToken.Value)
+	if err != nil {
+		return nil, err
 	}
 
 	if err := p.expectToken(token.DOES); err != nil {
@@ -586,23 +793,16 @@ func (p *Parser) parseFunctionDeclaration() (ast.Statement, error) {
 		return nil, err
 	}
 
-	if p.curToken.Type == token.THATS {
-		p.nextToken()
-		if err := p.expectToken(token.IT); err != nil {
-			return nil, err
-		}
-		p.nextToken()
-		if err := p.expectToken(token.PERIOD); err != nil {
-			return nil, err
-		}
-		p.nextToken()
+	if err := p.expectBlockEnd(); err != nil {
+		return nil, err
 	}
 
 	return &ast.FunctionDecl{
+		Base:       funcPos,
 		Name:       nameToken.Value,
-		Parameters: parameters,
+		Params:     parameters,
+		ReturnType: returnType,
 		Body:       body,
-		Line:       funcLine,
 	}, nil
 }
 
@@ -610,7 +810,7 @@ func (p *Parser) parseAssignment() (ast.Statement, error) {
 	if err := p.expectToken(token.SET); err != nil {
 		return nil, err
 	}
-	setLine := p.curToken.Line
+	setPos := at(p.curToken)
 	p.nextToken()
 
 	// Check for "Set the item at position X in Y to be Z"
@@ -618,10 +818,10 @@ func (p *Parser) parseAssignment() (ast.Statement, error) {
 	if p.curToken.Type == token.THE {
 		p.nextToken()
 		if p.curToken.Type == token.ITEM {
-			return p.parseIndexAssignment(setLine)
+			return p.parseIndexAssignment(setPos)
 		}
 		if p.curToken.Type == token.ENTRY {
-			return p.parseLookupKeyAssignment(setLine)
+			return p.parseLookupKeyAssignment(setPos)
 		}
 		return nil, p.syntaxErr(
 			fmt.Sprintf(msgFmtSetThe, p.curToken.Value),
@@ -637,6 +837,43 @@ func (p *Parser) parseAssignment() (ast.Statement, error) {
 		)
 	}
 	p.nextToken()
+
+	// "Set PERSON's name to be VALUE." — write a struct field.
+	//
+	// ast.FieldAssignment was implemented by both engines, the transpiler and
+	// the disassembler, and the parser never built one, so there was no way to
+	// change a field from source at all: a structure could be created and read
+	// but not modified.
+	if p.curToken.Type == token.POSSESSIVE {
+		p.nextToken() // consume 's
+		if p.curToken.Type != token.IDENTIFIER && !token.IsKeyword(p.curToken.Type) {
+			return nil, p.syntaxErr(msgSetFieldName, hintSetField)
+		}
+		fieldName := p.curToken.Value
+		p.nextToken()
+
+		if err := p.expectToken(token.TO); err != nil {
+			return nil, err
+		}
+		p.nextToken()
+		p.skipOptional(token.BE)
+
+		value, err := p.parseExpression()
+		if err != nil {
+			return nil, err
+		}
+		if err := p.expectToken(token.PERIOD); err != nil {
+			return nil, err
+		}
+		p.nextToken()
+
+		return &ast.FieldAssignment{
+			ObjectName: nameToken.Value,
+			Field:      fieldName,
+			Value:      value,
+			Base:       setPos,
+		}, nil
+	}
 
 	// "Set TABLE at KEY to be VALUE." — lookup table shorthand write
 	if p.curToken.Type == token.AT {
@@ -663,7 +900,7 @@ func (p *Parser) parseAssignment() (ast.Statement, error) {
 			return nil, err
 		}
 		p.nextToken()
-		return &ast.LookupKeyAssignment{TableName: nameToken.Value, Key: key, Value: value, Line: setLine}, nil
+		return &ast.LookupKeyAssignment{TableName: nameToken.Value, Key: key, Value: value, Base: setPos}, nil
 	}
 
 	if err := p.expectToken(token.TO); err != nil {
@@ -674,45 +911,6 @@ func (p *Parser) parseAssignment() (ast.Statement, error) {
 	// "be" is optional - "set x to 10" and "set x to be 10" are both valid
 	if p.curToken.Type == token.BE {
 		p.nextToken()
-	}
-
-	// Check for function call result: "the result of calling ..."
-	if p.curToken.Type == token.THE && p.peekToken.Type == token.IDENTIFIER && strings.EqualFold(p.peekToken.Value, resultKeyword) {
-		p.nextToken() // consume THE
-		p.nextToken() // consume "result"
-		if p.curToken.Type == token.OF {
-			p.nextToken()
-			if p.curToken.Type == token.CALLING {
-				p.nextToken()
-				funcName := p.curToken.Value
-				if p.curToken.Type != token.IDENTIFIER {
-					return nil, p.syntaxErr(
-						msgSetCallFuncName,
-						hintSetCallResult,
-					)
-				}
-				p.nextToken()
-
-				args, err := p.parseFunctionArguments()
-				if err != nil {
-					return nil, err
-				}
-
-				if err := p.expectToken(token.PERIOD); err != nil {
-					return nil, err
-				}
-				p.nextToken()
-
-				return &ast.Assignment{
-					Name: nameToken.Value,
-					Value: &ast.FunctionCall{
-						Name:      funcName,
-						Arguments: args,
-					},
-					Line: setLine,
-				}, nil
-			}
-		}
 	}
 
 	value, err := p.parseExpression()
@@ -728,12 +926,12 @@ func (p *Parser) parseAssignment() (ast.Statement, error) {
 	return &ast.Assignment{
 		Name:  nameToken.Value,
 		Value: value,
-		Line:  setLine,
+		Base:  setPos,
 	}, nil
 }
 
 // parseIndexAssignment parses "the item at position X in Y to be Z"
-func (p *Parser) parseIndexAssignment(setLine int) (ast.Statement, error) {
+func (p *Parser) parseIndexAssignment(setPos ast.Base) (ast.Statement, error) {
 	// Already consumed "Set the", now at "item"
 	if err := p.expectToken(token.ITEM); err != nil {
 		return nil, err
@@ -793,7 +991,7 @@ func (p *Parser) parseIndexAssignment(setLine int) (ast.Statement, error) {
 		ListName: listName,
 		Index:    index,
 		Value:    value,
-		Line:     setLine,
+		Base:     setPos,
 	}, nil
 }
 
@@ -801,13 +999,13 @@ func (p *Parser) parseCall() (ast.Statement, error) {
 	if err := p.expectToken(token.CALL); err != nil {
 		return nil, err
 	}
-	callLine := p.curToken.Line
+	callPos := at(p.curToken)
 	p.nextToken()
 
 	// First identifier could be:
 	// 1. Function name: "call greet with args."
 	// 2. Method name: "call talk from p2." or "call talk on p2."
-	// 3. Object name with possessive: "call p2's talk." (p2's is a single token)
+	// 3. Object name with possessive: "call p2's talk."
 
 	firstIdent := p.curToken.Value
 	if p.curToken.Type != token.IDENTIFIER {
@@ -818,26 +1016,20 @@ func (p *Parser) parseCall() (ast.Statement, error) {
 	}
 	p.nextToken()
 
-	// Check for possessive syntax: "call p2's talk."
-	// The identifier will end with 's (e.g., "p2's")
-	if len(firstIdent) > 2 && firstIdent[len(firstIdent)-2:] == "'s" {
-		// This is possessive: extract object name (remove 's)
-		objectName := firstIdent[:len(firstIdent)-2]
-
-		if p.curToken.Type != token.IDENTIFIER {
-			return nil, p.syntaxErr(
-				fmt.Sprintf(msgFmtCallPossessive, objectName),
-				hintCallName,
-			)
-		}
-		methodName := p.curToken.Value
-		p.nextToken()
-
-		// Parse optional arguments
-		var args []ast.Expression
-		if p.curToken.Type == token.WITH {
-			p.nextToken()
-			args = p.parseCallArguments()
+	// Possessive syntax: "call p2's talk."
+	//
+	// This used to test whether the identifier's text ended in "'s", because
+	// the lexer folded the possessive into the name here while emitting a
+	// POSSESSIVE token everywhere else. The two spellings had drifted: this
+	// path required a plain name for the method where the expression path
+	// accepted a keyword too, so "Print x's length." worked and
+	// "Call x's length." did not.
+	if p.curToken.Type == token.POSSESSIVE {
+		p.nextToken() // consume 's
+		methodCall, err := p.parseMethodAfterPossessive(
+			&ast.Identifier{Base: callPos, Name: firstIdent})
+		if err != nil {
+			return nil, err
 		}
 
 		if err := p.expectToken(token.PERIOD); err != nil {
@@ -845,15 +1037,7 @@ func (p *Parser) parseCall() (ast.Statement, error) {
 		}
 		p.nextToken()
 
-		// Return as method call
-		return &ast.CallStatement{
-			MethodCall: &ast.MethodCall{
-				Object:     &ast.Identifier{Name: objectName},
-				MethodName: methodName,
-				Arguments:  args,
-			},
-			Line: callLine,
-		}, nil
+		return &ast.CallStatement{MethodCall: methodCall, Base: callPos}, nil
 	}
 
 	// Check for "from" or "on" (method call syntax)
@@ -871,11 +1055,9 @@ func (p *Parser) parseCall() (ast.Statement, error) {
 		objectName := p.curToken.Value
 		p.nextToken()
 
-		// Parse optional arguments
-		var args []ast.Expression
-		if p.curToken.Type == token.WITH {
-			p.nextToken()
-			args = p.parseCallArguments()
+		args, err := p.parseWithArguments()
+		if err != nil {
+			return nil, err
 		}
 
 		if err := p.expectToken(token.PERIOD); err != nil {
@@ -886,21 +1068,19 @@ func (p *Parser) parseCall() (ast.Statement, error) {
 		// Return as method call
 		return &ast.CallStatement{
 			MethodCall: &ast.MethodCall{
-				Object:     &ast.Identifier{Name: objectName},
+				Object:     &ast.Identifier{Base: callPos, Name: objectName},
 				MethodName: methodName,
 				Arguments:  args,
 			},
-			Line: callLine,
+			Base: callPos,
 		}, nil
 	}
 
 	// Regular function call: "call greet with args."
 	funcName := firstIdent
-	var args []ast.Expression
-
-	if p.curToken.Type == token.WITH {
-		p.nextToken()
-		args = p.parseCallArguments()
+	args, err := p.parseWithArguments()
+	if err != nil {
+		return nil, err
 	}
 
 	if err := p.expectToken(token.PERIOD); err != nil {
@@ -909,42 +1089,58 @@ func (p *Parser) parseCall() (ast.Statement, error) {
 	p.nextToken()
 
 	return &ast.CallStatement{
+		Base: callPos,
 		FunctionCall: &ast.FunctionCall{
+			Base:      callPos,
 			Name:      funcName,
 			Arguments: args,
 		},
-		Line: callLine,
 	}, nil
 }
 
-// parseCallArguments parses comma-separated call arguments
-func (p *Parser) parseCallArguments() []ast.Expression {
+// parseArgumentList reads the arguments of a call written in English, after
+// the "with": "with a and b", or "with a, b".
+//
+// There were two of these for the same construct, with different separator
+// rules — one accepted a comma and the other only "and" — and different error
+// handling. This one discarded the error and returned whatever it had parsed
+// so far, so "Call f with ." became "Call f." and the mistake disappeared.
+// The parenthesised form f(a, b) stays separate, because inside parentheses
+// "and" is an operator rather than a separator.
+func (p *Parser) parseArgumentList() ([]ast.Expression, error) {
 	var args []ast.Expression
 
 	for {
-		arg, err := p.parseExpression()
+		arg, err := p.parseArgument()
 		if err != nil {
-			break
+			return nil, err
 		}
 		args = append(args, arg)
 
 		if p.curToken.Type != token.AND && p.curToken.Type != token.COMMA {
-			break
+			return args, nil
 		}
 		p.nextToken()
 	}
+}
 
-	return args
+// parseWithArguments reads an optional "with …" argument list.
+func (p *Parser) parseWithArguments() ([]ast.Expression, error) {
+	if p.curToken.Type != token.WITH {
+		return nil, nil
+	}
+	p.nextToken()
+	return p.parseArgumentList()
 }
 
 func (p *Parser) parseIfStatement() (ast.Statement, error) {
 	if err := p.expectToken(token.IF); err != nil {
 		return nil, err
 	}
-	startLine := p.curToken.Line
+	startPos := at(p.curToken)
 	p.nextToken()
 
-	condition, err := p.parseComparison()
+	condition, err := p.parseExpression()
 	if err != nil {
 		return nil, err
 	}
@@ -971,7 +1167,7 @@ func (p *Parser) parseIfStatement() (ast.Statement, error) {
 		p.nextToken()
 		if p.curToken.Type == token.IF {
 			p.nextToken()
-			eifCond, err := p.parseComparison()
+			eifCond, err := p.parseExpression()
 			if err != nil {
 				return nil, err
 			}
@@ -1000,16 +1196,8 @@ func (p *Parser) parseIfStatement() (ast.Statement, error) {
 		}
 	}
 
-	if p.curToken.Type == token.THATS {
-		p.nextToken()
-		if err := p.expectToken(token.IT); err != nil {
-			return nil, err
-		}
-		p.nextToken()
-		if err := p.expectToken(token.PERIOD); err != nil {
-			return nil, err
-		}
-		p.nextToken()
+	if err := p.expectBlockEnd(); err != nil {
+		return nil, err
 	}
 
 	return &ast.IfStatement{
@@ -1017,7 +1205,7 @@ func (p *Parser) parseIfStatement() (ast.Statement, error) {
 		Then:      thenBody,
 		ElseIf:    elseIfParts,
 		Else:      elseBody,
-		Line:      startLine,
+		Base:      startPos,
 	}, nil
 }
 
@@ -1025,7 +1213,7 @@ func (p *Parser) parseRepeat() (ast.Statement, error) {
 	if err := p.expectToken(token.REPEAT); err != nil {
 		return nil, err
 	}
-	startLine := p.curToken.Line
+	startPos := at(p.curToken)
 	p.nextToken()
 
 	// Check for "repeat forever" syntax
@@ -1042,22 +1230,14 @@ func (p *Parser) parseRepeat() (ast.Statement, error) {
 			return nil, err
 		}
 
-		if p.curToken.Type == token.THATS {
-			p.nextToken()
-			if err := p.expectToken(token.IT); err != nil {
-				return nil, err
-			}
-			p.nextToken()
-			if err := p.expectToken(token.PERIOD); err != nil {
-				return nil, err
-			}
-			p.nextToken()
+		if err := p.expectBlockEnd(); err != nil {
+			return nil, err
 		}
 
 		return &ast.WhileLoop{
 			Condition: &ast.BooleanLiteral{Value: true},
 			Body:      body,
-			Line:      startLine,
+			Base:      startPos,
 		}, nil
 	}
 
@@ -1074,7 +1254,7 @@ func (p *Parser) parseRepeat() (ast.Statement, error) {
 	// Check if it's a while loop or for loop
 	if p.curToken.Type == token.WHILE {
 		p.nextToken()
-		condition, err := p.parseComparison()
+		condition, err := p.parseExpression()
 		if err != nil {
 			return nil, err
 		}
@@ -1089,22 +1269,14 @@ func (p *Parser) parseRepeat() (ast.Statement, error) {
 			return nil, err
 		}
 
-		if p.curToken.Type == token.THATS {
-			p.nextToken()
-			if err := p.expectToken(token.IT); err != nil {
-				return nil, err
-			}
-			p.nextToken()
-			if err := p.expectToken(token.PERIOD); err != nil {
-				return nil, err
-			}
-			p.nextToken()
+		if err := p.expectBlockEnd(); err != nil {
+			return nil, err
 		}
 
 		return &ast.WhileLoop{
 			Condition: condition,
 			Body:      body,
-			Line:      startLine,
+			Base:      startPos,
 		}, nil
 	}
 
@@ -1129,22 +1301,14 @@ func (p *Parser) parseRepeat() (ast.Statement, error) {
 		return nil, err
 	}
 
-	if p.curToken.Type == token.THATS {
-		p.nextToken()
-		if err := p.expectToken(token.IT); err != nil {
-			return nil, err
-		}
-		p.nextToken()
-		if err := p.expectToken(token.PERIOD); err != nil {
-			return nil, err
-		}
-		p.nextToken()
+	if err := p.expectBlockEnd(); err != nil {
+		return nil, err
 	}
 
 	return &ast.ForLoop{
 		Count: countExpr,
 		Body:  body,
-		Line:  startLine,
+		Base:  startPos,
 	}, nil
 }
 
@@ -1214,23 +1378,15 @@ func (p *Parser) parseForEach() (ast.Statement, error) {
 		return nil, err
 	}
 
-	if p.curToken.Type == token.THATS {
-		p.nextToken()
-		if err := p.expectToken(token.IT); err != nil {
-			return nil, err
-		}
-		p.nextToken()
-		if err := p.expectToken(token.PERIOD); err != nil {
-			return nil, err
-		}
-		p.nextToken()
+	if err := p.expectBlockEnd(); err != nil {
+		return nil, err
 	}
 
 	return &ast.ForEachLoop{
 		Item: itemName,
 		List: listExpr,
 		Body: body,
-		Line: itemToken.Line,
+		Base: at(itemToken),
 	}, nil
 }
 
@@ -1242,7 +1398,7 @@ func (p *Parser) parseOutput(newline bool) (ast.Statement, error) {
 			hintPrintOrWrite,
 		)
 	}
-	startLine := p.curToken.Line
+	startPos := at(p.curToken)
 	p.nextToken()
 
 	var values []ast.Expression
@@ -1272,7 +1428,7 @@ func (p *Parser) parseOutput(newline bool) (ast.Statement, error) {
 	return &ast.OutputStatement{
 		Values:  values,
 		Newline: newline,
-		Line:    startLine,
+		Base:    startPos,
 	}, nil
 }
 
@@ -1280,12 +1436,19 @@ func (p *Parser) parseReturn() (ast.Statement, error) {
 	if err := p.expectToken(token.RETURN); err != nil {
 		return nil, err
 	}
-	startLine := p.curToken.Line
+	startPos := at(p.curToken)
 	p.nextToken()
 
-	value, err := p.parseExpression()
-	if err != nil {
-		return nil, err
+	// "Return." on its own finishes a function that gives back nothing. A
+	// value was required here, so such a function could not return early at
+	// all — its only way out was to reach the end of its body.
+	var value ast.Expression
+	if p.curToken.Type != token.PERIOD {
+		var err error
+		value, err = p.parseExpression()
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	if err := p.expectToken(token.PERIOD); err != nil {
@@ -1295,7 +1458,7 @@ func (p *Parser) parseReturn() (ast.Statement, error) {
 
 	return &ast.ReturnStatement{
 		Value: value,
-		Line:  startLine,
+		Base:  startPos,
 	}, nil
 }
 
@@ -1368,10 +1531,11 @@ func (p *Parser) parseContinue() (ast.Statement, error) {
 //   - "Ask "prompt" and store the answer in varname."
 //   - "Ask "prompt" and store the result in varname."
 func (p *Parser) parseAskStatement() (ast.Statement, error) {
+	askPos := at(p.curToken)
 	p.nextToken() // consume ASK
 
 	// Parse the prompt expression
-	prompt, err := p.parseExpression()
+	prompt, err := p.parseArgument()
 	if err != nil {
 		return nil, err
 	}
@@ -1428,9 +1592,12 @@ func (p *Parser) parseAskStatement() (ast.Statement, error) {
 
 	// Use Assignment so it works whether the variable already exists or not.
 	// The Assignment evaluator calls Set(), which creates the variable if it doesn't exist.
-	return &ast.Assignment{
+	// "Ask … as name." introduces name, so it is a declaration rather than
+	// an assignment to something that already exists.
+	return &ast.VariableDecl{
+		Base:  askPos,
 		Name:  varName,
-		Value: &ast.AskExpression{Prompt: prompt},
+		Value: &ast.AskExpression{Base: askPos, Prompt: prompt},
 	}, nil
 }
 
@@ -1446,47 +1613,98 @@ func (p *Parser) parseBlock() ([]ast.Statement, error) {
 		if err != nil {
 			return nil, err
 		}
-		if stmt != nil {
-			statements = append(statements, stmt)
-		}
+		statements = append(statements, stmt)
+	}
+
+	// Every block body goes through here, so this is where an unclosed one is
+	// visible. The caller reports the missing "thats it."; recording it lets an
+	// interactive prompt tell "there is more to come" from "that is wrong".
+	if p.curToken.Type == token.EOF {
+		p.blockAtEOF = true
 	}
 
 	return statements, nil
 }
 
-func (p *Parser) parseComparison() (ast.Expression, error) {
-	return p.parseLogical()
-}
-
-// parseLogical handles logical "and" / "or" operators (lowest precedence above comparison)
-func (p *Parser) parseLogical() (ast.Expression, error) {
-	left, err := p.parseRelational()
+// parseOr handles "or", the loosest-binding operator.
+//
+// "and" used to share this level with "or", which made "a or b and c" parse as
+// "(a or b) and c" instead of the conventional "a or (b and c)".
+func (p *Parser) parseOr() (ast.Expression, error) {
+	left, err := p.parseAnd()
 	if err != nil {
 		return nil, err
 	}
 
-	for p.curToken.Type == token.AND || p.curToken.Type == token.OR {
-		op := "and"
-		if p.curToken.Type == token.OR {
-			op = "or"
-		}
+	for p.curToken.Type == token.OR {
+		opPos := at(p.curToken)
 		p.nextToken()
-		right, err := p.parseRelational()
+		right, err := p.parseAnd()
 		if err != nil {
 			return nil, err
 		}
-		left = &ast.BinaryExpression{
-			Left:     left,
-			Operator: op,
-			Right:    right,
-		}
+		left = &ast.BinaryExpression{Base: opPos, Left: left, Operator: "or", Right: right}
 	}
 
 	return left, nil
 }
 
+// parseAnd handles "and", which binds tighter than "or".
+func (p *Parser) parseAnd() (ast.Expression, error) {
+	left, err := p.parseNot()
+	if err != nil {
+		return nil, err
+	}
+
+	for p.curToken.Type == token.AND {
+		opPos := at(p.curToken)
+		p.nextToken()
+		right, err := p.parseNot()
+		if err != nil {
+			return nil, err
+		}
+		left = &ast.BinaryExpression{Base: opPos, Left: left, Operator: "and", Right: right}
+	}
+
+	return left, nil
+}
+
+// parseNot handles the "not" prefix operator.
+//
+// It sits above the relational layer so that "not x is equal to y" means
+// "not (x is equal to y)". It used to live in parsePrimary, which bound it
+// tighter than both arithmetic and comparison, so the same phrase parsed as
+// "(not x) is equal to y".
+func (p *Parser) parseNot() (ast.Expression, error) {
+	if p.curToken.Type == token.NOT {
+		opPos := at(p.curToken)
+		p.nextToken()
+		right, err := p.parseNot()
+		if err != nil {
+			return nil, err
+		}
+		return &ast.UnaryExpression{Base: opPos, Operator: "not", Right: right}, nil
+	}
+	return p.parseRelational()
+}
+
 // parseRelational handles comparison operators like "is equal to", "is less than", etc.
+// parseRelational parses a comparison and records where it started.
+//
+// The nodes built here — comparisons, the "is true"/"is nothing" sugar, and
+// error-type checks — are created after the left operand has been consumed, so
+// they are stamped from the wrapper rather than inline.
 func (p *Parser) parseRelational() (ast.Expression, error) {
+	start := at(p.curToken)
+	expr, err := p.parseRelationalExpr()
+	if err != nil {
+		return nil, err
+	}
+	ast.SetPosIfUnknown(expr, start.Position)
+	return expr, nil
+}
+
+func (p *Parser) parseRelationalExpr() (ast.Expression, error) {
 	left, err := p.parseCast()
 	if err != nil {
 		return nil, err
@@ -1570,7 +1788,37 @@ func (p *Parser) parseRelational() (ast.Expression, error) {
 	return left, nil
 }
 
+// parseExpression parses a complete expression, including comparisons and
+// "and"/"or".
+//
+// It used to start at parseCast, which sits *below* the relational and logical
+// layers, so a comparison could not appear anywhere a value was expected:
+// "Declare b to be x is greater than 5." was a syntax error even though
+// boolean is a first-class declared type. Only conditions and parenthesised
+// expressions reached the comparison layer.
 func (p *Parser) parseExpression() (ast.Expression, error) {
+	return p.parseOr()
+}
+
+// parseArgument parses an expression in a position where "and" is a separator
+// rather than an operator — argument lists ("with 5 and 7"), "X of Y" call
+// arguments, and the "ask" prompt.
+//
+// It stops below the "and"/"or" layer so those keywords stay available as
+// separators; write parentheses to use them as operators in such a position,
+// as in "Call f with (a and b).".
+func (p *Parser) parseArgument() (ast.Expression, error) {
+	return p.parseNot()
+}
+
+// parseOfArgument parses the operand of an "X of Y" phrase — "casefold of name",
+// "the length of items", "the value of x".
+//
+// It binds tightest of the three entry points, because such a phrase is itself
+// the left operand of any following comparison: "casefold of answer is equal to
+// \"y\"" must group as "(casefold of answer) is equal to \"y\"", not as
+// "casefold of (answer is equal to \"y\")".
+func (p *Parser) parseOfArgument() (ast.Expression, error) {
 	return p.parseCast()
 }
 
@@ -1585,6 +1833,16 @@ func isPossessiveMethodNameToken(t token.Type) bool {
 //   - "cast to <type>" / "casted to <type>" — explicit type conversion
 //   - "has <key>"                            — lookup table key check
 func (p *Parser) parseCast() (ast.Expression, error) {
+	start := at(p.curToken)
+	expr, err := p.parseCastExpr(start)
+	if err != nil {
+		return nil, err
+	}
+	ast.SetPosIfUnknown(expr, start.Position)
+	return expr, nil
+}
+
+func (p *Parser) parseCastExpr(start ast.Base) (ast.Expression, error) {
 	expr, err := p.parseAdditive()
 	if err != nil {
 		return nil, err
@@ -1596,14 +1854,11 @@ func (p *Parser) parseCast() (ast.Expression, error) {
 		if p.curToken.Type == token.TO {
 			p.nextToken()
 		}
-		typeName := p.parseTypeName()
-		if typeName == "" {
-			return nil, p.syntaxErr(
-				fmt.Sprintf(msgFmtCastTypeName, p.curToken.Value),
-				hintCastType,
-			)
+		typeName, err := p.parseTypeName()
+		if err != nil {
+			return nil, err
 		}
-		return &ast.CastExpression{Value: expr, TypeName: typeName}, nil
+		return &ast.CastExpression{Value: expr, Type: typeName}, nil
 	}
 
 	// Postfix "has <key>" — lookup table membership test
@@ -1630,57 +1885,168 @@ func (p *Parser) parseCast() (ast.Expression, error) {
 	}
 
 	// Postfix possessive: expr's method
-	// Handles string literals and other non-identifier expressions:
-	//   "hello"'s title   →   MethodCall{Object: "hello", MethodName: "title"}
+	//   x's length       →   MethodCall{Object: x,       MethodName: "length"}
+	//   "hello"'s title  →   MethodCall{Object: "hello", MethodName: "title"}
 	if p.curToken.Type == token.POSSESSIVE {
 		p.nextToken() // consume 's
-		if !isPossessiveMethodNameToken(p.curToken.Type) {
-			return nil, p.syntaxErr(
-				msgPossessive,
-				hintPossessive,
-			)
-		}
-		methodName := p.curToken.Value
-		p.nextToken()
-		var args []ast.Expression
-		if p.curToken.Type == token.WITH {
-			p.nextToken()
-			args = p.parseCallArguments()
-		}
-		return &ast.MethodCall{Object: expr, MethodName: methodName, Arguments: args}, nil
+		return p.parseMethodAfterPossessive(expr)
 	}
 
 	return expr, nil
 }
 
-// parseTypeName parses a type name (single word or "unsigned integer")
-func (p *Parser) parseTypeName() string {
-	// Handle "unsigned integer"
-	if p.curToken.Type == token.UNSIGNED {
+// parseMethodAfterPossessive reads the method name and arguments that follow a
+// consumed "'s", for any object expression.
+//
+// This is the one place the construct is parsed. There used to be three, one
+// per way the possessive could reach the parser, and they disagreed about what
+// may follow the apostrophe and whether arguments are allowed.
+func (p *Parser) parseMethodAfterPossessive(object ast.Expression) (*ast.MethodCall, error) {
+	if !isPossessiveMethodNameToken(p.curToken.Type) {
+		return nil, p.syntaxErr(msgPossessive, hintPossessive)
+	}
+	methodName := p.curToken.Value
+	p.nextToken()
+
+	args, err := p.parseWithArguments()
+	if err != nil {
+		return nil, err
+	}
+	return &ast.MethodCall{Object: object, MethodName: methodName, Arguments: args}, nil
+}
+
+// canNameAType reports whether a token may begin a type annotation.
+//
+// Several type names are lexed as keywords rather than identifiers — "integer",
+// "array", "table", "range", "type" — which is why the typed-declaration form
+// used to reject "Declare x as integer to be 5." even though types.Parse
+// accepts "integer" and the error hint advertised it.
+func canNameAType(t token.Type) bool {
+	switch t {
+	case token.IDENTIFIER, token.INTEGER, token.UNSIGNED,
+		token.ARRAY, token.LOOKUP, token.TABLE, token.RANGE, token.TYPE:
+		return true
+	}
+	return false
+}
+
+// parseTypeName parses a type annotation and returns its name.
+//
+// This is the single entry point for every annotation position — typed
+// declarations, struct fields, "cast to", and array element types. Those four
+// used to be served by three separate implementations that disagreed: one
+// accepted *any* token at all (so "cast x to 5" parsed cleanly and only failed
+// at run time), one accepted only bare identifiers (so keyword-named types were
+// syntax errors), and they differed on case handling and on whether a leading
+// article was allowed.
+//
+// A name that matches a built-in type is normalised to lower case; anything
+// else keeps its original spelling, because it may name a struct — which only
+// the type checker can resolve.
+// parseTypeName reads a type annotation for a value: a variable, a parameter,
+// a struct field, a cast target.
+func (p *Parser) parseTypeName() (*ast.TypeExpr, error) {
+	return p.parseTypeNameAllowing(false)
+}
+
+// parseResultType reads the type a function gives back, which may be "nothing"
+// for a function that produces no value.
+func (p *Parser) parseResultType() (*ast.TypeExpr, error) {
+	return p.parseTypeNameAllowing(true)
+}
+
+func (p *Parser) parseTypeNameAllowing(nothingOK bool) (*ast.TypeExpr, error) {
+	pos := at(p.curToken)
+
+	// An article reads naturally here: "Declare x as a number to be 5."
+	if p.curToken.Type == token.IDENTIFIER &&
+		(strings.EqualFold(p.curToken.Value, "a") || strings.EqualFold(p.curToken.Value, "an")) {
 		p.nextToken()
-		if p.curToken.Type == token.INTEGER {
-			p.nextToken()
-			return "unsigned integer"
-		}
-		return "unsigned"
+		pos = at(p.curToken)
 	}
 
-	name := ""
-	switch p.curToken.Type {
-	case token.IDENTIFIER:
-		name = strings.ToLower(p.curToken.Value)
-	case token.INTEGER:
-		name = "integer"
-	case token.TYPE:
-		name = strings.ToLower(p.curToken.Value)
-	default:
-		// Try interpreting keyword token values as type names
-		name = strings.ToLower(p.curToken.Value)
-	}
-	if name != "" {
+	// "nothing" names the absence of a result, which only a function can have.
+	// A variable of that type could hold nothing at all.
+	if p.curToken.Type == token.NOTHING {
+		if !nothingOK {
+			return nil, p.syntaxErr(msgNothingNotAValueType, hintNothingResultOnly)
+		}
 		p.nextToken()
+		return typeExprAt(pos, "nothing"), nil
 	}
-	return name
+
+	if !canNameAType(p.curToken.Type) {
+		return nil, p.syntaxErr(
+			fmt.Sprintf(msgFmtTypeNameExpected, tokenFriendlyValue(p.curToken.Type, p.curToken.Value)),
+			fmt.Sprintf(hintFmtTypeName, strings.Join(types.UserTypeNames(), ", ")),
+		)
+	}
+
+	// Multi-word built-in names.
+	switch p.curToken.Type {
+	case token.UNSIGNED:
+		p.nextToken()
+		if p.curToken.Type != token.INTEGER {
+			return nil, p.syntaxErr(
+				msgUnsignedNeedsInteger,
+				hintUnsignedInteger,
+			)
+		}
+		p.nextToken()
+		return typeExprAt(pos, "unsigned integer"), nil
+	case token.LOOKUP:
+		p.nextToken()
+		if p.curToken.Type == token.TABLE {
+			p.nextToken()
+		}
+		return typeExprAt(pos, "lookup table"), nil
+	case token.INTEGER:
+		p.nextToken()
+		return typeExprAt(pos, "integer"), nil
+	}
+
+	name := p.curToken.Value
+	p.nextToken()
+	// Normalise built-in spellings; leave anything else alone so that a struct
+	// name keeps the case it was declared with.
+	if types.Parse(name) != types.TypeUnknown {
+		name = strings.ToLower(name)
+	}
+	return typeExprAt(pos, name), nil
+}
+
+// typeExprAt builds a positioned type annotation, resolving its built-in kind
+// once so that nothing downstream has to re-parse the name at run time.
+func typeExprAt(pos ast.Base, name string) *ast.TypeExpr {
+	return &ast.TypeExpr{Base: pos, Name: name, Kind: types.Parse(name)}
+}
+
+// parseGivesBack reads the "gives back <type>" clause that every function
+// declaration carries.
+//
+// It is required, and so are the parameter annotations, because a signature
+// that is optional is a signature that is usually absent: an unannotated
+// function is one whose calls cannot be checked, and the checking is the point
+// of writing it down. A function that produces no value says so, with
+// "gives back nothing", rather than staying silent — silence would be
+// indistinguishable from having forgotten.
+func (p *Parser) parseGivesBack(funcName string) (*ast.TypeExpr, error) {
+	if !p.skipWord("gives") {
+		return nil, p.syntaxErr(
+			fmt.Sprintf(msgFmtFunctionNeedsResult, funcName),
+			fmt.Sprintf(hintFmtFunctionResult, funcName),
+		)
+	}
+	if !p.skipWord("back") {
+		return nil, p.syntaxErr(msgGivesNeedsBack, hintReturnType)
+	}
+	returnType, err := p.parseResultType()
+	if err != nil {
+		return nil, err
+	}
+	p.skipOptional(token.COMMA)
+	p.skipOptional(token.AND)
+	return returnType, nil
 }
 
 func (p *Parser) parseAdditive() (ast.Expression, error) {
@@ -1694,12 +2060,14 @@ func (p *Parser) parseAdditive() (ast.Expression, error) {
 		if p.curToken.Type == token.MINUS {
 			op = "-"
 		}
+		opPos := at(p.curToken)
 		p.nextToken()
 		right, err := p.parseMultiplicative()
 		if err != nil {
 			return nil, err
 		}
 		left = &ast.BinaryExpression{
+			Base:     opPos,
 			Left:     left,
 			Operator: op,
 			Right:    right,
@@ -1720,12 +2088,14 @@ func (p *Parser) parseMultiplicative() (ast.Expression, error) {
 		if p.curToken.Type == token.SLASH {
 			op = "/"
 		}
+		opPos := at(p.curToken)
 		p.nextToken()
 		right, err := p.parsePrimary()
 		if err != nil {
 			return nil, err
 		}
 		left = &ast.BinaryExpression{
+			Base:     opPos,
 			Left:     left,
 			Operator: op,
 			Right:    right,
@@ -1735,10 +2105,33 @@ func (p *Parser) parseMultiplicative() (ast.Expression, error) {
 	return left, nil
 }
 
+// parsePrimary parses a primary expression and records where it started.
+//
+// The stamping happens here, once, rather than at each of the ~40 node
+// constructions inside parsePrimaryExpr.
 func (p *Parser) parsePrimary() (ast.Expression, error) {
+	start := at(p.curToken)
+	expr, err := p.parsePrimaryExpr()
+	if err != nil {
+		return nil, err
+	}
+	ast.SetPosIfUnknown(expr, start.Position)
+	return expr, nil
+}
+
+func (p *Parser) parsePrimaryExpr() (ast.Expression, error) {
 	switch p.curToken.Type {
 	case token.NUMBER:
-		value, _ := strconv.ParseFloat(p.curToken.Value, 64)
+		// A literal too large for a 64-bit float used to become +Inf here,
+		// silently, because the error was discarded: a program full of digits
+		// ran and computed with infinity.
+		value, err := strconv.ParseFloat(p.curToken.Value, 64)
+		if err != nil {
+			return nil, p.syntaxErr(
+				fmt.Sprintf(msgFmtNumberOutOfRange, p.curToken.Value),
+				hintNumberOutOfRange,
+			)
+		}
 		p.nextToken()
 		return &ast.NumberLiteral{Value: value}, nil
 
@@ -1758,18 +2151,6 @@ func (p *Parser) parsePrimary() (ast.Expression, error) {
 	case token.NOTHING:
 		p.nextToken()
 		return &ast.NothingLiteral{}, nil
-
-	case token.NOT:
-		// Logical NOT unary operator: "not <expression>"
-		p.nextToken()
-		expr, err := p.parsePrimary()
-		if err != nil {
-			return nil, err
-		}
-		return &ast.UnaryExpression{
-			Operator: "not",
-			Right:    expr,
-		}, nil
 
 	case token.ASK:
 		// "ask(<prompt>)" or "ask" used as expression
@@ -1791,7 +2172,7 @@ func (p *Parser) parsePrimary() (ast.Expression, error) {
 			return &ast.AskExpression{Prompt: prompt}, nil
 		}
 		// "ask" with a string directly (no parentheses)
-		prompt, err := p.parseExpression()
+		prompt, err := p.parseArgument()
 		if err != nil {
 			return nil, err
 		}
@@ -1822,6 +2203,18 @@ func (p *Parser) parsePrimary() (ast.Expression, error) {
 		if p.curToken.Type == token.ENTRY {
 			return p.parseLookupKeyAccess()
 		}
+		// "the result of calling f with …" — a call used as a value.
+		//
+		// This was previously recognised only after "Set", and by consuming
+		// "the" and "result" before checking what followed, so the phrase was
+		// a syntax error anywhere else and "Set x to be the result of f."
+		// silently dropped the words it had already eaten. The three-token
+		// lookahead here needs no rollback.
+		if p.isWord(resultKeyword) &&
+			p.peekToken.Type == token.OF &&
+			p.tokenAt(p.position).Type == token.CALLING {
+			return p.parseCallResult()
+		}
 		// Check for field access: "the name of person"
 		if p.curToken.Type == token.IDENTIFIER {
 			fieldName := p.curToken.Value
@@ -1829,7 +2222,7 @@ func (p *Parser) parsePrimary() (ast.Expression, error) {
 			p.nextToken()
 			if p.curToken.Type == token.OF {
 				p.nextToken()
-				obj, err := p.parseExpression()
+				obj, err := p.parseOfArgument()
 				if err != nil {
 					return nil, err
 				}
@@ -1855,7 +2248,7 @@ func (p *Parser) parsePrimary() (ast.Expression, error) {
 			if p.curToken.Type == token.OF {
 				p.nextToken()
 			}
-			return p.parseExpression()
+			return p.parseOfArgument()
 		}
 		return nil, p.syntaxErr(
 			fmt.Sprintf(msgFmtTheUnknown, p.curToken.Value),
@@ -1907,27 +2300,10 @@ func (p *Parser) parsePrimary() (ast.Expression, error) {
 
 		p.nextToken()
 
-		// Possessive expression: "x's method" → MethodCall{Object: x, MethodName: method}
-		// e.g. "her_love_txt's casefold" → casefold applied to her_love_txt
-		if len(name) > 2 && name[len(name)-2:] == "'s" {
-			objectName := name[:len(name)-2]
-			if isPossessiveMethodNameToken(p.curToken.Type) {
-				methodName := p.curToken.Value
-				p.nextToken()
-				var args []ast.Expression
-				if p.curToken.Type == token.WITH {
-					p.nextToken()
-					args = p.parseCallArguments()
-				}
-				return &ast.MethodCall{
-					Object:     &ast.Identifier{Name: objectName},
-					MethodName: methodName,
-					Arguments:  args,
-				}, nil
-			}
-			// No method name after possessive — treat as plain identifier
-			name = objectName
-		}
+		// A possessive after a name — "x's length" — is handled by the postfix
+		// layer, which sees the POSSESSIVE token after this returns the plain
+		// identifier. This used to test the identifier's own text for a "'s"
+		// suffix, because the lexer folded the possessive into the name.
 
 		// Check if it's a function call
 		if p.curToken.Type == token.LPAREN {
@@ -1951,7 +2327,7 @@ func (p *Parser) parsePrimary() (ast.Expression, error) {
 		// The name is passed as-is (original case) to match how all other function calls work.
 		if p.curToken.Type == token.OF {
 			p.nextToken()
-			arg, err := p.parseExpression()
+			arg, err := p.parseOfArgument()
 			if err != nil {
 				return nil, err
 			}
@@ -1983,7 +2359,7 @@ func (p *Parser) parsePrimary() (ast.Expression, error) {
 	case token.LPAREN:
 		p.nextToken()
 		// Allow logical operators (and/or) inside parentheses
-		expr, err := p.parseComparison()
+		expr, err := p.parseExpression()
 		if err != nil {
 			return nil, err
 		}
@@ -2008,6 +2384,9 @@ func (p *Parser) parsePrimary() (ast.Expression, error) {
 		// "new instance of Person" (without "a")
 		return p.parseStructInstantiation()
 
+	case token.ERROR:
+		return nil, p.errorTokenErr()
+
 	default:
 		return nil, p.syntaxErr(
 			fmt.Sprintf(msgFmtExprUnknown, p.curToken.Value),
@@ -2017,7 +2396,29 @@ func (p *Parser) parsePrimary() (ast.Expression, error) {
 }
 
 // parseIndexExpression parses "item at position X in/of Y"
+// parseCallResult parses "result of calling f with …" with "the" already
+// consumed, producing the call as an ordinary expression.
+func (p *Parser) parseCallResult() (ast.Expression, error) {
+	pos := at(p.curToken)
+	p.nextToken() // consume "result"
+	p.nextToken() // consume "of"
+	p.nextToken() // consume "calling"
+
+	if p.curToken.Type != token.IDENTIFIER {
+		return nil, p.syntaxErr(msgSetCallFuncName, hintSetCallResult)
+	}
+	funcName := p.curToken.Value
+	p.nextToken()
+
+	args, err := p.parseFunctionArguments()
+	if err != nil {
+		return nil, err
+	}
+	return &ast.FunctionCall{Base: pos, Name: funcName, Arguments: args}, nil
+}
+
 func (p *Parser) parseIndexExpression() (ast.Expression, error) {
+
 	// Already consumed "the", now at "item"
 	if err := p.expectToken(token.ITEM); err != nil {
 		return nil, err
@@ -2232,7 +2633,7 @@ func (p *Parser) parseToggle() (ast.Statement, error) {
 	if err := p.expectToken(token.TOGGLE); err != nil {
 		return nil, err
 	}
-	startLine := p.curToken.Line
+	startPos := at(p.curToken)
 	p.nextToken()
 
 	// Handle "toggle the value of x"
@@ -2263,7 +2664,7 @@ func (p *Parser) parseToggle() (ast.Statement, error) {
 
 	return &ast.ToggleStatement{
 		Name: name,
-		Line: startLine,
+		Base: startPos,
 	}, nil
 }
 
@@ -2372,27 +2773,14 @@ func (p *Parser) parseRangeExpression() (ast.Expression, error) {
 }
 
 func (p *Parser) parseFunctionArguments() ([]ast.Expression, error) {
-	var args []ast.Expression
-
-	if p.curToken.Type == token.WITH {
-		p.nextToken()
-		for {
-			arg, err := p.parseExpression()
-			if err != nil {
-				return nil, err
-			}
-			args = append(args, arg)
-
-			if p.curToken.Type != token.AND {
-				break
-			}
-			p.nextToken()
-		}
-	}
-
-	return args, nil
+	return p.parseWithArguments()
 }
 
+// parseFunctionCallArgs reads the arguments of the parenthesised form, f(a, b).
+//
+// Separate from parseArgumentList on purpose: inside parentheses "and" is the
+// boolean operator, so only a comma separates arguments and each one is a full
+// expression rather than one that stops at "and".
 func (p *Parser) parseFunctionCallArgs() ([]ast.Expression, error) {
 	var args []ast.Expression
 
@@ -2428,15 +2816,19 @@ func (p *Parser) parseArrayLiteral() (ast.Expression, error) {
 	p.nextToken() // consume OF
 
 	// Optional element type hint before the bracket
-	elementType := ""
+	var elementType *ast.TypeExpr
 	if p.curToken.Type != token.LBRACKET {
-		elementType = p.parseTypeName()
+		var err error
+		elementType, err = p.parseTypeName()
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	if p.curToken.Type != token.LBRACKET {
 		hint := hintArrayLiteral
-		if elementType != "" {
-			hint = fmt.Sprintf(hintFmtArrayAfterType, elementType)
+		if elementType != nil {
+			hint = fmt.Sprintf(hintFmtArrayAfterType, elementType.Name)
 		}
 		return nil, p.syntaxErr(
 			fmt.Sprintf(msgFmtArrayOpenBracket, p.curToken.Value),
@@ -2445,16 +2837,25 @@ func (p *Parser) parseArrayLiteral() (ast.Expression, error) {
 	}
 	p.nextToken() // consume [
 
+	// Elements are separated by commas, as they are in a list. The comma used
+	// to be optional here, so "an array of number [1 2 3]" was a three-element
+	// array — the same text that is a syntax error one line up in a list.
 	var elements []ast.Expression
 	for p.curToken.Type != token.RBRACKET && p.curToken.Type != token.EOF {
+		if len(elements) > 0 {
+			if p.curToken.Type != token.COMMA {
+				return nil, p.syntaxErr(
+					fmt.Sprintf(msgFmtArraySeparator, p.curToken.Value),
+					hintArraySeparator,
+				)
+			}
+			p.nextToken()
+		}
 		elem, err := p.parseExpression()
 		if err != nil {
 			return nil, err
 		}
 		elements = append(elements, elem)
-		if p.curToken.Type == token.COMMA {
-			p.nextToken()
-		}
 	}
 	if p.curToken.Type != token.RBRACKET {
 		return nil, p.syntaxErr(
@@ -2464,7 +2865,7 @@ func (p *Parser) parseArrayLiteral() (ast.Expression, error) {
 	}
 	p.nextToken() // consume ]
 
-	return &ast.ArrayLiteral{ElementType: elementType, Elements: elements}, nil
+	return &ast.ArrayLiteral{ElemType: elementType, Elements: elements}, nil
 }
 
 // parseLookupKeyAccess parses "the entry KEY in TABLE".
@@ -2495,7 +2896,7 @@ func (p *Parser) parseLookupKeyAccess() (ast.Expression, error) {
 
 // parseLookupKeyAssignment parses "the entry KEY in TABLE to be VALUE."
 // Cursor is on ENTRY when called (parseAssignment has already consumed "Set the").
-func (p *Parser) parseLookupKeyAssignment(setLine int) (ast.Statement, error) {
+func (p *Parser) parseLookupKeyAssignment(setPos ast.Base) (ast.Statement, error) {
 	p.nextToken() // consume ENTRY
 
 	key, err := p.parseExpression()
@@ -2514,7 +2915,7 @@ func (p *Parser) parseLookupKeyAssignment(setLine int) (ast.Statement, error) {
 	if p.curToken.Type != token.IDENTIFIER {
 		return nil, p.syntaxErr(
 			msgLookupTableName,
-			hintLookupTableName,
+			hintLookupSetEntry,
 		)
 	}
 	tableName := p.curToken.Value
@@ -2541,7 +2942,7 @@ func (p *Parser) parseLookupKeyAssignment(setLine int) (ast.Statement, error) {
 	}
 	p.nextToken()
 
-	return &ast.LookupKeyAssignment{TableName: tableName, Key: key, Value: value, Line: setLine}, nil
+	return &ast.LookupKeyAssignment{TableName: tableName, Key: key, Value: value, Base: setPos}, nil
 }
 
 // parseSleepStatement parses "Sleep for <duration>." and "Wait for <duration>."
@@ -2566,7 +2967,7 @@ func (p *Parser) parseLookupKeyAssignment(setLine int) (ast.Statement, error) {
 //	Please sleep for 1 minute.
 //	Would you kindly wait for a second.
 func (p *Parser) parseSleepStatement() (ast.Statement, error) {
-	line := p.curToken.Line
+	sleepPos := at(p.curToken)
 	p.nextToken() // consume SLEEP / WAIT
 
 	if p.curToken.Type != token.FOR {
@@ -2672,45 +3073,10 @@ func (p *Parser) parseSleepStatement() (ast.Statement, error) {
 
 	return &ast.CallStatement{
 		FunctionCall: &ast.FunctionCall{
+			Base:      sleepPos,
 			Name:      "sleep",
-			Arguments: []ast.Expression{&ast.NumberLiteral{Value: seconds}},
+			Arguments: []ast.Expression{&ast.NumberLiteral{Base: sleepPos, Value: seconds}},
 		},
-		Line: line,
+		Base: sleepPos,
 	}, nil
-}
-
-// stmtLine extracts the source line number from a statement.  Returns 0 if
-// the statement type does not carry a line field (e.g. CommentStatement).
-func stmtLine(stmt ast.Statement) int {
-	switch s := stmt.(type) {
-	case *ast.FunctionDecl:
-		return s.Line
-	case *ast.VariableDecl:
-		return s.Line
-	case *ast.Assignment:
-		return s.Line
-	case *ast.CallStatement:
-		return s.Line
-	case *ast.IfStatement:
-		return s.Line
-	case *ast.WhileLoop:
-		return s.Line
-	case *ast.ForLoop:
-		return s.Line
-	case *ast.ForEachLoop:
-		return s.Line
-	case *ast.OutputStatement:
-		return s.Line
-	case *ast.ReturnStatement:
-		return s.Line
-	case *ast.RaiseStatement:
-		return s.Line
-	case *ast.TryStatement:
-		return s.Line
-	case *ast.SwapStatement:
-		return s.Line
-	case *ast.ToggleStatement:
-		return s.Line
-	}
-	return 0
 }

@@ -29,7 +29,7 @@ func (d *disassembler) stmt(node ast.Statement) {
 
 	case *ast.TypedVariableDecl:
 		name := d.s(styleIdent, s.Name)
-		typeTag := d.s(styleType, ":"+s.TypeName)
+		typeTag := d.s(styleType, ":"+ast.TypeName(s.Type))
 		constTag := ""
 		if s.IsConstant {
 			constTag = " " + d.s(styleConst, "[const]")
@@ -52,8 +52,8 @@ func (d *disassembler) stmt(node ast.Statement) {
 		d.emit(styleOpcodeAssign, "ASSIGN", name+"  "+arrow+"  "+d.expr(s.Value))
 
 	case *ast.FunctionDecl:
-		params := make([]string, len(s.Parameters))
-		for i, p := range s.Parameters {
+		params := make([]string, len(s.ParamNames()))
+		for i, p := range s.ParamNames() {
 			params[i] = d.s(styleIdent, p)
 		}
 		paramStr := d.s(stylePunct, "(") +
@@ -213,7 +213,7 @@ func (d *disassembler) stmt(node ast.Statement) {
 		d.emit(styleOpcodeDecl, "STRUCT_DECL", d.s(styleLabel, s.Name))
 		d.depth++
 		for _, f := range s.Fields {
-			typeTag := d.s(styleType, ":"+f.TypeName)
+			typeTag := d.s(styleType, ":"+ast.TypeName(f.Type))
 			defPart := ""
 			if f.DefaultValue != nil {
 				defPart = "  " + d.s(styleArrow, "←") + "  " + d.expr(f.DefaultValue)
@@ -223,8 +223,8 @@ func (d *disassembler) stmt(node ast.Statement) {
 				d.s(styleIdent, f.Name)+typeTag+defPart)
 		}
 		for _, m := range s.Methods {
-			params := make([]string, len(m.Parameters))
-			for i, p := range m.Parameters {
+			params := make([]string, len(m.ParamNames()))
+			for i, p := range m.ParamNames() {
 				params[i] = d.s(styleIdent, p)
 			}
 			paramStr := d.s(stylePunct, "(") +

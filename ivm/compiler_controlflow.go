@@ -221,7 +221,7 @@ func (c *Compiler) compileForEachLoop(s *ast.ForEachLoop) error {
 	// define loop variable
 	c.chunk.Emit(OP_LOAD_VAR, listIdx)
 	c.chunk.Emit(OP_LOAD_VAR, idxIdx)
-	c.chunk.Emit(OP_INDEX_GET, 0)
+	c.chunk.Emit(OP_ITER_GET, 0)
 	itemIdx := c.chunk.AddName(s.Item)
 	c.chunk.Emit(OP_DEFINE_VAR, itemIdx)
 

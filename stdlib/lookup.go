@@ -1,9 +1,10 @@
 package stdlib
 
 import (
-	"github.com/Advik-B/english/astvm"
-	"github.com/Advik-B/english/astvm/types"
 	"fmt"
+
+	vm "github.com/Advik-B/english/astvm"
+	"github.com/Advik-B/english/types"
 )
 
 func evalLookup(name string, args []vm.Value) (vm.Value, error) {
@@ -14,7 +15,7 @@ func evalLookup(name string, args []vm.Value) (vm.Value, error) {
 		}
 		lt, ok := args[0].(*types.LookupTableValue)
 		if !ok {
-			return nil, fmt.Errorf("TypeError: keys() expects a lookup table, got %s", kindName(args[0]))
+			return nil, fmt.Errorf("TypeError: keys() expects a lookup table, got %s", types.NameOf(args[0]))
 		}
 		result := make([]interface{}, 0, len(lt.KeyOrder))
 		for _, k := range lt.KeyOrder {
@@ -32,7 +33,7 @@ func evalLookup(name string, args []vm.Value) (vm.Value, error) {
 		}
 		lt, ok := args[0].(*types.LookupTableValue)
 		if !ok {
-			return nil, fmt.Errorf("TypeError: values() expects a lookup table, got %s", kindName(args[0]))
+			return nil, fmt.Errorf("TypeError: values() expects a lookup table, got %s", types.NameOf(args[0]))
 		}
 		result := make([]interface{}, 0, len(lt.KeyOrder))
 		for _, k := range lt.KeyOrder {
@@ -45,7 +46,7 @@ func evalLookup(name string, args []vm.Value) (vm.Value, error) {
 		}
 		lt, ok := args[0].(*types.LookupTableValue)
 		if !ok {
-			return nil, fmt.Errorf("TypeError: table_remove() expects a lookup table, got %s", kindName(args[0]))
+			return nil, fmt.Errorf("TypeError: table_remove() expects a lookup table, got %s", types.NameOf(args[0]))
 		}
 		serialKey, err := types.SerializeKey(args[1])
 		if err != nil {
@@ -64,7 +65,7 @@ func evalLookup(name string, args []vm.Value) (vm.Value, error) {
 		}
 		lt, ok := args[0].(*types.LookupTableValue)
 		if !ok {
-			return nil, fmt.Errorf("TypeError: table_has() expects a lookup table, got %s", kindName(args[0]))
+			return nil, fmt.Errorf("TypeError: table_has() expects a lookup table, got %s", types.NameOf(args[0]))
 		}
 		serialKey, err := types.SerializeKey(args[1])
 		if err != nil {
@@ -104,13 +105,4 @@ func evalLookup(name string, args []vm.Value) (vm.Value, error) {
 		return args[2], nil
 	}
 	return nil, vm.NewRuntimeError("unknown lookup table function: " + name)
-}
-
-func registerLookupTableFunctions(env *vm.Environment) {
-	env.DefineFunction("keys", &vm.FunctionValue{Name: "keys", Parameters: []string{"table"}, Body: nil, Closure: env})
-	env.DefineFunction("values", &vm.FunctionValue{Name: "values", Parameters: []string{"table"}, Body: nil, Closure: env})
-	env.DefineFunction("table_remove", &vm.FunctionValue{Name: "table_remove", Parameters: []string{"table", "key"}, Body: nil, Closure: env})
-	env.DefineFunction("table_has", &vm.FunctionValue{Name: "table_has", Parameters: []string{"table", "key"}, Body: nil, Closure: env})
-	env.DefineFunction("merge", &vm.FunctionValue{Name: "merge", Parameters: []string{"table", "other"}, Body: nil, Closure: env})
-	env.DefineFunction("get_or_default", &vm.FunctionValue{Name: "get_or_default", Parameters: []string{"table", "key", "default"}, Body: nil, Closure: env})
 }

@@ -1,9 +1,12 @@
 package parser
 
 import (
+	"errors"
+	"strings"
+	"testing"
+
 	"github.com/Advik-B/english/ast"
 	"github.com/Advik-B/english/token"
-	"testing"
 )
 
 // Helper function to parse input
@@ -379,7 +382,7 @@ func TestParserAssignmentWithoutBe(t *testing.T) {
 }
 
 func TestParserFunctionDeclarationWithoutParams(t *testing.T) {
-	input := `Declare function greet that does the following:
+	input := `Declare function greet that gives back nothing, and does the following:
     Print "Hello".
 thats it.`
 
@@ -401,13 +404,13 @@ thats it.`
 		t.Errorf("Expected function name 'greet', got %q", funcDecl.Name)
 	}
 
-	if len(funcDecl.Parameters) != 0 {
-		t.Errorf("Expected 0 parameters, got %d", len(funcDecl.Parameters))
+	if len(funcDecl.ParamNames()) != 0 {
+		t.Errorf("Expected 0 parameters, got %d", len(funcDecl.ParamNames()))
 	}
 }
 
 func TestParserFunctionDeclarationWithParams(t *testing.T) {
-	input := `Declare function add that takes a and b and does the following:
+	input := `Declare function add that takes a as number and b as number, and gives back a number, and does the following:
     Return a + b.
 thats it.`
 
@@ -425,17 +428,17 @@ thats it.`
 		t.Errorf("Expected function name 'add', got %q", funcDecl.Name)
 	}
 
-	if len(funcDecl.Parameters) != 2 {
-		t.Errorf("Expected 2 parameters, got %d", len(funcDecl.Parameters))
+	if len(funcDecl.ParamNames()) != 2 {
+		t.Errorf("Expected 2 parameters, got %d", len(funcDecl.ParamNames()))
 	}
 
-	if funcDecl.Parameters[0] != "a" || funcDecl.Parameters[1] != "b" {
-		t.Errorf("Expected parameters [a, b], got %v", funcDecl.Parameters)
+	if funcDecl.ParamNames()[0] != "a" || funcDecl.ParamNames()[1] != "b" {
+		t.Errorf("Expected parameters [a, b], got %v", funcDecl.ParamNames())
 	}
 }
 
 func TestParserFunctionDeclarationSingleParam(t *testing.T) {
-	input := `Declare function double that takes x and does the following:
+	input := `Declare function double that takes x as number, and gives back a number, and does the following:
     Return x * 2.
 thats it.`
 
@@ -449,12 +452,12 @@ thats it.`
 		t.Fatalf("Expected FunctionDecl, got %T", program.Statements[0])
 	}
 
-	if len(funcDecl.Parameters) != 1 {
-		t.Errorf("Expected 1 parameter, got %d", len(funcDecl.Parameters))
+	if len(funcDecl.ParamNames()) != 1 {
+		t.Errorf("Expected 1 parameter, got %d", len(funcDecl.ParamNames()))
 	}
 
-	if funcDecl.Parameters[0] != "x" {
-		t.Errorf("Expected parameter 'x', got %q", funcDecl.Parameters[0])
+	if funcDecl.ParamNames()[0] != "x" {
+		t.Errorf("Expected parameter 'x', got %q", funcDecl.ParamNames()[0])
 	}
 }
 
@@ -1147,40 +1150,633 @@ func TestParserFunctionCallWithParens(t *testing.T) {
 }
 
 func TestParserAskStatement(t *testing.T) {
-tests := []struct {
-input   string
-varName string
-}{
-{`Ask "What is your age?" and store it in userAge.`, "userAge"},
-{`Ask "What is your age?" and store the answer in userAge.`, "userAge"},
-{`Ask "What is your age?" and store the result in userAge.`, "userAge"},
-{`Ask "What is your age?" as userAge.`, "userAge"},
+	tests := []struct {
+		input   string
+		varName string
+	}{
+		{`Ask "What is your age?" and store it in userAge.`, "userAge"},
+		{`Ask "What is your age?" and store the answer in userAge.`, "userAge"},
+		{`Ask "What is your age?" and store the result in userAge.`, "userAge"},
+		{`Ask "What is your age?" as userAge.`, "userAge"},
+	}
+
+	for _, test := range tests {
+		program, err := parse(test.input)
+		if err != nil {
+			t.Errorf("Input %q: parse error: %v", test.input, err)
+			continue
+		}
+
+		if len(program.Statements) != 1 {
+			t.Errorf("Input %q: expected 1 statement, got %d", test.input, len(program.Statements))
+			continue
+		}
+
+		// "Ask … as name." declares name.
+		assign, ok := program.Statements[0].(*ast.VariableDecl)
+		if !ok {
+			t.Errorf("Input %q: expected *ast.VariableDecl, got %T", test.input, program.Statements[0])
+			continue
+		}
+
+		if assign.Name != test.varName {
+			t.Errorf("Input %q: expected variable name %q, got %q", test.input, test.varName, assign.Name)
+		}
+
+		if _, ok := assign.Value.(*ast.AskExpression); !ok {
+			t.Errorf("Input %q: expected *ast.AskExpression as value, got %T", test.input, assign.Value)
+		}
+	}
 }
 
-for _, test := range tests {
-program, err := parse(test.input)
-if err != nil {
-t.Errorf("Input %q: parse error: %v", test.input, err)
-continue
+// TestUnterminatedStringLiteral covers the lexer bug where a string with no
+// closing quote was accepted silently: readString fell out of its loop at end
+// of input and then advanced past the "closing" quote regardless, swallowing
+// the rest of the file into the literal instead of reporting an error.
+func TestUnterminatedStringLiteral(t *testing.T) {
+	tests := []struct {
+		name  string
+		input string
+	}{
+		{"statement position", `Print "hello.`},
+		{"expression position", `Declare x to be "unclosed.`},
+		{"single quotes", `Print 'hello.`},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			_, err := parse(test.input)
+			if err == nil {
+				t.Fatalf("expected an error for %q, got none", test.input)
+			}
+			if !strings.Contains(err.Error(), "never closed") {
+				t.Errorf("error does not describe an unterminated literal: %v", err)
+			}
+		})
+	}
 }
 
-if len(program.Statements) != 1 {
-t.Errorf("Input %q: expected 1 statement, got %d", test.input, len(program.Statements))
-continue
+// TestTerminatedStringStillParses guards the fix above against over-reach.
+func TestTerminatedStringStillParses(t *testing.T) {
+	for _, src := range []string{
+		`Print "hello".`,
+		`Print 'hello'.`,
+		`Print "with \"escaped\" quotes".`,
+		`Print "".`,
+	} {
+		if _, err := parse(src); err != nil {
+			t.Errorf("%q should parse, got: %v", src, err)
+		}
+	}
 }
 
-assign, ok := program.Statements[0].(*ast.Assignment)
-if !ok {
-t.Errorf("Input %q: expected *ast.Assignment, got %T", test.input, program.Statements[0])
-continue
+// TestIllegalCharacterReported covers the lexer's ERROR token, which the parser
+// previously had no case for and reported with a generic message.
+func TestIllegalCharacterReported(t *testing.T) {
+	_, err := parse("@ this is nonsense.")
+	if err == nil {
+		t.Fatal("expected an error for an illegal character, got none")
+	}
+	if !strings.Contains(err.Error(), "do not recognise the character") {
+		t.Errorf("error does not name the illegal character: %v", err)
+	}
 }
 
-if assign.Name != test.varName {
-t.Errorf("Input %q: expected variable name %q, got %q", test.input, test.varName, assign.Name)
+// TestTypeAnnotationForms covers the three annotation positions that used to be
+// served by three incompatible parsers. Keyword-named types ("integer",
+// "array", "lookup table") were syntax errors in the typed-declaration form
+// even though types.Parse accepts them, and a leading article was accepted for
+// struct fields but consumed as the type name in declarations.
+func TestTypeAnnotationForms(t *testing.T) {
+	for _, src := range []string{
+		`Declare a as number to be 1.`,
+		`Declare a as a number to be 1.`,
+		`Declare a as an integer to be 1.`,
+		`Declare a as text to be "x".`,
+		`Declare a as a text to be "x".`,
+		`Declare a as boolean to be true.`,
+		`Declare a as integer to be 1.`,
+		`Declare a as number.`,
+		`Declare a as a number.`,
+		`Print 1 cast to text.`,
+		`Print "1" cast to number.`,
+		`Print 1 cast to a number.`,
+	} {
+		if _, err := parse(src); err != nil {
+			t.Errorf("%q should parse, got: %v", src, err)
+		}
+	}
 }
 
-if _, ok := assign.Value.(*ast.AskExpression); !ok {
-t.Errorf("Input %q: expected *ast.AskExpression as value, got %T", test.input, assign.Value)
+// TestTypeAnnotationRejectsNonTypes covers the old parseTypeName default branch,
+// which accepted *any* token as a type name — so "cast x to 5" parsed cleanly
+// and only failed at run time.
+func TestTypeAnnotationRejectsNonTypes(t *testing.T) {
+	for _, src := range []string{
+		`Print 1 cast to 5.`,
+		`Print 1 cast to "number".`,
+		`Declare y as 42 to be 1.`,
+		`Declare y as "number" to be 1.`,
+	} {
+		_, err := parse(src)
+		if err == nil {
+			t.Errorf("%q should be rejected, but parsed", src)
+			continue
+		}
+		if !strings.Contains(err.Error(), "type name") {
+			t.Errorf("%q: error should mention a type name, got: %v", src, err)
+		}
+	}
 }
+
+// TestBlockEndIsMandatory covers the silent-swallow bug: parseBlock stopped at
+// EOF without complaint and every closer in parser.go was optional, so the
+// statements after an unclosed block were absorbed into it.
+func TestBlockEndIsMandatory(t *testing.T) {
+	for _, src := range []string{
+		"Declare function f that gives back nothing, and does the following:\n    Print 1.\nPrint 2.",
+		"If true, then\n    Print 1.",
+		"Declare x to be 0.\nRepeat the following while x is less than 1:\n    Set x to be 1.",
+	} {
+		if _, err := parse(src); err == nil {
+			t.Errorf("expected an error for an unclosed block:\n%s", src)
+		}
+	}
 }
+
+// TestComparisonsAreFirstClass covers the grammar bug where parseExpression
+// started below the relational and logical layers, so a comparison could not
+// appear anywhere a value was expected despite boolean being a declared type.
+func TestComparisonsAreFirstClass(t *testing.T) {
+	for _, src := range []string{
+		`Declare x to be 1.
+Declare b to be x is greater than 0.`,
+		`Declare function f that takes n as number, and gives back a number, and does the following:
+    Return n is equal to 1.
+thats it.`,
+		`Declare x to be 1.
+Declare b to be x is greater than 0 and x is less than 5.`,
+		`Declare x to be 1.
+Print x is equal to 1.`,
+	} {
+		if _, err := parse(src); err != nil {
+			t.Errorf("%q should parse, got: %v", src, err)
+		}
+	}
+}
+
+// TestAndStillSeparatesArguments guards the change above against over-reach:
+// "and" must remain an argument separator, not become an operator, in call
+// argument lists and after an "ask" prompt.
+func TestAndStillSeparatesArguments(t *testing.T) {
+	prog, err := parse(`Declare function add that takes a as number and b as number, and gives back a number, and does the following:
+    Return a + b.
+thats it.
+Set s to be the result of calling add with 5 and 7.`)
+	if err != nil {
+		t.Fatalf("should parse, got: %v", err)
+	}
+	// The last statement must call add with two arguments, not one "5 and 7".
+	last := prog.Statements[len(prog.Statements)-1]
+	asg, ok := last.(*ast.Assignment)
+	if !ok {
+		t.Fatalf("last statement is %T, want *ast.Assignment", last)
+	}
+	call, ok := asg.Value.(*ast.FunctionCall)
+	if !ok {
+		t.Fatalf("assigned value is %T, want *ast.FunctionCall", asg.Value)
+	}
+	if len(call.Arguments) != 2 {
+		t.Errorf("add was called with %d argument(s), want 2", len(call.Arguments))
+	}
+}
+
+// TestLogicalPrecedence pins the fix for "and"/"or" sharing one precedence
+// level, which made "a or b and c" parse as "(a or b) and c".
+func TestLogicalPrecedence(t *testing.T) {
+	prog, err := parse(`Declare r to be true or false and false.`)
+	if err != nil {
+		t.Fatalf("should parse, got: %v", err)
+	}
+	decl := prog.Statements[0].(*ast.VariableDecl)
+	top, ok := decl.Value.(*ast.BinaryExpression)
+	if !ok {
+		t.Fatalf("value is %T, want *ast.BinaryExpression", decl.Value)
+	}
+	if top.Operator != "or" {
+		t.Errorf("top-level operator is %q, want \"or\" (and binds tighter)", top.Operator)
+	}
+	right, ok := top.Right.(*ast.BinaryExpression)
+	if !ok {
+		t.Fatalf("right operand is %T, want *ast.BinaryExpression", top.Right)
+	}
+	if right.Operator != "and" {
+		t.Errorf("right operand operator is %q, want \"and\"", right.Operator)
+	}
+}
+
+// TestNotPrecedence pins the fix for "not" living in parsePrimary, which bound
+// it tighter than comparison so "not x is equal to y" meant "(not x) is equal
+// to y".
+func TestNotPrecedence(t *testing.T) {
+	prog, err := parse(`Declare x to be 1.
+Declare r to be not x is equal to 2.`)
+	if err != nil {
+		t.Fatalf("should parse, got: %v", err)
+	}
+	decl := prog.Statements[1].(*ast.VariableDecl)
+	un, ok := decl.Value.(*ast.UnaryExpression)
+	if !ok {
+		t.Fatalf("value is %T, want *ast.UnaryExpression (not should be outermost)", decl.Value)
+	}
+	if un.Operator != "not" {
+		t.Errorf("operator is %q, want \"not\"", un.Operator)
+	}
+	if _, ok := un.Right.(*ast.BinaryExpression); !ok {
+		t.Errorf("operand of not is %T, want the comparison", un.Right)
+	}
+}
+
+// TestFunctionSignatureSyntax covers the parameter and return type annotations
+// added so that a function has a signature the checker can verify. Before
+// this, a function was just a name and a list of parameter names.
+func TestFunctionSignatureSyntax(t *testing.T) {
+	tests := []struct {
+		name       string
+		src        string
+		paramTypes []string // "" means unannotated
+		returnType string
+	}{
+		{
+			name: "annotated parameters and return",
+			src: `Declare function add that takes x as number and y as number, and gives back a number, and does the following:
+    Return x + y.
+thats it.`,
+			paramTypes: []string{"number", "number"},
+			returnType: "number",
+		},
+		{
+			name: "return type with no comma",
+			src: `Declare function shout that takes msg as text and gives back a text, and does the following:
+    Return msg.
+thats it.`,
+			paramTypes: []string{"text"},
+			returnType: "text",
+		},
+		{
+			name: "no parameters, only a return type",
+			src: `Declare function answer that gives back a number, and does the following:
+    Return 42.
+thats it.`,
+			paramTypes: nil,
+			returnType: "number",
+		},
+		{
+			name: "gives back nothing, for a function with no result",
+			src: `Declare function announce that takes label as text, and gives back nothing, and does the following:
+    Print label.
+thats it.`,
+			paramTypes: []string{"text"},
+			returnType: "nothing",
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			prog, err := parse(test.src)
+			if err != nil {
+				t.Fatalf("should parse, got: %v", err)
+			}
+			fd, ok := prog.Statements[0].(*ast.FunctionDecl)
+			if !ok {
+				t.Fatalf("statement is %T, want *ast.FunctionDecl", prog.Statements[0])
+			}
+			if len(fd.Params) != len(test.paramTypes) {
+				t.Fatalf("got %d parameter(s), want %d", len(fd.Params), len(test.paramTypes))
+			}
+			for i, want := range test.paramTypes {
+				got := ast.TypeName(fd.Params[i].Type)
+				if got != want {
+					t.Errorf("parameter %d annotation is %q, want %q", i, got, want)
+				}
+				if want != "" && !fd.Params[i].Type.Pos().IsKnown() {
+					t.Errorf("parameter %d annotation has no position", i)
+				}
+			}
+			if got := ast.TypeName(fd.ReturnType); got != test.returnType {
+				t.Errorf("return type is %q, want %q", got, test.returnType)
+			}
+		})
+	}
+}
+
+// TestSignaturesAreRequired covers the annotations themselves, which used to
+// be optional.
+//
+// An optional signature is one that is usually absent, and an unannotated
+// function is one whose calls cannot be checked — which is the whole point of
+// writing it down. A function that produces no value says so rather than
+// staying silent, since silence is indistinguishable from having forgotten.
+func TestSignaturesAreRequired(t *testing.T) {
+	for _, c := range []struct{ name, src, want string }{
+		{
+			name: "a parameter with no type",
+			src: `Declare function add that takes a and b and does the following:
+    Return a + b.
+thats it.`,
+			want: "The parameter 'a' needs a type",
+		},
+		{
+			name: "one parameter annotated and one not",
+			src: `Declare function f that takes a as number and b and does the following:
+    Return a.
+thats it.`,
+			want: "The parameter 'b' needs a type",
+		},
+		{
+			name: "no result",
+			src: `Declare function f that takes a as number, and does the following:
+    Return a.
+thats it.`,
+			want: "must say what it gives back",
+		},
+		{
+			name: "a method with no result",
+			src: `Declare Point as a structure with the following fields:
+    x is a number with 0 being the default.
+
+    let show be a function that does the following:
+        Print x.
+    thats it.
+thats it.`,
+			want: "must say what it gives back",
+		},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			_, err := parse(c.src)
+			if err == nil {
+				t.Fatal("parsed without a signature")
+			}
+			if !strings.Contains(err.Error(), c.want) {
+				t.Errorf("message is %v, want it to mention %q", err, c.want)
+			}
+		})
+	}
+}
+
+// TestNothingIsNotAValueType covers the one type name that only a result may
+// carry: a variable declared as nothing could hold nothing at all.
+func TestNothingIsNotAValueType(t *testing.T) {
+	_, err := parse("Declare x as nothing to be 1.")
+	if err == nil {
+		t.Fatal("a variable was declared as nothing")
+	}
+	if !strings.Contains(err.Error(), "not a type a value can have") {
+		t.Errorf("unexpected message: %v", err)
+	}
+}
+
+// TestGivesRequiresBack checks the diagnostic for a half-written return clause.
+func TestGivesRequiresBack(t *testing.T) {
+	_, err := parse(`Declare function f that gives a number, and does the following:
+    Return 1.
+thats it.`)
+	if err == nil {
+		t.Fatal("expected an error for \"gives\" without \"back\"")
+	}
+	if !strings.Contains(err.Error(), "'back'") {
+		t.Errorf("error should mention the missing word: %v", err)
+	}
+}
+
+// TestStructMethodSignatureSyntax checks methods accept the same annotations.
+func TestStructMethodSignatureSyntax(t *testing.T) {
+	prog, err := parse(`Declare Point as a structure with the following fields:
+    x is a number with 0 being the default.
+
+    let scaled be a function that takes factor as number and gives back a number, and does the following:
+        Return x * factor.
+    thats it.
+thats it.`)
+	if err != nil {
+		t.Fatalf("should parse, got: %v", err)
+	}
+	sd := prog.Statements[0].(*ast.StructDecl)
+	if len(sd.Methods) != 1 {
+		t.Fatalf("got %d method(s), want 1", len(sd.Methods))
+	}
+	m := sd.Methods[0]
+	if len(m.Params) != 1 || ast.TypeName(m.Params[0].Type) != "number" {
+		t.Errorf("method parameter annotation is %q, want \"number\"", ast.TypeName(m.Params[0].Type))
+	}
+	if ast.TypeName(m.ReturnType) != "number" {
+		t.Errorf("method return type is %q, want \"number\"", ast.TypeName(m.ReturnType))
+	}
+}
+
+// TestFieldAssignmentSyntax covers writing to a struct field, which had no
+// syntax at all: ast.FieldAssignment was implemented by both engines, the
+// transpiler and the disassembler, and the parser never built one, so a
+// structure could be created and read but never changed.
+func TestFieldAssignmentSyntax(t *testing.T) {
+	prog, err := parse(`Set person's name to be "Alice".`)
+	if err != nil {
+		t.Fatalf("Set person's name to be …: %v", err)
+	}
+	if len(prog.Statements) != 1 {
+		t.Fatalf("parsed %d statements, want 1", len(prog.Statements))
+	}
+	assign, ok := prog.Statements[0].(*ast.FieldAssignment)
+	if !ok {
+		t.Fatalf("parsed a %T, want a *ast.FieldAssignment", prog.Statements[0])
+	}
+	if assign.ObjectName != "person" {
+		t.Errorf("object is %q, want person", assign.ObjectName)
+	}
+	if assign.Field != "name" {
+		t.Errorf("field is %q, want name", assign.Field)
+	}
+	if _, ok := assign.Value.(*ast.StringLiteral); !ok {
+		t.Errorf("value is a %T, want a string literal", assign.Value)
+	}
+
+	// "to" without "be" is accepted for a field, as it is for a variable.
+	if _, err := parse(`Set person's age to 31.`); err != nil {
+		t.Errorf("Set person's age to 31: %v", err)
+	}
+
+	// A field name that is also a keyword still works.
+	if _, err := parse(`Set person's type to be "human".`); err != nil {
+		t.Errorf("a keyword field name was rejected: %v", err)
+	}
+}
+
+// TestPossessiveIsOneConstruct covers the possessive, which the lexer spelled
+// two ways: folded into the identifier after a name, and a separate token
+// after anything else. Two spellings meant two parsers, and they had drifted —
+// "Print x's length." worked while "Call x's length." did not, because the
+// call path required a plain name where the expression path accepted a
+// keyword too.
+func TestPossessiveIsOneConstruct(t *testing.T) {
+	// The lexer emits the name and the possessive separately, always.
+	tokens := NewLexer(`person's name`).TokenizeAll()
+	want := []token.Type{token.IDENTIFIER, token.POSSESSIVE, token.IDENTIFIER, token.EOF}
+	if len(tokens) != len(want) {
+		t.Fatalf("lexed %d tokens, want %d: %v", len(tokens), len(want), tokens)
+	}
+	for i, w := range want {
+		if tokens[i].Type != w {
+			t.Fatalf("token %d is %v, want %v", i, tokens[i].Type, w)
+		}
+	}
+	if tokens[0].Value != "person" {
+		t.Errorf("the name lexed as %q; the possessive is not part of it", tokens[0].Value)
+	}
+
+	// Both statements reach the same construct, keyword method name included.
+	for _, src := range []string{
+		`Print x's length.`,
+		`Call x's length.`,
+		`Print x's title.`,
+		`Call x's talk with "hi".`,
+	} {
+		if _, err := parse(src); err != nil {
+			t.Errorf("%s: %v", src, err)
+		}
+	}
+}
+
+// TestNumberOutOfRangeIsReported covers a literal too large for a 64-bit
+// float, which used to become +Inf silently because the conversion's error was
+// discarded: a program full of digits ran and computed with infinity.
+func TestNumberOutOfRangeIsReported(t *testing.T) {
+	huge := strings.Repeat("9", 400)
+	_, err := parse("Declare huge to be " + huge + ".")
+	if err == nil {
+		t.Fatal("a 400-digit literal was accepted")
+	}
+	if !strings.Contains(err.Error(), "too large") {
+		t.Errorf("unexpected message: %v", err)
+	}
+
+	// A literal that does fit is unaffected, exponent included.
+	for _, src := range []string{
+		"Declare x to be 1e10.",
+		"Declare x to be 2.5E-3.",
+		"Declare x to be 1.7976931348623157e308.",
+	} {
+		if _, err := parse(src); err != nil {
+			t.Errorf("%s: %v", src, err)
+		}
+	}
+}
+
+// TestCallArgumentErrorIsReported covers the argument list, which discarded
+// its error and returned whatever it had parsed so far: "Call f with ."
+// became "Call f." and the mistake disappeared.
+func TestCallArgumentErrorIsReported(t *testing.T) {
+	if _, err := parse(`Call f with .`); err == nil {
+		t.Error("Call f with . was accepted as a call with no arguments")
+	}
+
+	// One separator rule for the English form, whichever way it is written.
+	for _, src := range []string{
+		`Call f with 1 and 2.`,
+		`Call f with 1, 2.`,
+		`Declare r to be the result of calling f with 1 and 2.`,
+		`Declare r to be the result of calling f with 1, 2.`,
+	} {
+		if _, err := parse(src); err != nil {
+			t.Errorf("%s: %v", src, err)
+		}
+	}
+}
+
+// TestArrayElementsNeedSeparators covers the array literal, whose comma was
+// optional: "an array of number [1 2 3]" was a three-element array, while the
+// same text in a list is a syntax error.
+func TestArrayElementsNeedSeparators(t *testing.T) {
+	if _, err := parse(`Declare xs to be an array of number [1 2 3].`); err == nil {
+		t.Error("an array literal without separators was accepted")
+	}
+	if _, err := parse(`Declare xs to be an array of number [1, 2, 3].`); err != nil {
+		t.Errorf("a properly separated array literal was rejected: %v", err)
+	}
+	if _, err := parse(`Declare xs to be an array of number [].`); err != nil {
+		t.Errorf("an empty array literal was rejected: %v", err)
+	}
+}
+
+// TestParseReportsEveryError covers error recovery. The parser stopped at the
+// first syntax error, so a file with two typos took two runs to fix, and the
+// editor — which shows one diagnostic per parse and then gives up before
+// extracting any symbols — told you nothing else about a file until its last
+// syntax error was gone.
+func TestParseReportsEveryError(t *testing.T) {
+	_, err := parse(`Declare x to be 1.
+Declare to be 2.
+Print x.
+Set 5 to be 3.
+Print "ok".`)
+	if err == nil {
+		t.Fatal("a program with two syntax errors parsed")
+	}
+
+	errs := Errors(err)
+	if len(errs) != 2 {
+		t.Fatalf("reported %d error(s), want 2:\n%v", len(errs), err)
+	}
+	if errs[0].Line != 2 {
+		t.Errorf("the first error is on line %d, want 2", errs[0].Line)
+	}
+	if errs[1].Line != 4 {
+		t.Errorf("the second error is on line %d, want 4", errs[1].Line)
+	}
+
+	// Anything that asks "is this a syntax error, and where?" still gets the
+	// first one, unchanged.
+	var one *SyntaxError
+	if !errors.As(err, &one) {
+		t.Fatal("a multi-error parse failure is not recognised as a syntax error")
+	}
+	if one.Line != 2 {
+		t.Errorf("the unwrapped error is on line %d, want 2", one.Line)
+	}
+}
+
+// TestTruncatedInputIsNotRecoveredFrom guards the interactive prompt: input
+// that simply ran out has nothing after it to resynchronise on, and the prompt
+// needs to see it as "more is coming" rather than as a mistake.
+func TestTruncatedInputIsNotRecoveredFrom(t *testing.T) {
+	_, err := parse("If x is greater than 1, then\n    Print 1.\n")
+	if err == nil {
+		t.Fatal("an unclosed block parsed")
+	}
+	if !IsTruncated(err) {
+		t.Errorf("an unclosed block was not reported as truncated: %v", err)
+	}
+	if got := len(Errors(err)); got != 1 {
+		t.Errorf("reported %d errors for truncated input, want 1", got)
+	}
+}
+
+// TestImportItemListNeedsEveryName covers the import list, which broke out of
+// its loop when a separator was not followed by a name: "Import a, from
+// "lib.abc"." silently imported only "a" and said nothing about the stray
+// comma.
+func TestImportItemListNeedsEveryName(t *testing.T) {
+	if _, err := parse(`Import a, from "lib.abc".`); err == nil {
+		t.Error(`Import a, from "lib.abc". was accepted`)
+	}
+	for _, src := range []string{
+		`Import a from "lib.abc".`,
+		`Import a and b from "lib.abc".`,
+		`Import a, b and c from "lib.abc".`,
+		`Import everything from "lib.abc".`,
+		`Import "lib.abc".`,
+	} {
+		if _, err := parse(src); err != nil {
+			t.Errorf("%s: %v", src, err)
+		}
+	}
 }

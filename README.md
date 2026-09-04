@@ -9,8 +9,8 @@ Example below:
 ---
 
 ```english
-Declare function greet that takes name and does the following:
-    Print "Hello, ", the value of name, "!".
+Declare function greet that takes name as text, and gives back nothing, and does the following:
+    Print "Hello, " + name + "!".
 thats it.
 
 Call greet with "World".
@@ -29,7 +29,7 @@ Call greet with "World".
 | 📦 **Bytecode Compiler** | Compile `.abc` source files to fast-loading `.101` bytecode |
 | ⚡ **Auto-Caching** | Imported files are automatically cached (like Python's `__pycache__`) |
 | 🐍 **Python Transpiler** | Convert any English program to readable Python |
-| 🔒 **Strict Typing** | Variables are type-locked at declaration; no silent coercions |
+| 🔒 **Static Typing** | Every program is type-checked before it runs: names, types, arity, arguments and returns |
 | 🏗️ **Structs & Methods** | Define custom data structures with fields and possessive accessor syntax |
 | ⚠️ **Custom Errors** | Declare named error types and catch them selectively |
 
@@ -120,16 +120,25 @@ let max_size be always 256.
 
 ### Step 3 — Data Types
 
-English has six built-in value types:
+There is one numeric type, `number`, and it is a 64-bit float. English has no
+separate integer, unsigned or single-precision type: a whole number is a
+`number` that happens to have no fractional part, and prints without a decimal
+point.
 
 | Type | Examples | Notes |
 |---|---|---|
-| `number` | `42`, `3.14`, `-7` | 64-bit float |
+| `number` | `42`, `3.14`, `-7` | 64-bit float; the only numeric type |
 | `text` | `"hello"`, `"line1\nline2"` | supports `\n`, `\t`, `\\`, `\"` |
-| `boolean` | `true`, `false` | |
-| `nothing` | `nothing` | equivalent to null/nil |
-| list | `[1, 2, 3]` | ordered, mixed-type allowed |
-| range | `[1 .. 10]` | immutable sequence of numbers |
+| `boolean` | `true`, `false` | what a condition must be |
+| `nothing` | `nothing` | the absence of a value (null/nil) |
+| list | `[1, 2, 3]` | ordered, mixed types allowed |
+| array | `an array of number [1, 2, 3]` | ordered, every item the same type |
+| lookup table | `a lookup table` | keys in insertion order (Step 10) |
+| range | `[1 .. 10]` | 1 up to but not including 10; read-only. Counting down needs a negative step: `a range from 10 to 0 by -1` |
+| structure | `a new instance of Person` | your own named fields (Step 15) |
+| function | `Declare function add …` | called, not stored in a variable |
+| error | raised, then caught | has a type and a message (Step 16) |
+| reference | `a reference to total` | another name for the same variable (Step 18) |
 
 Declare a variable with an **explicit type annotation**:
 
@@ -137,10 +146,29 @@ Declare a variable with an **explicit type annotation**:
 Declare count    as number  to be 0.
 Declare greeting as text    to be "Hi".
 Declare active   as boolean to be true.
-Declare pending  as number.              # no initial value — starts as nothing
+Declare pending  as number.              # declared, not yet given a value
 ```
 
-Types are **locked at declaration**. Assigning a value of the wrong type is a `TypeError`.
+A type name may be written with an article, and the collection types are
+spelled as you would say them:
+
+```english
+Declare total  as a number       to be 0.
+Declare names  as a list         to be ["Alice", "Bob"].
+Declare prices as a lookup table.
+```
+
+Types are **locked at declaration**, whether you wrote the type or it was
+inferred from the first value. Assigning a value of another type is reported
+before the program runs:
+
+```english
+Declare count to be 0.
+Set count to be "many".        # cannot assign text to 'count', which is number
+```
+
+Assigning to a name that was never declared is also an error, rather than
+quietly declaring it — a misspelled `Set` is a mistake, not a new variable.
 
 ---
 
@@ -178,9 +206,19 @@ Print "Hello, World!".          # Hello, World!\n
 Write "Hello, ".                # Hello, (no newline)
 Write "World!\n".               # World!\n
 
-# Print accepts multiple arguments separated by commas
+# Print accepts several values separated by commas, and puts a space
+# between them
 Print "Name:", the value of name.      # Name: Alice
 Print "Sum:", 5 + 3.                   # Sum: 8
+```
+
+The space between values is why a greeting is usually built with `+` rather
+than commas — commas would leave a gap on each side of the name:
+
+```english
+Declare name to be "World".
+Print "Hello, ", name, "!".     # Hello,  World !
+Print "Hello, " + name + "!".   # Hello, World!
 ```
 
 String **escape sequences**:
@@ -291,21 +329,22 @@ thats it.
 
 ### Step 8 — Functions
 
-Declare a function with `Declare function … that does the following:` and close it with `thats it.`
+Every function says what it takes and what it gives back. A function that
+produces no value says `gives back nothing`:
 
 ```english
-Declare function say_hello that does the following:
+Declare function say_hello that gives back nothing, and does the following:
     Print "Hello from a function!".
 thats it.
 
 Call say_hello.
 ```
 
-**Parameters** use `that takes … and does the following:`
+**Parameters** use `that takes … as <type>`:
 
 ```english
-Declare function greet that takes name and does the following:
-    Print "Hello, ", the value of name, "!".
+Declare function greet that takes name as text, and gives back nothing, and does the following:
+    Print "Hello, " + name + "!".
 thats it.
 
 Call greet with "Alice".
@@ -314,7 +353,7 @@ Call greet with "Alice".
 **Multiple parameters** are separated with `and`:
 
 ```english
-Declare function add that takes a and b and does the following:
+Declare function add that takes a as number and b as number, and gives back a number, and does the following:
     Return a + b.
 thats it.
 
@@ -323,10 +362,34 @@ Set result to be the result of calling add with 5 and 3.
 Print the value of result.   # 8
 ```
 
+The signature is what makes a call checkable, so it is required rather than
+offered: calling a function with the wrong number of arguments, with an
+argument of the wrong type, or returning something other than what it promised
+is reported before the program runs, with the line and column of the mistake.
+A function that declares a result must return one on every path through its
+body; one that gives back nothing must not return a value, and its result
+cannot be used as a value:
+
+```english
+Call say_hello.                                   # this is how it is called
+Declare x to be the result of calling say_hello.  # there is no value here
+```
+
+`Return.` on its own finishes such a function early:
+
+```english
+Declare function announce that takes label as text, and gives back nothing, and does the following:
+    If label is equal to "", then
+        Return.
+    thats it.
+    Print label.
+thats it.
+```
+
 **Recursive functions** work naturally:
 
 ```english
-Declare function factorial that takes n and does the following:
+Declare function factorial that takes n as number, and gives back a number, and does the following:
     If n is less than or equal to 1, then
         Return 1.
     thats it.
@@ -544,7 +607,7 @@ Define a struct with named fields using `declare … as a structure with the fol
 ```english
 declare Person as a structure with the following fields:
     name is a string.
-    age is an unsigned integer with 0 being the default.
+    age is a number with 0 being the default.
 thats it.
 ```
 
@@ -564,13 +627,22 @@ Print the name of alice.     # Alice
 Print the age of alice.      # 30
 ```
 
+Change a field with the possessive `'s`:
+
+```english
+Set alice's age to be 31.
+Print the age of alice.      # 31
+
+Set alice's age to be "old". # field 'age' of Person is number, but this is text
+```
+
 Add methods to a struct and call them with the possessive `'s` syntax:
 
 ```english
 declare Person as a structure with the following fields:
     name is a string.
 
-    let greet be a function that does the following:
+    let greet be a function that gives back nothing, and does the following:
         Print "Hello, my name is", name.
     thats it.
 thats it.
@@ -682,7 +754,7 @@ Example library (`math_library.abc`):
 ```english
 Print "Library loaded.".       # runs on normal import; skipped on safe import
 
-Declare function square that takes x and does the following:
+Declare function square that takes x as number, and gives back a number, and does the following:
     Return x * x.
 thats it.
 
@@ -727,7 +799,7 @@ Print the location of x.    # Outputs: 0x...:x
 
 ```english
 Ask "What is your name?" and store in name.
-Print "Hello, ", the value of name, "!".
+Print "Hello, " + name + "!".
 ```
 
 Or as an expression:
@@ -739,14 +811,18 @@ Print answer cast to number + 1.
 
 #### Ranges
 
-A **range** is an immutable sequence of numbers. Use it wherever a list is expected (e.g. `for each` loops).
+A **range** is a read-only sequence of numbers. Use it wherever a list is expected (e.g. `for each` loops).
+
+A range **stops before its end**, and counts down only when the step is
+negative — the same rule as Python's `range`:
 
 **Programmer-style** — two dots inside brackets:
 
 ```english
-Declare r to be [1 .. 10].        # 1, 2, 3, …, 10 (inclusive)
-Declare r to be [10 .. 1].        # 10, 9, 8, …, 1 (descending)
-Declare r to be [1 .. 10 by 2].   # 1, 3, 5, 7, 9  (with step)
+Declare r to be [1 .. 10].          # 1, 2, 3, …, 9
+Declare r to be [1 .. 10 by 2].     # 1, 3, 5, 7, 9
+Declare r to be [10 .. 1 by -1].    # 10, 9, 8, …, 2
+Declare r to be [10 .. 1].          # empty: counting down needs a negative step
 ```
 
 **Natural-English style:**
@@ -754,15 +830,16 @@ Declare r to be [1 .. 10 by 2].   # 1, 3, 5, 7, 9  (with step)
 ```english
 Declare r to be a range from 1 to 10.
 Declare r to be a range from 1 to 10 by 2.
+Declare r to be a range from 10 to 0 by -1.
 ```
 
-Both forms produce the same immutable range value. Use them in loops:
+Both forms produce the same read-only range value. Use them in loops:
 
 ```english
 For each n in [1 .. 5], do the following:
     Print the value of n.
 thats it.
-# Prints 1 2 3 4 5
+# Prints 1 2 3 4
 ```
 
 #### Sleep / Wait
@@ -790,6 +867,13 @@ Would you kindly wait for a second.
 
 ## 📚 Standard Library Reference
 
+Every function below is declared in one place, `stdlib/signatures.go`, with its
+parameter types and result type. The type checker, the two Python back-ends,
+`english help-topic` and the editor's completions all read that declaration, so
+a function cannot be documented one way and behave another. Calling one with
+the wrong number of arguments, or with an argument of the wrong type, is
+reported before the program runs.
+
 ### Math
 
 | Function | Description |
@@ -799,7 +883,7 @@ Would you kindly wait for a second.
 | `abs(x)` | absolute value |
 | `floor(x)` | round down |
 | `ceil(x)` | round up |
-| `round(x)` | round to nearest integer |
+| `round(x)` | round to the nearest whole number, halves away from zero |
 | `min(a, b)` | smaller of two values |
 | `max(a, b)` | larger of two values |
 | `sin(x)` / `cos(x)` / `tan(x)` | trigonometry (radians) |
@@ -908,6 +992,10 @@ Would you kindly wait for a second.
 ./english run program.abc
 ./english program.abc           # shorthand
 
+# Choose the engine: 'ivm' (the default) or 'ast'. Both must agree; the flag
+# exists so you can check that they do.
+./english run --vm=ast program.abc
+
 # Start the interactive REPL
 ./english
 
@@ -915,12 +1003,17 @@ Would you kindly wait for a second.
 ./english compile program.abc           # creates program.101
 ./english compile program.abc -o out.101
 
+# Transpile to Python
+./english transpile program.abc         # creates program.py
+./english transpile program.101         # creates program.py
+./english transpile --inline program.abc  # one self-contained .py file
+
 # Run compiled bytecode
 ./english run program.101
 
-# Transpile to Python
-./english transpile program.abc         # creates program.abc.py
-./english transpile program.101         # creates program.101.py
+# Show a compiled file as source, or as an opcode listing
+./english cat program.101
+./english inspect-ivm program.101
 
 # Show version
 ./english version
@@ -965,17 +1058,22 @@ Start the REPL with no arguments:
 
 Features:
 - **Syntax highlighting** — keywords, strings, numbers, and operators are color-coded
-- **Multi-line blocks** — automatically detects incomplete blocks until you type `thats it.`
-- **Command history** — use arrow keys to navigate previous inputs
+- **Multi-line blocks** — the prompt changes to `...` and keeps reading while a
+  block is open. The parser decides that, so `Print "thats it.".` inside a loop
+  is text rather than the end of the block
+- **The same rules as `english run`** — a statement is type-checked before it is
+  evaluated, so the REPL accepts exactly what a program would
+- **Survives a mistake** — a failed statement leaves the session and everything
+  defined in it intact
 
 REPL commands:
 
 | Command | Description |
 |---|---|
-| `:help` / `:h` | show help |
-| `:clear` / `:cls` | clear screen |
-| `:exit` / `:quit` / `:q` | exit the REPL |
-| `Ctrl+C` / `Esc` | exit the REPL |
+| `help` | show help |
+| `help <topic>` | search the help registry, as `english help-topic` does |
+| `exit` / `quit` | leave the REPL |
+| `Ctrl+D` | leave the REPL |
 
 ---
 
@@ -993,10 +1091,20 @@ English can compile source files to a binary `.101` format for faster loading (n
 
 The `.101` format:
 - Uses magic bytes `0x10 0x1E 0x4E 0x47` for identification
-- Includes a version byte for format compatibility
-- Stores a binary-encoded AST (protobuf-style serialization)
+- Includes a version byte, which also says which of the two encodings follows:
+  the instruction stream `english compile` writes, or the older serialised AST
+- Carries the original source as a trailing section, so `english transpile` and
+  `english cat` can work from it; `--strip` leaves it out
+- Is validated before any of it runs: every count is checked against the
+  remaining bytes, and every instruction against the pools it indexes, so a
+  truncated or corrupted file is an error rather than a crash
 
-Imported files are **automatically compiled and cached** in `__engcache__/`. The cache is invalidated by a SipHash (PEP 552-style) of the source file content.
+Imported files are **automatically compiled and cached** in `__engcache__/`.
+A cache entry is stamped with a SipHash of the compiler version, the format
+version and the source text, and is used only while that stamp matches — the
+hash-based invalidation PEP 552 describes, rather than a comparison of
+modification times, which gets it wrong whenever a checkout or a restore
+leaves a file older than something built from different text.
 
 ---
 
@@ -1005,24 +1113,30 @@ Imported files are **automatically compiled and cached** in `__engcache__/`. The
 Convert any English program to readable Python:
 
 ```bash
-./english transpile myprogram.abc        # creates myprogram.abc.py
+./english transpile myprogram.abc        # creates myprogram.py
 ./english transpile myprogram.101        # works on bytecode too
 ```
+
+The program is parsed and type-checked first, so a program that will not run
+will not transpile either. Each imported `.abc` file becomes its own `.py`
+file, imported by name; `--inline` merges everything into a single file
+instead. Nothing is written unless the whole set translates.
 
 Quick translation reference:
 
 | English | Python |
 |---|---|
 | `Declare x to be 5.` | `x = 5` |
-| `Declare pi to always be 3.14.` | `pi = 3.14  # constant` |
+| `Declare pi to always be 3.14.` | `pi: Final = 3.14` |
 | `Print "hello".` | `print("hello")` |
+| `Print total.` | `print(_show(total))` |
 | `Write "hello".` | `print("hello", end="")` |
 | `If x is greater than 5, then …` | `if x > 5:` |
 | `repeat the following while x is less than 10:` | `while x < 10:` |
 | `repeat the following 5 times:` | `for _ in range(5):` |
 | `For each item in list, do the following:` | `for item in list:` |
 | `Repeat forever:` | `while True:` |
-| `Declare function foo that takes a …` | `def foo(a):` |
+| `Declare function foo that takes a as number …` | `def foo(a):` |
 | `Return x.` | `return x` |
 | `Try doing the following: … on error: …` | `try: … except Exception: …` |
 | `Raise "msg" as NetworkError.` | `raise NetworkError("msg")` |
@@ -1031,7 +1145,17 @@ Quick translation reference:
 | `Toggle flag.` | `flag = not flag` |
 | `Swap x and y.` | `x, y = y, x` |
 
-Standard library calls are mapped to their Python equivalents (e.g. `sqrt(x)` → `math.sqrt(x)`). A small set of helper functions is injected at the top of the generated file for operations without a direct Python equivalent.
+Standard library calls are mapped to their Python equivalents (e.g. `sqrt(x)` → `math.sqrt(x)`). A small set of helper functions is injected at the top of the generated file wherever Python's own behaviour differs from English's, so the translation says the same thing rather than something close to it:
+
+| Helper | Why Python's version will not do |
+|---|---|
+| `_show(v)` | English prints a whole number without a decimal point, `true`/`false` in lower case, and `nothing` for the absence of a value |
+| `_round(x)` | English rounds half away from zero; Python's `round` rounds half to even, so `round(2.5)` differs |
+| `_remainder(a, b)` | English takes the sign of the dividend; Python's `%` takes the sign of the divisor, so `-7 % 3` differs |
+| `_to_bool(v)` | English reads `true`/`yes`/`no` and refuses the rest; Python's `bool` calls every non-empty string true |
+| `_range(…)` | Keeps the bounds and step rule identical, and evaluates each argument once |
+
+A name that collides with something the generated code uses — a Python keyword, or a built-in such as `sum` or `len` — gets a trailing underscore, at every place it is written.
 
 ---
 
@@ -1064,7 +1188,7 @@ thats it.
 ### Fibonacci Sequence
 
 ```english
-Declare function fib that takes n and does the following:
+Declare function fib that takes n as number, and gives back a number, and does the following:
     If n is less than or equal to 1, then
         Return n.
     thats it.
@@ -1116,7 +1240,7 @@ declare Point as a structure with the following fields:
     y is a number.
 thats it.
 
-Declare function distance that takes p and does the following:
+Declare function distance that takes p as Point, and gives back a number, and does the following:
     Declare px to be the x of p.
     Declare py to be the y of p.
     Return sqrt(px * px + py * py).
@@ -1137,7 +1261,7 @@ Print the value of d.   # 5
 ```english
 Declare NetworkError as an error type.
 
-Declare function fetch that takes url and does the following:
+Declare function fetch that takes url as text, and gives back nothing, and does the following:
     If url is equal to "", then
         Raise "URL must not be empty" as NetworkError.
     thats it.
@@ -1157,47 +1281,48 @@ thats it.
 
 ## 📁 Project Structure
 
+A program takes one of two routes after being parsed and checked. Both are
+meant to produce identical output, and `feature_parity/` is where that is
+asserted.
+
+```
+source (.abc) → tokeniser → parser → AST → sema ─┬→ ivm      (compile to instructions, execute)
+                                                 └→ astvm    (walk the tree)
+                                                 ├→ bytecode (.101 file)
+                                                 └→ transpiler (.py file)
+```
+
 ```
 english/
 ├── main.go                  # Entry point
-├── cmd/
-│   ├── root.go              # Cobra CLI & subcommands
-│   └── repl.go              # Bubble Tea REPL
-├── token/
-│   └── token.go             # Token type definitions
-├── tokeniser/
-│   └── tokeniser.go         # Shared lexer
-├── ast/
-│   └── ast.go               # AST node types (50+ nodes)
-├── parser/
-│   ├── lexer.go             # Tokenizer wrapper
-│   ├── parser.go            # Recursive-descent parser
-│   ├── messages.go          # Error message strings
-│   └── syntax_error.go      # SyntaxError type
-├── astvm/
-│   └── vm.go                # AST tree-walk interpreter
-├── vm/
-│   ├── evaluator.go         # Statement evaluator
-│   ├── environment.go       # Scoped variable store
-│   ├── checker.go           # Compile-time type checker
-│   ├── values.go            # Value types & errors
-│   ├── stdlib/
-│   │   └── stdlib.go        # Standard library functions
-│   └── types/
-│       └── kind.go          # TypeKind enum
-├── bytecode/
-│   └── bytecode.go          # AST ↔ .101 serialization
-├── transpiler/
-│   └── transpiler.go        # AST → Python
-├── highlight/
-│   └── highlight.go         # Syntax highlighting
-├── stacktraces/
-│   └── stacktraces.go       # Error rendering
-└── examples/                # 60+ example programs
+├── cmd/                     # Cobra CLI: run, compile, transpile, cat, inspect, lsp
+├── token/                   # Token type definitions
+├── tokeniser/               # The lexer, and one spelling per token
+├── ast/                     # AST node types, each with a source position
+├── parser/                  # Recursive-descent parser, messages, SyntaxError
+├── sema/                    # The type checker: scopes, inference, diagnostics
+├── types/                   # TypeKind, casts, composite values, lookup keys
+├── runtime/                 # Operators, conversions and collections, shared
+│                            #   by both engines so they cannot disagree
+├── astvm/                   # Tree-walking engine
+├── ivm/                     # Instruction engine: compiler, machine, decompiler
+├── stdlib/                  # The standard library, declared once in
+│                            #   signatures.go and derived everywhere else
+├── bytecode/                # AST ↔ .101 serialisation, and the source cache
+│   └── disasm/              #   AST-level disassembly for "english cat"
+├── transpiler/              # AST → Python
+├── pygen/                   # The parts of Python generation both back-ends share
+├── lsp/                     # Language server: diagnostics, completion, hover
+├── help/                    # The help registry behind "english help-topic"
+├── repl/                    # The interactive prompt
+├── highlight/               # Syntax highlighting
+├── stacktraces/             # Error rendering
+├── version/                 # The one place the version number lives
+├── feature_parity/          # Asserts the two engines agree, message included
+└── examples/                # 67 example programs, run under both engines
     ├── hello_world.abc
     ├── fibonacci.abc
     ├── fizzbuzz.abc
-    ├── factorial.abc
     ├── bubble_sort.abc
     ├── error_types.abc
     ├── strict_types.abc
@@ -1227,8 +1352,14 @@ go test ./... -v
 
 # Single package
 go test ./parser/... -v
-go test ./vm/...    -v
+go test ./sema/...   -v
+
+# The two engines must agree, message for message
+go test ./feature_parity/... -v
 ```
+
+CI runs `gofmt -l .`, `go vet ./...`, `go build ./...` and `go test ./...`; the
+first of those is a gate, so formatting is not a review topic.
 
 ### Run Examples
 
@@ -1236,7 +1367,13 @@ go test ./vm/...    -v
 ./english run examples/hello_world.abc
 ./english run examples/fibonacci.abc
 ./english run examples/turing_machine.abc
+
+# The same program under the other engine: the output must be identical
+./english run --vm=ast examples/fibonacci.abc
 ```
+
+`examples/test_errors.abc` is the exception: it is a collection of mistakes,
+kept so the error messages can be read, and it is meant not to compile.
 
 ### Compile & Run Bytecode
 

@@ -1,26 +1,32 @@
 package ivm
 
 import (
-	"github.com/Advik-B/english/ast"
 	"fmt"
+
+	"github.com/Advik-B/english/ast"
 )
 
 // Compiler walks an AST and emits instructions into a Chunk.
 type Compiler struct {
-	chunk            *Chunk
-	loopStarts       []int   // jump-back targets for while loops (before condition test)
-	loopContinues    [][]int // like loopEnds: positions of continue JUMPs to patch (for for/for-each)
-	loopEnds         [][]int // positions of break JUMPs to patch to loop end
-	loopScopeDepths  []int   // scope depth at the start of each loop's body
-	scopeDepth       int     // current number of active scopes (each PUSH_SCOPE increments)
-	funcName         string  // name of the function being compiled (for error messages)
-	counter          int     // for generating unique hidden variable names
+	chunk           *Chunk
+	loopStarts      []int   // jump-back targets for while loops (before condition test)
+	loopContinues   [][]int // like loopEnds: positions of continue JUMPs to patch (for for/for-each)
+	loopEnds        [][]int // positions of break JUMPs to patch to loop end
+	loopScopeDepths []int   // scope depth at the start of each loop's body
+	scopeDepth      int     // current number of active scopes (each PUSH_SCOPE increments)
+	funcName        string  // name of the function being compiled (for error messages)
+	counter         int     // for generating unique hidden variable names
 }
 
 // Compile compiles an ast.Program to a Chunk.
 func Compile(prog *ast.Program) (*Chunk, error) {
 	c := &Compiler{chunk: NewChunk()}
 	if err := c.compileStatements(prog.Statements); err != nil {
+		return nil, err
+	}
+	// Fail loudly if the program outgrew the encoding's packed-operand limits,
+	// rather than emitting bytecode that silently refers to the wrong names.
+	if err := c.chunk.CheckLimits(); err != nil {
 		return nil, err
 	}
 	return c.chunk, nil
@@ -33,6 +39,17 @@ func (c *Compiler) nextHidden() string {
 
 func (c *Compiler) compileStatements(stmts []ast.Statement) error {
 	for _, stmt := range stmts {
+		// Record the source line before each statement, so that a failure
+		// anywhere inside it can be attributed.
+		//
+		// This was emitted only for assignments, so the line the machine
+		// reported was whichever assignment ran most recently — or nothing at
+		// all in a program with none. Every runtime error from a declaration,
+		// a Print, a condition, an index or a call was reported against the
+		// wrong line or no line.
+		if line := stmt.Pos().Line; line > 0 {
+			c.chunk.Emit(OP_SET_LINE, uint32(line))
+		}
 		if err := c.compileStatement(stmt); err != nil {
 			return err
 		}
@@ -62,7 +79,7 @@ func (c *Compiler) compileStatement(stmt ast.Statement) error {
 
 	case *ast.TypedVariableDecl:
 		// Stack: compile type name first, then value
-		typeIdx := c.chunk.AddConst(s.TypeName)
+		typeIdx := c.chunk.AddConst(ast.TypeName(s.Type))
 		c.chunk.Emit(OP_LOAD_CONST, typeIdx)
 		if s.Value != nil {
 			if err := c.compileExpression(s.Value); err != nil {
@@ -79,9 +96,6 @@ func (c *Compiler) compileStatement(stmt ast.Statement) error {
 		}
 
 	case *ast.Assignment:
-		if s.Line > 0 {
-			c.chunk.Emit(OP_SET_LINE, uint32(s.Line))
-		}
 		if err := c.compileExpression(s.Value); err != nil {
 			return err
 		}
@@ -123,7 +137,7 @@ func (c *Compiler) compileStatement(stmt ast.Statement) error {
 
 	case *ast.FunctionDecl:
 		// Compile function body as a child FuncChunk
-		bodyChunk, err := c.compileFuncBody(s.Name, s.Parameters, s.Body)
+		bodyChunk, err := c.compileFuncBody(s.Name, s.ParamNames(), s.Body)
 		if err != nil {
 			return err
 		}
@@ -366,7 +380,7 @@ func (c *Compiler) compileExpression(expr ast.Expression) error {
 				return err
 			}
 		}
-		typeIdx := c.chunk.AddConst(e.ElementType)
+		typeIdx := c.chunk.AddConst(ast.TypeName(e.ElemType))
 		c.chunk.Emit(OP_LOAD_CONST, typeIdx)
 		c.chunk.Emit(OP_BUILD_ARRAY, uint32(len(e.Elements)))
 
@@ -425,7 +439,7 @@ func (c *Compiler) compileExpression(expr ast.Expression) error {
 		if err := c.compileExpression(e.Value); err != nil {
 			return err
 		}
-		tIdx := c.chunk.AddName(e.TypeName)
+		tIdx := c.chunk.AddName(ast.TypeName(e.Type))
 		c.chunk.Emit(OP_CAST, tIdx)
 
 	case *ast.NilCheckExpression:
@@ -514,6 +528,9 @@ func (c *Compiler) compileBinaryExpr(e *ast.BinaryExpression) error {
 		if err := c.compileExpression(e.Right); err != nil {
 			return err
 		}
+		// The right operand is the value of the whole expression when the
+		// left did not short-circuit, so it must be a boolean too.
+		c.chunk.Emit(OP_TO_BOOL, 0)
 		endJump := c.chunk.CurrentPos()
 		c.chunk.Emit(OP_JUMP, 0)
 		// false_label:
@@ -534,6 +551,9 @@ func (c *Compiler) compileBinaryExpr(e *ast.BinaryExpression) error {
 		if err := c.compileExpression(e.Right); err != nil {
 			return err
 		}
+		// The right operand is the value of the whole expression when the
+		// left did not short-circuit, so it must be a boolean too.
+		c.chunk.Emit(OP_TO_BOOL, 0)
 		endJump := c.chunk.CurrentPos()
 		c.chunk.Emit(OP_JUMP, 0)
 		// true_label:
@@ -587,5 +607,3 @@ func parseBinOp(op string) (BinOp, error) {
 		return 0, fmt.Errorf("unknown binary operator: %s", op)
 	}
 }
-
-

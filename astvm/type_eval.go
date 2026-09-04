@@ -1,9 +1,11 @@
 package vm
 
 import (
-	"github.com/Advik-B/english/ast"
-	"github.com/Advik-B/english/astvm/types"
 	"fmt"
+
+	"github.com/Advik-B/english/ast"
+	"github.com/Advik-B/english/runtime"
+	"github.com/Advik-B/english/types"
 )
 
 // evalTryStatement evaluates a try/error/finally block
@@ -30,6 +32,13 @@ func (ev *Evaluator) evalTryStatement(node *ast.TryStatement) (Value, error) {
 	}
 
 	// Execute error handler if there was an error
+	// A TypeError is a compile error that escaped analysis, not a runtime
+	// condition, so a handler must not swallow it: catching one would let a
+	// program carry on with a type violation it never fixed.
+	if te, ok := tryError.(*TypeError); ok {
+		return ev.runFinally(node, nil, te)
+	}
+
 	if tryError != nil && len(node.ErrorBody) > 0 {
 		// Convert error to ErrorValue
 		var errorVal *types.ErrorValue
@@ -53,10 +62,7 @@ func (ev *Evaluator) evalTryStatement(node *ast.TryStatement) (Value, error) {
 		// A match is exact type equality or any inherited parent type.
 		// If it doesn't match, skip the handler and propagate.
 		if node.ErrorType != "" && !ev.env.IsSubtypeOf(errorVal.ErrorType, node.ErrorType) {
-			if len(node.FinallyBody) > 0 {
-				ev.executeFinallyBlock(node.FinallyBody)
-			}
-			return nil, tryError
+			return ev.runFinally(node, nil, tryError)
 		}
 
 		// Bind error to variable in error handler scope
@@ -73,10 +79,7 @@ func (ev *Evaluator) evalTryStatement(node *ast.TryStatement) (Value, error) {
 			if err != nil {
 				// Error in error handler - restore environment and execute finally
 				ev.env = oldEnv
-				if len(node.FinallyBody) > 0 {
-					ev.executeFinallyBlock(node.FinallyBody)
-				}
-				return nil, err
+				return ev.runFinally(node, nil, err)
 			}
 			if _, ok := val.(*ReturnValue); ok {
 				tryResult = val
@@ -96,24 +99,47 @@ func (ev *Evaluator) evalTryStatement(node *ast.TryStatement) (Value, error) {
 		tryError = nil
 	}
 
-	// Execute finally block
-	if len(node.FinallyBody) > 0 {
-		ev.executeFinallyBlock(node.FinallyBody)
-	}
-
-	// If there was an unhandled error, return it
-	if tryError != nil {
-		return nil, tryError
-	}
-
-	return tryResult, nil
+	// The finally block runs whichever way the try finished, and can change
+	// the outcome: an error there replaces the one being carried, and a
+	// Return there is the value the try produces.
+	return ev.runFinally(node, tryResult, tryError)
 }
 
-// executeFinallyBlock executes the finally block (ignoring errors)
-func (ev *Evaluator) executeFinallyBlock(finallyBody []ast.Statement) {
+// executeFinallyBlock runs the "but finally" block, and reports what happened.
+//
+// It used to discard both results of every statement, so an error raised in a
+// finally block vanished — the block appeared to succeed and the program
+// carried on — and a Return or Break inside one was ignored. Now an error
+// there replaces whatever the try was going to produce, since the last thing
+// to go wrong is the thing to report, and a Return is honoured.
+func (ev *Evaluator) executeFinallyBlock(finallyBody []ast.Statement) (Value, error) {
 	for _, stmt := range finallyBody {
-		ev.Eval(stmt) // Ignore errors in finally block
+		val, err := ev.Eval(stmt)
+		if err != nil {
+			return nil, err
+		}
+		switch val.(type) {
+		case *ReturnValue, *BreakValue, *ContinueValue:
+			return val, nil
+		}
 	}
+	return nil, nil
+}
+
+// runFinally runs the finally block for a try that is already finishing, and
+// folds its outcome into the result the try was about to produce.
+func (ev *Evaluator) runFinally(node *ast.TryStatement, result Value, pending error) (Value, error) {
+	if len(node.FinallyBody) == 0 {
+		return result, pending
+	}
+	val, err := ev.executeFinallyBlock(node.FinallyBody)
+	if err != nil {
+		return nil, err
+	}
+	if val != nil {
+		return val, nil
+	}
+	return result, pending
 }
 
 // evalRaiseStatement evaluates a raise statement
@@ -145,7 +171,7 @@ func (ev *Evaluator) evalTypedVariableDecl(node *ast.TypedVariableDecl) (Value, 
 			return nil, err
 		}
 	}
-	if err := ev.env.DefineTyped(node.Name, node.TypeName, value, node.IsConstant); err != nil {
+	if err := ev.env.DefineTyped(node.Name, node.Type.Name, value, node.IsConstant); err != nil {
 		// Type annotation errors and redefinition errors are compile-time
 		// errors. Return a TypeError so the renderer shows "Compile Error".
 		return nil, &TypeError{Line: node.Line, Message: err.Error()}
@@ -225,8 +251,8 @@ func (ev *Evaluator) evalCastExpression(node *ast.CastExpression) (Value, error)
 		return nil, err
 	}
 
-	// Parse target type
-	targetType := types.Parse(node.TypeName)
+	// The annotation's kind was resolved when it was parsed.
+	targetType := node.Type.Kind
 
 	// Attempt to cast
 	result, err := CastValue(val, targetType)
@@ -265,37 +291,5 @@ func (ev *Evaluator) evalCopyExpression(node *ast.CopyExpression) (Value, error)
 	}
 
 	// Perform deep copy based on type
-	return deepCopy(val), nil
-}
-
-// deepCopy performs a deep copy of a value
-func deepCopy(val Value) Value {
-	switch v := val.(type) {
-	case []interface{}:
-		// Deep copy list
-		copied := make([]interface{}, len(v))
-		for i, elem := range v {
-			copied[i] = deepCopy(elem)
-		}
-		return copied
-	case *StructInstance:
-		// Deep copy struct instance
-		copiedFields := make(map[string]Value)
-		for fieldName, fieldVal := range v.Fields {
-			copiedFields[fieldName] = deepCopy(fieldVal)
-		}
-		return &StructInstance{
-			Definition: v.Definition,
-			Fields:     copiedFields,
-		}
-	case *types.TypedValue:
-		// Deep copy typed value
-		return &types.TypedValue{
-			Value:    deepCopy(v.Value),
-			TypeInfo: v.TypeInfo,
-		}
-	default:
-		// For primitive types, just return the value (they're immutable or copied by value)
-		return val
-	}
+	return runtime.DeepCopy(val), nil
 }

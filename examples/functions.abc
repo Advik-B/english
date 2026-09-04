@@ -4,7 +4,7 @@
 Print "=== Function Examples ===".
 
 # Simple function with no parameters
-Declare function sayHello that does the following:
+Declare function sayHello that gives back nothing, and does the following:
     Print "Hello from the function!".
 thats it.
 
@@ -12,16 +12,15 @@ Print "Calling sayHello:".
 Call sayHello.
 
 # Function with parameters
-Declare function greet that takes name and does the following:
-    Print "Hello,", the value of name, "! Nice to meet you.".
+Declare function greet that takes name as text, and gives back nothing, and does the following:
+    Print "Hello, " + name + "! Nice to meet you.".
 thats it.
 
 Print "Calling greet with 'Alice':".
-Declare x to be 0.
-Set x to be the result of calling greet with "Alice".
+Call greet with "Alice".
 
 # Function with return value
-Declare function add that takes a and b and does the following:
+Declare function add that takes a as number and b as number, and gives back a number, and does the following:
     Return a + b.
 thats it.
 
@@ -31,7 +30,7 @@ Set sum to be the result of calling add with 5 and 7.
 Print "Result:", the value of sum.
 
 # Function with multiple parameters
-Declare function multiply that takes x and y and does the following:
+Declare function multiply that takes x as number and y as number, and gives back a number, and does the following:
     Return x * y.
 thats it.
 
@@ -49,7 +48,7 @@ Set outer to be the result of calling add with inner and 4.
 Print "Result:", the value of outer.
 
 # Function that uses conditionals
-Declare function max that takes a and b and does the following:
+Declare function max that takes a as number and b as number, and gives back a number, and does the following:
     If a is greater than b, then
         Return a.
     otherwise
@@ -63,7 +62,7 @@ Set maximum to be the result of calling max with 10 and 25.
 Print "Result:", the value of maximum.
 
 # Function that calculates average
-Declare function average that takes x and y and z and does the following:
+Declare function average that takes x as number and y as number and z as number, and gives back a number, and does the following:
     Declare total to be x + y + z.
     Return total / 3.
 thats it.

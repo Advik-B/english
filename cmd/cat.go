@@ -1,15 +1,18 @@
 package cmd
 
 import (
-	"github.com/Advik-B/english/bytecode"
-	"github.com/Advik-B/english/bytecode/disasm"
-	"github.com/Advik-B/english/highlight"
-	"github.com/Advik-B/english/stacktraces"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 
+	"github.com/Advik-B/english/ast"
+	"github.com/Advik-B/english/bytecode"
+	"github.com/Advik-B/english/bytecode/disasm"
+	"github.com/Advik-B/english/highlight"
+	"github.com/Advik-B/english/ivm"
+	"github.com/Advik-B/english/parser"
+	"github.com/Advik-B/english/stacktraces"
 	"github.com/spf13/cobra"
 )
 
@@ -77,8 +80,11 @@ func catBytecode(filename string, friendlyOps bool, importDepth, unrollDepth int
 		os.Exit(1)
 	}
 
-	dec := bytecode.NewDecoder(data)
-	program, err := dec.Decode()
+	// Two formats share the same magic bytes and are told apart by the version
+	// byte. Only the older AST format was handled here, so "english cat" failed
+	// with "unsupported bytecode version" on every file "english compile"
+	// produces.
+	program, err := decodeAnyBytecode(data, filename)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error decoding bytecode: %v\n", err)
 		os.Exit(1)
@@ -96,4 +102,28 @@ func init() {
 	catCmd.Flags().IntVar(&catUnrollDepth, "unroll-depth", 0,
 		"Unroll nested function calls this many levels for readability (0 = off, -1 = fully recursive)")
 	rootCmd.AddCommand(catCmd)
+}
+
+// decodeAnyBytecode recovers a program from either bytecode format.
+//
+// The instruction format carries the original source as a trailing section
+// unless it was compiled with --strip, and re-parsing that gives a full AST to
+// disassemble. Without it there is nothing for an AST disassembler to show,
+// and "english inspect-ivm" is the tool for the opcode listing.
+func decodeAnyBytecode(data []byte, filename string) (*ast.Program, error) {
+	if ivm.IsInstructionFormat(data) {
+		_, embeddedSrc, err := ivm.DecodeFileAll(data)
+		if err != nil {
+			return nil, err
+		}
+		if embeddedSrc == "" {
+			return nil, fmt.Errorf(
+				"%s was compiled with --strip, so it carries no source to show.\n"+
+					"  Use 'english inspect-ivm %s' for the opcode listing", filename, filename)
+		}
+		lexer := parser.NewLexer(embeddedSrc)
+		p := parser.NewParser(lexer.TokenizeAll())
+		return p.Parse()
+	}
+	return bytecode.NewDecoder(data).Decode()
 }

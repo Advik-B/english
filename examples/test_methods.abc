@@ -2,13 +2,13 @@
 
 declare Person as a structure with the following fields:
     name is a string.
-    age is an unsigned integer with 18 being the default.
+    age is a number with 18 being the default.
     
-    let talk be a function that does the following:
+    let talk be a function that gives back nothing, and does the following:
         print "Hello, my name is", name.
     thats it.
     
-    let greet be a function that takes other and does the following:
+    let greet be a function that takes other as text, and gives back nothing, and does the following:
         print name, "says hello to", other.
     thats it.
 thats it.

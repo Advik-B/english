@@ -4,7 +4,7 @@
 Print "=== Prime Number Checker ===".
 
 # Function to check if a number is prime
-Declare function isPrime that takes n and does the following:
+Declare function isPrime that takes n as number, and gives back a number, and does the following:
     If n is less than 2, then
         Return 0.
     thats it.

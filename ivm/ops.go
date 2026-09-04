@@ -6,7 +6,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/Advik-B/english/astvm/types"
+	"github.com/Advik-B/english/types"
 )
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────

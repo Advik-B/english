@@ -3,7 +3,7 @@ package ivm
 import (
 	"fmt"
 
-	"github.com/Advik-B/english/astvm/types"
+	"github.com/Advik-B/english/types"
 )
 
 // BuiltinFunc is the stdlib function dispatcher.

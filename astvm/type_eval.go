@@ -4,7 +4,7 @@ import (
 	"fmt"
 
 	"github.com/Advik-B/english/ast"
-	"github.com/Advik-B/english/astvm/types"
+	"github.com/Advik-B/english/types"
 )
 
 // evalTryStatement evaluates a try/error/finally block

@@ -9,9 +9,9 @@ import (
 
 	"github.com/Advik-B/english/ast"
 	vm "github.com/Advik-B/english/astvm"
-	"github.com/Advik-B/english/astvm/types"
 	"github.com/Advik-B/english/parser"
 	"github.com/Advik-B/english/stdlib"
+	"github.com/Advik-B/english/types"
 )
 
 // Helper function to evaluate code

@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/Advik-B/english/astvm/types"
+	"github.com/Advik-B/english/types"
 )
 
 // Environment represents a lexical scope: variables, constants, functions, and structs.

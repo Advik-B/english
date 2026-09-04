@@ -4,7 +4,7 @@ import (
 	"fmt"
 
 	vm "github.com/Advik-B/english/astvm"
-	"github.com/Advik-B/english/astvm/types"
+	"github.com/Advik-B/english/types"
 )
 
 func evalLookup(name string, args []vm.Value) (vm.Value, error) {

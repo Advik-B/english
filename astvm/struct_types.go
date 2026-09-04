@@ -1,6 +1,6 @@
 package vm
 
-import "github.com/Advik-B/english/astvm/types"
+import "github.com/Advik-B/english/types"
 
 // StructDefinition describes a struct type declared in source code.
 // It lives in vm/ (not vm/types/) because Methods references *FunctionValue.

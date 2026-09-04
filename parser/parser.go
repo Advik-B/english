@@ -6,9 +6,9 @@ import (
 	"strings"
 
 	"github.com/Advik-B/english/ast"
-	"github.com/Advik-B/english/astvm/types"
 	"github.com/Advik-B/english/token"
 	"github.com/Advik-B/english/tokeniser"
+	"github.com/Advik-B/english/types"
 )
 
 // Magic string constants used in parsing

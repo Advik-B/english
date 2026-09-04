@@ -8,9 +8,9 @@ import (
 	"strings"
 
 	"github.com/Advik-B/english/ast"
-	"github.com/Advik-B/english/astvm/types"
 	"github.com/Advik-B/english/bytecode"
 	"github.com/Advik-B/english/parser"
+	"github.com/Advik-B/english/types"
 )
 
 // Evaluator executes the AST

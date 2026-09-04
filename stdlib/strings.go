@@ -5,7 +5,7 @@ import (
 	"strings"
 
 	vm "github.com/Advik-B/english/astvm"
-	"github.com/Advik-B/english/astvm/types"
+	"github.com/Advik-B/english/types"
 )
 
 func evalString(name string, args []vm.Value) (vm.Value, error) {

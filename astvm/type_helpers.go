@@ -1,7 +1,7 @@
 package vm
 
 import (
-	"github.com/Advik-B/english/astvm/types"
+	"github.com/Advik-B/english/types"
 )
 
 // inferTypeKind determines the TypeKind of a runtime value.

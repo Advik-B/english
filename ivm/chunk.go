@@ -1,6 +1,6 @@
 package ivm
 
-import "github.com/Advik-B/english/astvm/types"
+import "github.com/Advik-B/english/types"
 
 // Instruction is a single VM instruction: an opcode plus a 32-bit operand.
 type Instruction struct {

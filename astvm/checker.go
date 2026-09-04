@@ -7,8 +7,8 @@ import (
 	"strings"
 
 	"github.com/Advik-B/english/ast"
-	"github.com/Advik-B/english/astvm/types"
 	"github.com/Advik-B/english/parser"
+	"github.com/Advik-B/english/types"
 )
 
 // builtinArgTypes maps function name to the expected TypeKind of each positional argument.

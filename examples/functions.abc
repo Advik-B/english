@@ -13,7 +13,7 @@ Call sayHello.
 
 # Function with parameters
 Declare function greet that takes name and does the following:
-    Print "Hello,", the value of name, "! Nice to meet you.".
+    Print "Hello, " + name + "! Nice to meet you.".
 thats it.
 
 Print "Calling greet with 'Alice':".

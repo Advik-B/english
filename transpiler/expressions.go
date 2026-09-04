@@ -132,13 +132,14 @@ func (t *Transpiler) transpileListLit(elements []ast.Expression) string {
 	return "[" + strings.Join(parts, ", ") + "]"
 }
 
-// transpileRangeLit translates a range, which includes its end and runs
-// downwards when the end is below the start.
+// transpileRangeLit translates a range, which stops before its end and runs
+// downwards only with a negative step — the same rule as Python's range.
 //
 // A helper, rather than the conditional expression this used to emit: that
-// named start, end and step up to three times each, so any of them that did
-// something as well as producing a value did it repeatedly, and the line was
-// unreadable.
+// added one to the end and picked the step's sign from the direction, so every
+// transpiled range had one element the interpreter left out. It also named
+// start, end and step up to three times each, so any of them that did
+// something as well as producing a value did it repeatedly.
 func (t *Transpiler) transpileRangeLit(e *ast.RangeLiteral) string {
 	start := t.transpileExpr(e.Start)
 	end := t.transpileExpr(e.End)

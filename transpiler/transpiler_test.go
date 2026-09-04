@@ -1344,3 +1344,19 @@ func TestImportOfAPythonModuleIsPassedThrough(t *testing.T) {
 Print "x".`)
 	assertContains(t, out, "from os.path import *")
 }
+
+// TestRangeStopsBeforeItsEnd covers the range's bounds, which the generated
+// Python got wrong in two ways: it added one to the end, so every transpiled
+// range had one element the interpreter left out, and it chose the step's sign
+// from the direction, so "a range from 10 to 5" counted down where the
+// interpreter produces nothing at all.
+func TestRangeStopsBeforeItsEnd(t *testing.T) {
+	out := transpile(t, `Declare xs to be a range from 1 to 5.`)
+	assertContains(t, out, "_range(1, 5)")
+	if strings.Contains(out, "+ 1") {
+		t.Errorf("the range end was adjusted:\n%s", out)
+	}
+	if !strings.Contains(out, "return range(int(start), int(end), step)") {
+		t.Errorf("the range helper does not mirror the interpreter:\n%s", out)
+	}
+}

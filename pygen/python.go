@@ -205,17 +205,17 @@ var HelperDefs = map[string]string{
     start = int(start)
     return text[start:start + int(length)]`,
 
-	// An English range includes its end, and runs downwards when the end is
-	// below the start. Expressing that inline named start, end and step up to
-	// three times each.
-	"_range": `def _range(start, end, step=None):
-    start = int(start)
-    end = int(end)
-    if step is None:
-        step = 1 if start <= end else -1
-    else:
-        step = int(step)
-    return range(start, end + (1 if step > 0 else -1), step)`,
+	// An English range is Python's range: it stops before its end, and runs
+	// downwards only with a negative step. The expression this replaces added
+	// one to the end and chose the step's sign from the direction, so every
+	// transpiled range included one element the interpreter left out, and
+	// "a range from 10 to 5" counted down where the interpreter produced
+	// nothing. It also named start, end and step up to three times each.
+	"_range": `def _range(start, end, step=1):
+    step = int(step)
+    if step == 0:
+        return []
+    return range(int(start), int(end), step)`,
 }
 
 // HelperOrder defines the deterministic emission order for helper functions.

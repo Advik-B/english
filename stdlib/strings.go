@@ -2,6 +2,7 @@ package stdlib
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 
 	vm "github.com/Advik-B/english/astvm"
@@ -107,16 +108,22 @@ func evalString(name string, args []vm.Value) (vm.Value, error) {
 		if err != nil {
 			return nil, vm.NewRuntimeError("substring expects a number as third argument")
 		}
+		// Positions count characters, not bytes: slicing by byte offset can
+		// cut a multi-byte character in half and produce invalid text.
+		runes := []rune(text)
 		s := int(start)
 		l := int(length)
-		if s < 0 || s > len(text) {
+		if s < 0 || s > len(runes) {
 			return nil, vm.NewRuntimeError(fmt.Sprintf("substring start index %d out of range", s))
 		}
 		end := s + l
-		if end > len(text) {
-			end = len(text)
+		if end > len(runes) {
+			end = len(runes)
 		}
-		return text[s:end], nil
+		if end < s {
+			end = s
+		}
+		return string(runes[s:end]), nil
 	case "str_repeat":
 		text, err := requireText("str_repeat", args[0])
 		if err != nil {
@@ -153,11 +160,7 @@ func evalString(name string, args []vm.Value) (vm.Value, error) {
 				padChar = " "
 			}
 		}
-		w := int(width)
-		for len(text) < w {
-			text = padChar[:1] + text
-		}
-		return text, nil
+		return padTo(text, int(width), padChar, padLeft), nil
 	case "pad_right":
 		text, err := requireText("pad_right", args[0])
 		if err != nil {
@@ -174,18 +177,16 @@ func evalString(name string, args []vm.Value) (vm.Value, error) {
 				padChar = " "
 			}
 		}
-		w := int(width)
-		for len(text) < w {
-			text = text + padChar[:1]
-		}
-		return text, nil
+		return padTo(text, int(width), padChar, padRight), nil
 	case "to_number":
 		text, err := requireText("to_number", args[0])
 		if err != nil {
 			return nil, err
 		}
-		var f float64
-		_, err = fmt.Sscanf(text, "%g", &f)
+		// The whole text must be a number. Sscanf stops at the first character
+		// it cannot use, so to_number("12abc") quietly returned 12 while
+		// "12abc" cast to number correctly refused.
+		f, err := strconv.ParseFloat(strings.TrimSpace(text), 64)
 		if err != nil {
 			return nil, vm.NewRuntimeError(fmt.Sprintf("cannot convert '%s' to a number", text))
 		}
@@ -198,11 +199,18 @@ func evalString(name string, args []vm.Value) (vm.Value, error) {
 			return len(v) == 0, nil
 		case []interface{}:
 			return len(v) == 0, nil
+		case *types.ArrayValue:
+			return len(v.Elements) == 0, nil
+		case *types.LookupTableValue:
+			return len(v.Entries) == 0, nil
 		case nil:
 			return true, nil
-		default:
-			return false, nil
 		}
+		// Emptiness is not a property of a number or a boolean. Answering
+		// false for them hid the mistake in a language that otherwise refuses
+		// every implicit conversion.
+		return nil, vm.NewRuntimeError(fmt.Sprintf(
+			"is_empty expects text or a collection, got %s", types.NameOf(args[0])))
 	case "title":
 		text, err := requireText("title", args[0])
 		if err != nil {
@@ -363,14 +371,7 @@ func evalString(name string, args []vm.Value) (vm.Value, error) {
 				fillChar = " "
 			}
 		}
-		w := int(width)
-		pad := w - len(text)
-		if pad <= 0 {
-			return text, nil
-		}
-		left := pad / 2
-		right := pad - left
-		return strings.Repeat(fillChar[:1], left) + text + strings.Repeat(fillChar[:1], right), nil
+		return padTo(text, int(width), fillChar, padCentre), nil
 	case "zfill":
 		text, err := requireText("zfill", args[0])
 		if err != nil {
@@ -381,7 +382,7 @@ func evalString(name string, args []vm.Value) (vm.Value, error) {
 			return nil, err
 		}
 		w := int(width)
-		if len(text) >= w {
+		if len([]rune(text)) >= w {
 			return text, nil
 		}
 		prefix := ""
@@ -390,7 +391,46 @@ func evalString(name string, args []vm.Value) (vm.Value, error) {
 			prefix = string(body[0])
 			body = body[1:]
 		}
-		return prefix + strings.Repeat("0", w-len(prefix)-len(body)) + body, nil
+		zeros := w - len([]rune(prefix)) - len([]rune(body))
+		if zeros < 0 {
+			zeros = 0
+		}
+		return prefix + strings.Repeat("0", zeros) + body, nil
 	}
 	return nil, vm.NewRuntimeError("unknown string function: " + name)
+}
+
+// Padding sides.
+const (
+	padLeft = iota
+	padRight
+	padCentre
+)
+
+// padTo pads text to a width, measured in characters.
+//
+// Both the width and the pad character used to be handled by byte: the width
+// was compared against len(text), so any non-ASCII text was padded to the
+// wrong visible length, and the pad character was sliced with [:1], which
+// takes one *byte* of it — so padding with a multi-byte character produced
+// invalid text.
+func padTo(text string, width int, pad string, side int) string {
+	fill := []rune(pad)
+	if len(fill) == 0 {
+		fill = []rune{' '}
+	}
+	filler := string(fill[0])
+
+	missing := width - len([]rune(text))
+	if missing <= 0 {
+		return text
+	}
+	switch side {
+	case padLeft:
+		return strings.Repeat(filler, missing) + text
+	case padRight:
+		return text + strings.Repeat(filler, missing)
+	}
+	left := missing / 2
+	return strings.Repeat(filler, left) + text + strings.Repeat(filler, missing-left)
 }

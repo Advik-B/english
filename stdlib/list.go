@@ -3,8 +3,10 @@ package stdlib
 import (
 	"fmt"
 	"sort"
+	"strings"
 
 	vm "github.com/Advik-B/english/astvm"
+	"github.com/Advik-B/english/runtime"
 	"github.com/Advik-B/english/types"
 )
 
@@ -79,14 +81,7 @@ func evalList(name string, args []vm.Value) (vm.Value, error) {
 		}
 		result := make([]interface{}, len(list))
 		copy(result, list)
-		sort.Slice(result, func(i, j int) bool {
-			a, errA := vm.ToNumber(result[i])
-			b, errB := vm.ToNumber(result[j])
-			if errA == nil && errB == nil {
-				return a < b
-			}
-			return vm.ToString(result[i]) < vm.ToString(result[j])
-		})
+		sort.SliceStable(result, orderBefore(result))
 		return result, nil
 	case "reverse":
 		list, ok := args[0].([]interface{})
@@ -131,17 +126,22 @@ func evalList(name string, args []vm.Value) (vm.Value, error) {
 		if !ok {
 			return nil, vm.NewRuntimeError("unique expects a list")
 		}
-		seen := make(map[string]bool)
-		var result []interface{}
+		// Distinctness follows the language's own equality, which knows that
+		// the number 1 and the text "1" are different values. Keying on their
+		// rendered form made them the same, so unique([1, "1"]) returned one
+		// element.
+		result := []interface{}{}
 		for _, item := range list {
-			key := fmt.Sprintf("%v", item)
-			if !seen[key] {
-				seen[key] = true
+			duplicate := false
+			for _, kept := range result {
+				if runtime.Equals(kept, item) {
+					duplicate = true
+					break
+				}
+			}
+			if !duplicate {
 				result = append(result, item)
 			}
-		}
-		if result == nil {
-			result = []interface{}{}
 		}
 		return result, nil
 	case "first":
@@ -343,13 +343,8 @@ func evalList(name string, args []vm.Value) (vm.Value, error) {
 		}
 		result := make([]interface{}, len(lst))
 		copy(result, lst)
-		sort.Slice(result, func(i, j int) bool {
-			a, errA := vm.ToNumber(result[i])
-			b, errB := vm.ToNumber(result[j])
-			if errA == nil && errB == nil {
-				return a > b
-			}
-			return vm.ToString(result[i]) > vm.ToString(result[j])
+		sort.SliceStable(result, func(i, j int) bool {
+			return compareValues(result[i], result[j]) > 0
 		})
 		return result, nil
 	case "zip_with":
@@ -372,4 +367,77 @@ func evalList(name string, args []vm.Value) (vm.Value, error) {
 		return result, nil
 	}
 	return nil, vm.NewRuntimeError("unknown list function: " + name)
+}
+
+// orderBefore returns the ordering predicate used by sort and sorted_desc.
+//
+// A comparison must be consistent for every pair, or the result is undefined.
+// The previous comparator decided per pair: numeric when both happened to be
+// numbers, and textual otherwise, which is not transitive on a mixed list — so
+// sort.Slice was free to produce anything at all.
+//
+// Values are ordered by type first, then within a type, so a mixed list has a
+// definite order rather than an accidental one.
+func orderBefore(items []interface{}) func(i, j int) bool {
+	return func(i, j int) bool {
+		return compareValues(items[i], items[j]) < 0
+	}
+}
+
+// compareValues orders two values: negative if a sorts before b, positive if
+// after, zero if they sort together.
+func compareValues(a, b interface{}) int {
+	ra, rb := sortRank(a), sortRank(b)
+	if ra != rb {
+		return ra - rb
+	}
+	switch ra {
+	case rankNumber:
+		x, _ := vm.ToNumber(a)
+		y, _ := vm.ToNumber(b)
+		switch {
+		case x < y:
+			return -1
+		case x > y:
+			return 1
+		}
+		return 0
+	case rankBool:
+		x, y := a.(bool), b.(bool)
+		switch {
+		case !x && y:
+			return -1
+		case x && !y:
+			return 1
+		}
+		return 0
+	case rankText:
+		return strings.Compare(a.(string), b.(string))
+	}
+	// Everything else keeps its relative order, which SliceStable preserves.
+	return 0
+}
+
+// Sort ranks: values of different types sort in this order.
+const (
+	rankNothing = iota
+	rankBool
+	rankNumber
+	rankText
+	rankOther
+)
+
+func sortRank(v interface{}) int {
+	switch v.(type) {
+	case nil:
+		return rankNothing
+	case bool:
+		return rankBool
+	case string:
+		return rankText
+	}
+	if _, err := vm.ToNumber(v); err == nil {
+		return rankNumber
+	}
+	return rankOther
 }

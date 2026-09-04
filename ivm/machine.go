@@ -106,13 +106,16 @@ func (m *Machine) popEnv() {
 }
 
 func (m *Machine) runtimeErr(msg string) error {
-	return &machineError{message: msg, line: m.cur.line, frame: m.cur.name}
+	return &machineError{message: msg, line: m.cur.line, frames: m.callStack()}
 }
 
 type machineError struct {
 	message string
 	line    int
-	frame   string
+	// frames are the call frames, innermost first. A single frame name used to
+	// be kept, so a failure several calls deep reported only the one it
+	// happened in.
+	frames []string
 }
 
 func (e *machineError) Error() string {
@@ -136,10 +139,10 @@ func (e *machineError) RuntimeLine() int { return e.line }
 
 // RuntimeCallStack implements stacktraces.RuntimeError.
 func (e *machineError) RuntimeCallStack() []string {
-	if e.frame == "" {
+	if e.frames == nil {
 		return []string{}
 	}
-	return []string{e.frame}
+	return e.frames
 }
 
 // execute runs the machine until the outermost frame returns.
@@ -914,7 +917,13 @@ func (m *Machine) callFunction(name string, args []interface{}, callerChunk *Chu
 			if strings.Contains(err.Error(), "unknown built-in function:") {
 				return nil, m.runtimeErr(fmt.Sprintf("undefined function '%s'", name))
 			}
-			return nil, err
+			// A failure inside the standard library belongs to the call site.
+			// The library's own error carried a call stack of just "<stdlib>",
+			// which replaced the real one.
+			if ev, ok := err.(*types.ErrorValue); ok {
+				return nil, ev // a raised value the program may catch
+			}
+			return nil, m.runtimeErr(stripRuntimePrefix(err.Error()))
 		}
 		return res, nil
 	}
@@ -1083,4 +1092,14 @@ func (m *Machine) callStack() []string {
 		}
 	}
 	return stack
+}
+
+// stripRuntimePrefix removes the envelope the standard library's own error
+// constructor adds, so that re-wrapping does not stack two of them.
+func stripRuntimePrefix(msg string) string {
+	msg = strings.TrimPrefix(msg, "Runtime Error: ")
+	if i := strings.Index(msg, "\nCall Stack"); i >= 0 {
+		msg = msg[:i]
+	}
+	return strings.TrimSpace(msg)
 }

@@ -121,3 +121,92 @@ func TestHelpCoversEveryBuiltin(t *testing.T) {
 			len(undocumented), strings.Join(undocumented, ", "))
 	}
 }
+
+// TestStringFunctionsCountCharacters covers the string functions, which were
+// byte-oriented: substring could cut a multi-byte character in half, and the
+// padding functions both measured width in bytes and sliced one byte off the
+// pad character, so padding with a multi-byte character produced invalid text.
+func TestStringFunctionsCountCharacters(t *testing.T) {
+	cases := []struct {
+		name string
+		args []interface{}
+		want string
+	}{
+		{"substring", []interface{}{"héllo", 1.0, 3.0}, "éll"},
+		{"substring", []interface{}{"日本語", 1.0, 2.0}, "本語"},
+		{"pad_left", []interface{}{"5", 4.0, "·"}, "···5"},
+		{"pad_right", []interface{}{"5", 3.0, "·"}, "5··"},
+		{"center", []interface{}{"x", 5.0, "·"}, "··x··"},
+		{"zfill", []interface{}{"é", 3.0}, "00é"},
+	}
+	for _, c := range cases {
+		got, err := stdlib.Eval(c.name, c.args)
+		if err != nil {
+			t.Errorf("%s%v: %v", c.name, c.args, err)
+			continue
+		}
+		if got != c.want {
+			t.Errorf("%s%v = %q, want %q", c.name, c.args, got, c.want)
+		}
+	}
+}
+
+// TestUniqueUsesLanguageEquality covers dedup, which keyed on the rendered
+// form of a value, so the number 1 and the text "1" were the same key.
+func TestUniqueUsesLanguageEquality(t *testing.T) {
+	got, err := stdlib.Eval("unique", []interface{}{[]interface{}{1.0, "1", 1.0, "1"}})
+	if err != nil {
+		t.Fatalf("unique: %v", err)
+	}
+	list, ok := got.([]interface{})
+	if !ok {
+		t.Fatalf("unique returned %T, want a list", got)
+	}
+	if len(list) != 2 {
+		t.Errorf("unique([1, \"1\", 1, \"1\"]) kept %d value(s), want 2", len(list))
+	}
+}
+
+// TestSortIsConsistent covers the ordering predicate, which decided per pair —
+// numeric when both happened to be numbers and textual otherwise — which is
+// not transitive on a mixed list, so the result was undefined.
+func TestSortIsConsistent(t *testing.T) {
+	mixed := []interface{}{"b", 2.0, nil, true, "a", 1.0, false}
+
+	first, err := stdlib.Eval("sort", []interface{}{mixed})
+	if err != nil {
+		t.Fatalf("sort: %v", err)
+	}
+	// Sorting an already sorted list must not change it, which a
+	// non-transitive comparison cannot promise.
+	second, err := stdlib.Eval("sort", []interface{}{first})
+	if err != nil {
+		t.Fatalf("sort: %v", err)
+	}
+	a := first.([]interface{})
+	b := second.([]interface{})
+	for i := range a {
+		if !sameValue(a[i], b[i]) {
+			t.Errorf("sorting twice changed the order at %d: %v then %v", i, a[i], b[i])
+		}
+	}
+}
+
+func sameValue(a, b interface{}) bool { return a == b }
+
+// TestWrongTypeIsReported covers the functions that answered rather than
+// reporting: is_nan said true for text, is_infinite said false, and is_empty
+// said false for a number.
+func TestWrongTypeIsReported(t *testing.T) {
+	for _, name := range []string{"is_nan", "is_infinite"} {
+		if _, err := stdlib.Eval(name, []interface{}{"hello"}); err == nil {
+			t.Errorf("%s accepted text", name)
+		}
+	}
+	if _, err := stdlib.Eval("is_empty", []interface{}{1.0}); err == nil {
+		t.Error("is_empty accepted a number")
+	}
+	if _, err := stdlib.Eval("to_number", []interface{}{"12abc"}); err == nil {
+		t.Error("to_number accepted trailing text")
+	}
+}

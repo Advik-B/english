@@ -127,15 +127,18 @@ func evalMath(name string, args []vm.Value) (vm.Value, error) {
 		}
 		return a + rand.Float64()*(b-a), nil
 	case "is_nan":
-		x, err := vm.ToNumber(args[0])
+		// A value that is not a number is a mistake, not a not-a-number:
+		// answering true for it meant is_nan("hello") reported true, and
+		// answering false in is_infinite meant the mistake vanished entirely.
+		x, err := requireNumber("is_nan", args[0])
 		if err != nil {
-			return true, nil // non-numeric is NaN-like
+			return nil, err
 		}
 		return math.IsNaN(x), nil
 	case "is_infinite":
-		x, err := vm.ToNumber(args[0])
+		x, err := requireNumber("is_infinite", args[0])
 		if err != nil {
-			return false, nil
+			return nil, err
 		}
 		return math.IsInf(x, 0), nil
 	}

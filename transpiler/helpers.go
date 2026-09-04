@@ -61,13 +61,67 @@ func isIntegerLiteral(s string) bool {
 	return len(s) > 0 && (s[0] >= '0' && s[0] <= '9' || s[0] == '-')
 }
 
-// maybeInt returns expr unchanged. Python list/string indices do not require
-// explicit int() wrapping; using a non-integer index raises a clear TypeError.
+// maybeInt wraps an expression in int() where Python needs a whole number.
+//
+// English has one number type and it is a float, so an index, a length, a
+// repeat count and a range bound all arrive as floats. Python requires an int
+// for every one of those: "xs[1.0]" is a TypeError and "range(1.0)" is a
+// TypeError, so a program that ran in English failed as soon as it was
+// transpiled. This used to return its argument untouched, with a doc comment
+// asserting that no wrapping was needed, at thirteen call sites — while the
+// bytecode decompiler, the other Python back-end, wrapped correctly.
+//
+// An expression already known to be a whole number is left alone, so the
+// output stays readable: int(int(x)) and int(len(xs)) are noise.
 func maybeInt(expr string) string {
-	return expr
+	if alreadyInt(expr) {
+		return expr
+	}
+	return "int(" + expr + ")"
+}
+
+// alreadyInt reports whether an expression is certainly a Python int.
+func alreadyInt(expr string) bool {
+	expr = strings.TrimSpace(expr)
+	if isIntegerLiteral(expr) {
+		return true
+	}
+	for _, wrapper := range []string{"int(", "len(", "_round("} {
+		if wrapsWhole(expr, wrapper) {
+			return true
+		}
+	}
+	return false
+}
+
+// wrapsWhole reports whether expr is a single call to the given function —
+// "len(xs)" but not "len(xs) + len(ys)", whose parentheses close early.
+func wrapsWhole(expr, open string) bool {
+	if !strings.HasPrefix(expr, open) || !strings.HasSuffix(expr, ")") {
+		return false
+	}
+	depth := 0
+	for i := len(open) - 1; i < len(expr); i++ {
+		switch expr[i] {
+		case '(':
+			depth++
+		case ')':
+			depth--
+			if depth == 0 {
+				return i == len(expr)-1
+			}
+		}
+	}
+	return false
 }
 
 // ─── Operator / type name mapping ────────────────────────────────────────────
+
+// isRemainder reports whether an operator is English's remainder, which needs
+// a helper rather than Python's %.
+func isRemainder(op string) bool {
+	return op == "%" || op == "remainder"
+}
 
 // mapOperator converts an English operator string to the Python equivalent.
 func mapOperator(op string) string {
@@ -80,8 +134,8 @@ func mapOperator(op string) string {
 		return "*"
 	case "/":
 		return "/"
-	case "%", "remainder":
-		return "%"
+	// The remainder is not here: Python's % is a different operation, so it
+	// goes through a helper. See isRemainder.
 	case "**":
 		return "**"
 	case "is equal to", "==":
@@ -129,6 +183,11 @@ func mapTypeName(name string) string {
 // typeZeroValue returns the Python zero/default value literal for a given
 // English type name. Used when a struct field has no explicit default so that
 // struct instances can be created with no arguments.
+//
+// It matches what the interpreter starts such a field as, which for a
+// collection is an empty one — this used to answer None for those, so a field
+// declared as a list began as nothing in Python and as an empty list in
+// English, and the first thing done to it failed.
 func typeZeroValue(typeName string) string {
 	switch strings.ToLower(typeName) {
 	case "number", "float", "integer", "int", "unsigned integer":
@@ -137,6 +196,10 @@ func typeZeroValue(typeName string) string {
 		return `""`
 	case "boolean", "bool":
 		return "False"
+	case "list", "array":
+		return "[]"
+	case "lookup table", "table":
+		return "{}"
 	default:
 		return "None"
 	}

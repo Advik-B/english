@@ -207,7 +207,9 @@ func TestToString(t *testing.T) {
 		{nil, "nothing"}, // nil displays as "nothing" (the language keyword)
 		{true, "true"},
 		{false, "false"},
-		{[]interface{}{float64(1), float64(2), float64(3)}, "[1 2 3]"},
+		// A sequence renders the same way whichever container holds it; a list
+		// used to render without the separators an array rendered with.
+		{[]interface{}{float64(1), float64(2), float64(3)}, "[1, 2, 3]"},
 	}
 
 	for _, test := range tests {
@@ -2782,7 +2784,7 @@ func TestListMethods(t *testing.T) {
 		{`Print product of [1, 2, 3, 4].`, "24\n"},
 		{`Print any_true of [false, false, true].`, "true\n"},
 		{`Print all_true of [true, true, false].`, "false\n"},
-		{`Print sorted_desc of [1, 3, 2].`, "[3 2 1]\n"},
+		{`Print sorted_desc of [1, 3, 2].`, "[3, 2, 1]\n"},
 	}
 	for _, tt := range tests {
 		got := captureOutput(func() { evaluate(tt.code) })

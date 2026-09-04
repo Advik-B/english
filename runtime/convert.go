@@ -42,11 +42,16 @@ func ToString(v Value) string {
 	case float32:
 		return formatNumber(float64(val))
 	case []interface{}:
+		// A sequence renders the same way whichever container holds it. A list
+		// used to render as "[1 2 3]" and an array as "[1, 2, 3]", so the same
+		// three numbers printed two different ways depending on how they were
+		// declared; the disassembler and both Python back-ends had already
+		// settled on the separated form.
 		parts := make([]string, len(val))
 		for i, el := range val {
 			parts[i] = ToString(el)
 		}
-		return "[" + strings.Join(parts, " ") + "]"
+		return "[" + strings.Join(parts, ", ") + "]"
 	case *types.ArrayValue:
 		parts := make([]string, len(val.Elements))
 		for i, el := range val.Elements {
@@ -58,7 +63,7 @@ func ToString(v Value) string {
 		for _, el := range val.ToSlice() {
 			parts = append(parts, ToString(el))
 		}
-		return "[" + strings.Join(parts, " ") + "]"
+		return "[" + strings.Join(parts, ", ") + "]"
 	case *types.LookupTableValue:
 		return lookupTableString(val)
 	case *types.ErrorValue:

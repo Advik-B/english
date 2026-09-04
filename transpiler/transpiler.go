@@ -267,6 +267,9 @@ func (t *Transpiler) scanStmt(stmt ast.Statement) {
 		t.scanExpr(s.Value)
 	case *ast.OutputStatement:
 		for _, v := range s.Values {
+			if !rendersAsItself(v) {
+				t.helpers["_show"] = true
+			}
 			t.scanExpr(v)
 		}
 	case *ast.ReturnStatement:
@@ -302,6 +305,10 @@ func (t *Transpiler) scanExpr(expr ast.Expression) {
 			t.scanExpr(a)
 		}
 	case *ast.BinaryExpression:
+		if isRemainder(e.Operator) {
+			t.needsMath = true
+			t.helpers["_remainder"] = true
+		}
 		t.scanExpr(e.Left)
 		t.scanExpr(e.Right)
 	case *ast.UnaryExpression:
@@ -325,6 +332,12 @@ func (t *Transpiler) scanExpr(expr ast.Expression) {
 	case *ast.NilCheckExpression:
 		t.scanExpr(e.Value)
 	case *ast.CastExpression:
+		switch strings.ToLower(ast.TypeName(e.Type)) {
+		case "text", "string", "str":
+			t.helpers["_show"] = true
+		case "boolean", "bool":
+			t.helpers["_to_bool"] = true
+		}
 		t.scanExpr(e.Value)
 	case *ast.TypeExpression:
 		t.scanExpr(e.Value)
@@ -341,6 +354,7 @@ func (t *Transpiler) scanExpr(expr ast.Expression) {
 			t.scanExpr(el)
 		}
 	case *ast.RangeLiteral:
+		t.helpers["_range"] = true
 		t.scanExpr(e.Start)
 		t.scanExpr(e.End)
 		if e.Step != nil {
@@ -359,6 +373,19 @@ func (t *Transpiler) scanFuncCall(name string) {
 	switch name {
 	case "sqrt", "pow", "floor", "ceil", "sin", "cos", "tan", "log", "log10", "log2", "exp":
 		t.needsMath = true
+	case "round":
+		t.needsMath = true
+		t.helpers["_round"] = true
+	case "average":
+		t.helpers["_average"] = true
+	case "insert":
+		t.helpers["_insert"] = true
+	case "remove":
+		t.helpers["_remove_at"] = true
+	case "substring":
+		t.helpers["_substring"] = true
+	case "to_string":
+		t.helpers["_show"] = true
 	case "is_nan":
 		t.needsMath = true
 		t.helpers["_is_nan"] = true

@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/Advik-B/english/ast"
+	"github.com/Advik-B/english/pygen"
 )
 
 // ─── Statements ───────────────────────────────────────────────────────────────
@@ -91,23 +92,33 @@ func (t *Transpiler) transpileImport(s *ast.ImportStatement) {
 	// Emit standard Python import statements so the output stays simple and
 	// readable for beginners.
 
-	// Module name: base file name without any extensions (e.g. "math_library").
-	base := filepath.Base(s.Path)
-	module := strings.SplitN(base, ".", 2)[0]
+	// A path ending in ".abc" is an English file the CLI has transpiled to a
+	// sibling .py file, and it is imported by the name that file was given —
+	// the same rule, so the two cannot disagree. This used to take everything
+	// before the *first* dot while the file was named by stripping the last
+	// extension, so "my.lib.abc" was written as "my.lib.py" and imported as
+	// "my", a module that does not exist.
+	//
+	// Anything else — "math", "os.path" — names a Python module and is passed
+	// through as written, since it is Python's to resolve.
+	englishFile := strings.EqualFold(filepath.Ext(s.Path), ".abc")
+	module := s.Path
+	if englishFile {
+		module = pygen.ModuleName(s.Path)
 
-	// If the library lives in a different directory from the main file, emit a
-	// one-line sys.path insert so Python can find the module.
-	importedDir := filepath.Dir(s.Path)
-	mainDir := t.sourceDir
-	if mainDir == "" {
-		mainDir = "."
-	}
-	if rel, err := filepath.Rel(mainDir, importedDir); err == nil {
-		rel = filepath.ToSlash(rel)
-		if rel != "." {
-			t.writeLine("import sys")
-			t.writeLine("import os")
-			t.writeLine(fmt.Sprintf("sys.path.insert(0, os.path.join(os.path.dirname(__file__), %q))", rel))
+		// If the library lives in a different directory from the main file,
+		// emit a one-line sys.path insert so Python can find the module.
+		mainDir := t.sourceDir
+		if mainDir == "" {
+			mainDir = "."
+		}
+		if rel, err := filepath.Rel(mainDir, filepath.Dir(s.Path)); err == nil {
+			rel = filepath.ToSlash(rel)
+			if rel != "." {
+				t.writeLine("import sys")
+				t.writeLine("import os")
+				t.writeLine(fmt.Sprintf("sys.path.insert(0, os.path.join(os.path.dirname(__file__), %q))", rel))
+			}
 		}
 	}
 
@@ -183,7 +194,7 @@ func (t *Transpiler) transpileIndexAssignment(s *ast.IndexAssignment) {
 }
 
 func (t *Transpiler) transpileFieldAssignment(s *ast.FieldAssignment) {
-	t.writeLine(fmt.Sprintf("%s.%s = %s", sanitizeIdent(s.ObjectName), s.Field, t.transpileExpr(s.Value)))
+	t.writeLine(fmt.Sprintf("%s.%s = %s", sanitizeIdent(s.ObjectName), sanitizeIdent(s.Field), t.transpileExpr(s.Value)))
 }
 
 func (t *Transpiler) transpileLookupKeyAssignment(s *ast.LookupKeyAssignment) {
@@ -213,9 +224,14 @@ func (t *Transpiler) transpileCallStatement(s *ast.CallStatement) {
 }
 
 func (t *Transpiler) transpileOutput(s *ast.OutputStatement) {
+	// Each value goes through English's renderer. Printing them directly gave
+	// Python's rendering instead: 5.0 for a whole number, True for a boolean,
+	// None for the absence of a value, and Python's own bracket style for a
+	// list. A literal whose Python form already reads the same way is left
+	// alone, so the common case stays print("Hello, World!").
 	parts := make([]string, len(s.Values))
 	for i, v := range s.Values {
-		parts[i] = t.transpileExpr(v)
+		parts[i] = t.transpileShown(v)
 	}
 	args := strings.Join(parts, ", ")
 	if s.Newline {
@@ -284,18 +300,14 @@ func (t *Transpiler) transpileTry(s *ast.TryStatement) {
 
 	if len(s.ErrorBody) > 0 {
 		var excLine string
+		errorType := "Exception"
 		if s.ErrorType != "" {
-			if s.ErrorVar != "" {
-				excLine = fmt.Sprintf("except %s as %s:", s.ErrorType, s.ErrorVar)
-			} else {
-				excLine = fmt.Sprintf("except %s:", s.ErrorType)
-			}
+			errorType = sanitizeIdent(s.ErrorType)
+		}
+		if s.ErrorVar != "" {
+			excLine = fmt.Sprintf("except %s as %s:", errorType, sanitizeIdent(s.ErrorVar))
 		} else {
-			if s.ErrorVar != "" {
-				excLine = fmt.Sprintf("except Exception as %s:", s.ErrorVar)
-			} else {
-				excLine = "except Exception:"
-			}
+			excLine = fmt.Sprintf("except %s:", errorType)
 		}
 		t.writeLine(excLine)
 		t.indent++
@@ -314,7 +326,7 @@ func (t *Transpiler) transpileTry(s *ast.TryStatement) {
 func (t *Transpiler) transpileRaise(s *ast.RaiseStatement) {
 	msg := t.transpileExpr(s.Message)
 	if s.ErrorType != "" {
-		t.writeLine(fmt.Sprintf("raise %s(%s)", s.ErrorType, msg))
+		t.writeLine(fmt.Sprintf("raise %s(%s)", sanitizeIdent(s.ErrorType), msg))
 	} else {
 		t.writeLine(fmt.Sprintf("raise Exception(%s)", msg))
 	}
@@ -325,12 +337,12 @@ func (t *Transpiler) transpileErrorTypeDecl(s *ast.ErrorTypeDecl) {
 	if s.ParentType != "" {
 		parent = s.ParentType
 	}
-	t.writeLine(fmt.Sprintf("class %s(%s): pass", s.Name, parent))
+	t.writeLine(fmt.Sprintf("class %s(%s): pass", sanitizeIdent(s.Name), sanitizeIdent(parent)))
 	t.write("\n")
 }
 
 func (t *Transpiler) transpileStructDecl(s *ast.StructDecl) {
-	t.writeLine(fmt.Sprintf("class %s:", s.Name))
+	t.writeLine(fmt.Sprintf("class %s:", sanitizeIdent(s.Name)))
 	t.indent++
 
 	if len(s.Fields) > 0 {
@@ -338,21 +350,35 @@ func (t *Transpiler) transpileStructDecl(s *ast.StructDecl) {
 		// Fields with an explicit default use that value; fields without a default
 		// fall back to the Python zero value for their declared type so that
 		// instances can be created with no arguments (e.g. "a new instance of T").
+		//
+		// A default that is a list or a table cannot be written as a parameter
+		// default: Python evaluates a parameter default once, when the def is
+		// executed, so every instance would share the same object and adding
+		// an item to one instance's field would add it to every instance's.
+		// Those take None as the parameter default and build a fresh value in
+		// the body instead. (The interpreter had the same bug for the same
+		// reason, and now copies its defaults.)
+		defaults := make([]string, len(s.Fields))
 		params := make([]string, 0, len(s.Fields)+1)
 		params = append(params, "self")
-		for _, field := range s.Fields {
+		for i, field := range s.Fields {
 			fname := sanitizeIdent(field.Name)
-			if field.DefaultValue != nil {
-				defVal := t.transpileExpr(field.DefaultValue)
-				params = append(params, fmt.Sprintf("%s=%s", fname, defVal))
-			} else {
-				params = append(params, fmt.Sprintf("%s=%s", fname, typeZeroValue(ast.TypeName(field.Type))))
+			defaults[i] = t.fieldDefault(field)
+			if isMutableLiteral(defaults[i]) {
+				params = append(params, fname+"=None")
+				continue
 			}
+			params = append(params, fmt.Sprintf("%s=%s", fname, defaults[i]))
 		}
 		t.writeLine(fmt.Sprintf("def __init__(%s):", strings.Join(params, ", ")))
 		t.indent++
-		for _, field := range s.Fields {
+		for i, field := range s.Fields {
 			fname := sanitizeIdent(field.Name)
+			if isMutableLiteral(defaults[i]) {
+				t.writeLine(fmt.Sprintf("self.%s = %s if %s is None else %s",
+					fname, defaults[i], fname, fname))
+				continue
+			}
 			t.writeLine(fmt.Sprintf("self.%s = %s", fname, fname))
 		}
 		t.indent--
@@ -384,6 +410,21 @@ func (t *Transpiler) transpileStructDecl(s *ast.StructDecl) {
 
 	t.indent--
 	t.write("\n")
+}
+
+// fieldDefault is the Python expression a struct field starts out as: what the
+// declaration said, or the zero value for its declared type.
+func (t *Transpiler) fieldDefault(field *ast.StructField) string {
+	if field.DefaultValue != nil {
+		return t.transpileExpr(field.DefaultValue)
+	}
+	return typeZeroValue(ast.TypeName(field.Type))
+}
+
+// isMutableLiteral reports whether a Python expression builds a fresh mutable
+// object, which is what makes it unsafe as a parameter default.
+func isMutableLiteral(expr string) bool {
+	return strings.HasPrefix(expr, "[") || strings.HasPrefix(expr, "{")
 }
 
 // transpileBody writes a block of statements.

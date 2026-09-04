@@ -182,8 +182,14 @@ func (d *decompiler) finish() string {
 		out.WriteByte('\n')
 	}
 
-	// Emit helper function definitions (same set as AST transpiler uses).
-	for h := range d.helpers {
+	// Emit helper function definitions (same set as AST transpiler uses), in
+	// the shared order. This used to iterate the set itself, and a Go map's
+	// order is deliberately randomised, so a program needing two helpers
+	// decompiled to different text on different runs.
+	for _, h := range pygen.HelperOrder {
+		if !d.helpers[h] {
+			continue
+		}
 		if def, ok := helperDefs[h]; ok {
 			out.WriteString(def + "\n\n")
 		}

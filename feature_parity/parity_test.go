@@ -1244,3 +1244,27 @@ Declare p to be a new instance of Point with the following fields:
 thats it.`
 	assertParityError(t, src)
 }
+
+// TestParityStructCollectionFieldDefaults covers a field with a collection
+// type and no default, where the two engines disagreed: the instruction VM
+// started it as an empty collection and the tree-walker as nothing, because
+// the tree-walker carried its own copy of the per-type zero values and that
+// copy had no case for a lookup table or an array.
+func TestParityStructCollectionFieldDefaults(t *testing.T) {
+	assertParity(t, `Declare Store as a structure with the following fields:
+    prices is a lookup table.
+thats it.
+
+Declare shop to be a new instance of Store.
+Print the prices of shop.`)
+}
+
+// TestParityListRendering covers how a sequence is written out. A list
+// rendered without the separators an array rendered with, so the same three
+// numbers printed two different ways depending on how they were declared.
+func TestParityListRendering(t *testing.T) {
+	assertParity(t, `Declare xs to be [1, 2, 3].
+Declare ys to be an array of number [1, 2, 3].
+Print xs.
+Print ys.`)
+}

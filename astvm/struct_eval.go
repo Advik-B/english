@@ -31,29 +31,11 @@ func (ev *Evaluator) evalStructDecl(node *ast.StructDecl) (Value, error) {
 			}
 			defaultValue = val
 		} else {
-			// Set default values based on type
-			switch typeKind {
-			case types.TypeI32:
-				defaultValue = int32(0)
-			case types.TypeI64:
-				defaultValue = int64(0)
-			case types.TypeU32:
-				defaultValue = uint32(0)
-			case types.TypeU64:
-				defaultValue = uint64(0)
-			case types.TypeF32:
-				defaultValue = float32(0.0)
-			case types.TypeF64:
-				defaultValue = float64(0.0)
-			case types.TypeString:
-				defaultValue = ""
-			case types.TypeBool:
-				defaultValue = false
-			case types.TypeList:
-				defaultValue = []interface{}{}
-			default:
-				defaultValue = nil
-			}
+			// The zero value for the declared type. This was a copy of the
+			// same switch the shared runtime holds, and the copy was missing
+			// the array and lookup-table cases, so a field of either type
+			// started as nothing instead of an empty one.
+			defaultValue = runtime.TypeDefault(typeKind)
 		}
 
 		fields[field.Name] = &FieldDefinition{
@@ -98,10 +80,16 @@ func (ev *Evaluator) evalStructInstantiation(node *ast.StructInstantiation) (Val
 		return nil, ev.runtimeError(fmt.Sprintf("undefined struct type '%s'", node.StructName))
 	}
 
-	// Create instance with default field values
+	// Create instance with default field values.
+	//
+	// A default is evaluated once, when the structure is declared, so every
+	// instance was handed the *same* list or table: adding an item to one
+	// instance's field added it to every instance's, including instances
+	// created earlier. The other engine re-evaluates the default expression
+	// per instance and never had this.
 	fields := make(map[string]Value)
 	for fieldName, fieldDef := range structDef.Fields {
-		fields[fieldName] = fieldDef.DefaultValue
+		fields[fieldName] = runtime.DeepCopy(fieldDef.DefaultValue)
 	}
 
 	// Override with provided field values

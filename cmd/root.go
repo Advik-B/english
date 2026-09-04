@@ -14,6 +14,7 @@ import (
 	"github.com/Advik-B/english/highlight"
 	"github.com/Advik-B/english/ivm"
 	"github.com/Advik-B/english/parser"
+	"github.com/Advik-B/english/pygen"
 	"github.com/Advik-B/english/sema"
 	"github.com/Advik-B/english/stacktraces"
 	"github.com/Advik-B/english/stdlib"
@@ -564,10 +565,12 @@ func transpileTree(filename string, inline bool, seen map[string]bool, outputs *
 	}
 	seen[filename] = true
 
-	// Output filename: strip source extension, add ".py".
-	// The same rule applies to both .abc and .101 inputs so that module names
-	// are always valid Python identifiers (e.g. "fizzbuzz.abc" → "fizzbuzz.py").
-	output := strings.TrimSuffix(filename, filepath.Ext(filename)) + ".py"
+	// Output filename: the module name plus ".py", in the source's directory.
+	// The same rule applies to both .abc and .101 inputs, and to the import
+	// statements the transpiler emits, so a file's name and the name it is
+	// imported by cannot disagree — they did for any path with more than one
+	// dot in it.
+	output := filepath.Join(filepath.Dir(filename), pygen.ModuleName(filename)+".py")
 
 	var pySource string
 	var err error

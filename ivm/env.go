@@ -250,3 +250,17 @@ func (s *StructInstance) EnglishCopy() interface{} {
 
 // EnglishString implements runtime.Displayer for references.
 func (r *ReferenceValue) EnglishString() string { return "<ref: " + r.Name + ">" }
+
+// field returns the definition of a named field, or nil when the struct does
+// not declare one.
+func (s *StructInstance) field(name string) *FieldDef {
+	if s.DefRef == nil {
+		return nil
+	}
+	for _, fd := range s.DefRef.Fields {
+		if fd != nil && fd.Name == name {
+			return fd
+		}
+	}
+	return nil
+}

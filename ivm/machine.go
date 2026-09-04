@@ -706,7 +706,18 @@ func (m *Machine) step(instr Instruction, chunk *Chunk) (result interface{}, sto
 		obj := m.pop()
 		si, ok := obj.(*StructInstance)
 		if !ok {
-			return nil, false, m.runtimeErr(fmt.Sprintf("SET_FIELD: not a struct instance (got %T)", obj))
+			return nil, false, m.runtimeErr(fmt.Sprintf(
+				"cannot set a field on %s; expected a struct", runtime.NameOf(obj)))
+		}
+		// A field the struct does not declare used to be created here, so a
+		// misspelled name silently added a field instead of reporting one.
+		field := si.field(fieldName)
+		if field == nil {
+			return nil, false, m.runtimeErr(fmt.Sprintf(
+				"struct '%s' has no field named '%s'", si.DefName, fieldName))
+		}
+		if err := checkFieldType(si.DefName, field, newVal); err != nil {
+			return nil, false, m.runtimeErr(err.Error())
 		}
 		si.Fields[fieldName] = newVal
 

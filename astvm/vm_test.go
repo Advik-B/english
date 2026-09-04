@@ -2975,3 +2975,63 @@ func TestChecker_FollowsImports(t *testing.T) {
 		t.Errorf("expected error File to be %q, got %q", libFile.Name(), e.File)
 	}
 }
+
+// TestCheckerRecordsInferredTypes covers the expression type slot added to the
+// AST. Expression nodes had nowhere to record a type, so every stage that
+// needed one re-derived it; the checker now writes its result onto the node.
+func TestCheckerRecordsInferredTypes(t *testing.T) {
+	src := `Declare n to be 1.
+Declare s to be "x".
+Declare b to be true.
+Declare c to be "7" cast to number.`
+
+	lexer := parser.NewLexer(src)
+	p := parser.NewParser(lexer.TokenizeAll())
+	prog, err := p.Parse()
+	if err != nil {
+		t.Fatalf("failed to parse: %v", err)
+	}
+	if errs := vm.Check(prog); len(errs) != 0 {
+		t.Fatalf("unexpected check errors: %v", errs)
+	}
+
+	want := []types.TypeKind{
+		types.TypeF64,    // 1
+		types.TypeString, // "x"
+		types.TypeBool,   // true
+		types.TypeF64,    // "7" cast to number
+	}
+	for i, w := range want {
+		decl, ok := prog.Statements[i].(*ast.VariableDecl)
+		if !ok {
+			t.Fatalf("statement %d is %T, want *ast.VariableDecl", i, prog.Statements[i])
+		}
+		got := decl.Value.InferredType()
+		if got == nil {
+			t.Errorf("statement %d: no inferred type recorded", i)
+			continue
+		}
+		if got.Kind != w {
+			t.Errorf("statement %d: inferred %v, want %v", i, got.Kind, w)
+		}
+	}
+}
+
+// TestCastResultIsTypeChecked follows from recording the cast target's kind:
+// a cast's result type is now known statically, so a mismatched initialiser is
+// caught at compile time instead of at run time.
+func TestCastResultIsTypeChecked(t *testing.T) {
+	lexer := parser.NewLexer(`Declare x as text to be 5 cast to number.`)
+	p := parser.NewParser(lexer.TokenizeAll())
+	prog, err := p.Parse()
+	if err != nil {
+		t.Fatalf("failed to parse: %v", err)
+	}
+	errs := vm.Check(prog)
+	if len(errs) == 0 {
+		t.Fatal("expected a compile error for initialising text with a number cast")
+	}
+	if !strings.Contains(errs[0].Message, "cannot initialize text with number") {
+		t.Errorf("unexpected error: %v", errs[0].Message)
+	}
+}

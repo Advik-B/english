@@ -25,14 +25,26 @@ func (p Position) IsKnown() bool { return p.Line > 0 }
 // Position's fields are promoted through Base, so node.Line keeps working.
 type Base struct {
 	Position
+	// inferred is the type the checker determined for this node. It is
+	// meaningful only for expressions, and is unexported so that it can only
+	// be reached through the Expression interface rather than set by accident
+	// in a composite literal.
+	inferred *types.TypeInfo
 }
 
 // Pos returns the node's source position.
 func (b Base) Pos() Position { return b.Position }
 
+// InferredType returns the type the checker determined for this expression,
+// or nil if it has not been checked or the type could not be determined.
+func (b *Base) InferredType() *types.TypeInfo { return b.inferred }
+
+// SetInferredType records the type the checker determined for this expression.
+func (b *Base) SetInferredType(t *types.TypeInfo) { b.inferred = t }
+
 // At builds a Base for the given position.
 func At(line, col, offset int) Base {
-	return Base{Position{Line: line, Col: col, Offset: offset}}
+	return Base{Position: Position{Line: line, Col: col, Offset: offset}}
 }
 
 // TypeExpr is a type annotation as written in the source: the type in
@@ -100,10 +112,18 @@ type Statement interface {
 	statementNode()
 }
 
-// Expression is the interface for all expression nodes
+// Expression is the interface for all expression nodes.
+//
+// Every expression carries a slot for the type the checker infers for it, so
+// that the type of a subexpression is computed once and is available to the
+// compiler, the transpiler and the editor rather than being re-derived by each.
 type Expression interface {
 	Node
 	expressionNode()
+	// InferredType is the type the checker determined, or nil if unchecked.
+	InferredType() *types.TypeInfo
+	// SetInferredType records the checker's result.
+	SetInferredType(*types.TypeInfo)
 }
 
 // Program is the root node of the AST

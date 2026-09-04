@@ -125,6 +125,13 @@ func Describe(v interface{}) *TypeInfo {
 	}
 }
 
+// InfoFor returns type metadata for a kind alone. Describe answers "what type
+// is this value"; InfoFor answers "what does this type look like", which is
+// what the static side needs when there is no value to inspect.
+func InfoFor(k TypeKind) *TypeInfo {
+	return &TypeInfo{Kind: k, Name: Name(k)}
+}
+
 // Infer determines the TypeKind of a runtime value.
 func Infer(v interface{}) TypeKind {
 	return Describe(v).Kind

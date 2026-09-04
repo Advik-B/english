@@ -175,9 +175,18 @@ func (tc *TypeChecker) declareVar(name string, line int) {
 	current[name] = line
 }
 
-// exprType infers the static TypeKind of an expression.
+// exprType infers the static TypeKind of an expression, recording the result
+// on the node so that later stages read it rather than re-deriving it.
 // Returns TypeUnknown when the type cannot be statically determined.
 func (tc *TypeChecker) exprType(expr ast.Expression) types.TypeKind {
+	kind := tc.deriveType(expr)
+	if kind != types.TypeUnknown {
+		expr.SetInferredType(types.InfoFor(kind))
+	}
+	return kind
+}
+
+func (tc *TypeChecker) deriveType(expr ast.Expression) types.TypeKind {
 	switch e := expr.(type) {
 	case *ast.NumberLiteral:
 		return types.TypeF64
@@ -191,6 +200,9 @@ func (tc *TypeChecker) exprType(expr ast.Expression) types.TypeKind {
 		if tk, ok := tc.varTypes[e.Name]; ok {
 			return tk
 		}
+	case *ast.CastExpression:
+		// The cast target is resolved when the annotation is parsed.
+		return e.Type.Kind
 	}
 	return types.TypeUnknown
 }

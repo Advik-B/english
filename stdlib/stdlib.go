@@ -27,7 +27,7 @@ func Register(env *vm.Environment) {
 	for _, s := range signatureList {
 		env.DefineFunction(s.Name, &vm.FunctionValue{
 			Name:       s.Name,
-			Parameters: s.Params,
+			Parameters: s.ParamNames(),
 			Body:       nil, // nil body marks a built-in
 			Closure:    env,
 		})

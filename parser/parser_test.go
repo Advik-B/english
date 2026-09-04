@@ -1171,9 +1171,10 @@ func TestParserAskStatement(t *testing.T) {
 			continue
 		}
 
-		assign, ok := program.Statements[0].(*ast.Assignment)
+		// "Ask … as name." declares name.
+		assign, ok := program.Statements[0].(*ast.VariableDecl)
 		if !ok {
-			t.Errorf("Input %q: expected *ast.Assignment, got %T", test.input, program.Statements[0])
+			t.Errorf("Input %q: expected *ast.VariableDecl, got %T", test.input, program.Statements[0])
 			continue
 		}
 

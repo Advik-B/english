@@ -13,6 +13,7 @@ import (
 	"github.com/Advik-B/english/highlight"
 	"github.com/Advik-B/english/ivm"
 	"github.com/Advik-B/english/parser"
+	"github.com/Advik-B/english/sema"
 	"github.com/Advik-B/english/stacktraces"
 	"github.com/Advik-B/english/stdlib"
 	"github.com/Advik-B/english/transpiler"
@@ -248,7 +249,27 @@ func init() {
 			"Only applies to .abc source files.")
 }
 
+// analyse type-checks a program and exits with a report if anything is wrong.
+//
+// Every entry point goes through here, so that running a program, compiling
+// it, disassembling it and transpiling it all apply the same rules. The
+// version-1 bytecode path used to skip checking entirely.
+func analyse(prog *ast.Program, filename string) {
+	diags := sema.Check(prog, sema.Config{
+		Predefined: stdlib.PredefinedNames(),
+		Dir:        filepath.Dir(filename),
+	})
+	if len(diags) == 0 {
+		return
+	}
+	for _, d := range diags {
+		stacktraces.Print(d)
+	}
+	os.Exit(1)
+}
+
 // RunFile executes an English source file using the instruction VM (ivm) by default.
+
 // This is a convenience wrapper for RunFileIVM.
 func RunFile(filename string) {
 	RunFileIVM(filename, -1)
@@ -284,13 +305,7 @@ func RunFileIVM(filename string, minPoliteness float64) {
 		}
 	}
 
-	typeErrs := vm.Check(program, stdlib.PredefinedNames()...)
-	if len(typeErrs) > 0 {
-		for _, e := range typeErrs {
-			stacktraces.Print(e)
-		}
-		os.Exit(1)
-	}
+	analyse(program, filename)
 
 	chunk, compileErr := ivm.Compile(program)
 	if compileErr != nil {
@@ -337,13 +352,7 @@ func RunFileAST(filename string, minPoliteness float64) {
 		}
 	}
 
-	typeErrs := vm.Check(program, stdlib.PredefinedNames()...)
-	if len(typeErrs) > 0 {
-		for _, e := range typeErrs {
-			stacktraces.Print(e)
-		}
-		os.Exit(1)
-	}
+	analyse(program, filename)
 
 	evaluator := vm.NewEvaluator(env, stdlib.Eval)
 	_, err = evaluator.Eval(program)
@@ -380,13 +389,7 @@ func CompileFileOptions(filename string, output string, stripSource bool) {
 		os.Exit(1)
 	}
 
-	typeErrs := vm.Check(program, stdlib.PredefinedNames()...)
-	if len(typeErrs) > 0 {
-		for _, e := range typeErrs {
-			stacktraces.Print(e)
-		}
-		os.Exit(1)
-	}
+	analyse(program, filename)
 
 	chunk, compileErr := ivm.Compile(program)
 	if compileErr != nil {
@@ -481,13 +484,7 @@ func transpileWithOptions(filename string, inline bool, seen map[string]bool) {
 					stacktraces.Print(parseErr)
 					os.Exit(1)
 				}
-				typeErrs := vm.Check(prog, stdlib.PredefinedNames()...)
-				if len(typeErrs) > 0 {
-					for _, e := range typeErrs {
-						stacktraces.Print(e)
-					}
-					os.Exit(1)
-				}
+				analyse(prog, filename)
 				if inline {
 					pySource = transpiler.NewTranspilerInlined().Transpile(prog)
 				} else {
@@ -514,13 +511,7 @@ func transpileWithOptions(filename string, inline bool, seen map[string]bool) {
 			os.Exit(1)
 		}
 
-		typeErrs := vm.Check(prog, stdlib.PredefinedNames()...)
-		if len(typeErrs) > 0 {
-			for _, e := range typeErrs {
-				stacktraces.Print(e)
-			}
-			os.Exit(1)
-		}
+		analyse(prog, filename)
 
 		pySource = transpiler.NewTranspilerStripped().Transpile(prog)
 	} else {
@@ -540,13 +531,7 @@ func transpileWithOptions(filename string, inline bool, seen map[string]bool) {
 			os.Exit(1)
 		}
 
-		typeErrs := vm.Check(prog, stdlib.PredefinedNames()...)
-		if len(typeErrs) > 0 {
-			for _, e := range typeErrs {
-				stacktraces.Print(e)
-			}
-			os.Exit(1)
-		}
+		analyse(prog, filename)
 
 		if inline {
 			// --inline: resolve all imports by inlining their ASTs into a single file.
@@ -607,6 +592,8 @@ func RunBytecode(filename string) {
 		fmt.Fprintf(os.Stderr, "Bytecode error: %v\n", err)
 		os.Exit(1)
 	}
+
+	analyse(program, filename)
 
 	env := vm.NewEnvironment()
 	stdlib.Register(env)

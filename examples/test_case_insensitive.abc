@@ -17,7 +17,7 @@ DECLARE FUNCTION greet THAT TAKES name AND DOES THE FOLLOWING:
     Print the value of name.
 THATS IT.
 
-SET result TO BE the result of CALLING greet WITH "World".
+DECLARE result TO BE the result of CALLING greet WITH "World".
 
 # Test loops
 REPEAT the following 3 TIMES:

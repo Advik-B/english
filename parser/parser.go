@@ -805,46 +805,6 @@ func (p *Parser) parseAssignment() (ast.Statement, error) {
 		p.nextToken()
 	}
 
-	// Check for function call result: "the result of calling ..."
-	if p.curToken.Type == token.THE && p.peekToken.Type == token.IDENTIFIER && strings.EqualFold(p.peekToken.Value, resultKeyword) {
-		p.nextToken() // consume THE
-		p.nextToken() // consume "result"
-		if p.curToken.Type == token.OF {
-			p.nextToken()
-			if p.curToken.Type == token.CALLING {
-				p.nextToken()
-				funcName := p.curToken.Value
-				if p.curToken.Type != token.IDENTIFIER {
-					return nil, p.syntaxErr(
-						msgSetCallFuncName,
-						hintSetCallResult,
-					)
-				}
-				p.nextToken()
-
-				args, err := p.parseFunctionArguments()
-				if err != nil {
-					return nil, err
-				}
-
-				if err := p.expectToken(token.PERIOD); err != nil {
-					return nil, err
-				}
-				p.nextToken()
-
-				return &ast.Assignment{
-					Name: nameToken.Value,
-					Value: &ast.FunctionCall{
-						Base:      setPos,
-						Name:      funcName,
-						Arguments: args,
-					},
-					Base: setPos,
-				}, nil
-			}
-		}
-	}
-
 	value, err := p.parseExpression()
 	if err != nil {
 		return nil, err
@@ -1039,11 +999,12 @@ func (p *Parser) parseCall() (ast.Statement, error) {
 	p.nextToken()
 
 	return &ast.CallStatement{
+		Base: callPos,
 		FunctionCall: &ast.FunctionCall{
+			Base:      callPos,
 			Name:      funcName,
 			Arguments: args,
 		},
-		Base: callPos,
 	}, nil
 }
 
@@ -1458,6 +1419,7 @@ func (p *Parser) parseContinue() (ast.Statement, error) {
 //   - "Ask "prompt" and store the answer in varname."
 //   - "Ask "prompt" and store the result in varname."
 func (p *Parser) parseAskStatement() (ast.Statement, error) {
+	askPos := at(p.curToken)
 	p.nextToken() // consume ASK
 
 	// Parse the prompt expression
@@ -1518,9 +1480,12 @@ func (p *Parser) parseAskStatement() (ast.Statement, error) {
 
 	// Use Assignment so it works whether the variable already exists or not.
 	// The Assignment evaluator calls Set(), which creates the variable if it doesn't exist.
-	return &ast.Assignment{
+	// "Ask … as name." introduces name, so it is a declaration rather than
+	// an assignment to something that already exists.
+	return &ast.VariableDecl{
+		Base:  askPos,
 		Name:  varName,
-		Value: &ast.AskExpression{Prompt: prompt},
+		Value: &ast.AskExpression{Base: askPos, Prompt: prompt},
 	}, nil
 }
 
@@ -2056,6 +2021,18 @@ func (p *Parser) parsePrimaryExpr() (ast.Expression, error) {
 		if p.curToken.Type == token.ENTRY {
 			return p.parseLookupKeyAccess()
 		}
+		// "the result of calling f with …" — a call used as a value.
+		//
+		// This was previously recognised only after "Set", and by consuming
+		// "the" and "result" before checking what followed, so the phrase was
+		// a syntax error anywhere else and "Set x to be the result of f."
+		// silently dropped the words it had already eaten. The three-token
+		// lookahead here needs no rollback.
+		if p.isWord(resultKeyword) &&
+			p.peekToken.Type == token.OF &&
+			p.tokenAt(p.position).Type == token.CALLING {
+			return p.parseCallResult()
+		}
 		// Check for field access: "the name of person"
 		if p.curToken.Type == token.IDENTIFIER {
 			fieldName := p.curToken.Value
@@ -2254,7 +2231,29 @@ func (p *Parser) parsePrimaryExpr() (ast.Expression, error) {
 }
 
 // parseIndexExpression parses "item at position X in/of Y"
+// parseCallResult parses "result of calling f with …" with "the" already
+// consumed, producing the call as an ordinary expression.
+func (p *Parser) parseCallResult() (ast.Expression, error) {
+	pos := at(p.curToken)
+	p.nextToken() // consume "result"
+	p.nextToken() // consume "of"
+	p.nextToken() // consume "calling"
+
+	if p.curToken.Type != token.IDENTIFIER {
+		return nil, p.syntaxErr(msgSetCallFuncName, hintSetCallResult)
+	}
+	funcName := p.curToken.Value
+	p.nextToken()
+
+	args, err := p.parseFunctionArguments()
+	if err != nil {
+		return nil, err
+	}
+	return &ast.FunctionCall{Base: pos, Name: funcName, Arguments: args}, nil
+}
+
 func (p *Parser) parseIndexExpression() (ast.Expression, error) {
+
 	// Already consumed "the", now at "item"
 	if err := p.expectToken(token.ITEM); err != nil {
 		return nil, err

@@ -133,7 +133,7 @@ func TestUsageRendering(t *testing.T) {
 		if !ok {
 			t.Fatalf("%s: not found in signature table", name)
 		}
-		if got := usage(s); got != want {
+		if got := Usage(s); got != want {
 			t.Errorf("usage(%s) = %q, want %q", name, got, want)
 		}
 	}

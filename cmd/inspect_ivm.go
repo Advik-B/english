@@ -14,11 +14,9 @@ import (
 	"path/filepath"
 	"strings"
 
-	vm "github.com/Advik-B/english/astvm"
 	"github.com/Advik-B/english/ivm"
 	"github.com/Advik-B/english/parser"
 	"github.com/Advik-B/english/stacktraces"
-	"github.com/Advik-B/english/stdlib"
 	"github.com/spf13/cobra"
 )
 
@@ -74,13 +72,7 @@ displayed; the listing is always derived from the opcode stream.`,
 				stacktraces.Print(parseErr)
 				os.Exit(1)
 			}
-			typeErrs := vm.Check(program, stdlib.PredefinedNames()...)
-			if len(typeErrs) > 0 {
-				for _, e := range typeErrs {
-					stacktraces.Print(e)
-				}
-				os.Exit(1)
-			}
+			analyse(program, filename)
 			compiled, compileErr := ivm.Compile(program)
 			if compileErr != nil {
 				fmt.Fprintf(os.Stderr, "Compile error: %v\n", compileErr)

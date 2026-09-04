@@ -20,9 +20,11 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/Advik-B/english/ast"
 	vm "github.com/Advik-B/english/astvm"
 	"github.com/Advik-B/english/ivm"
 	"github.com/Advik-B/english/parser"
+	"github.com/Advik-B/english/sema"
 	"github.com/Advik-B/english/stdlib"
 )
 
@@ -39,6 +41,9 @@ func runAST(src string) (string, error) {
 		program, err := p.Parse()
 		if err != nil {
 			runErr = err
+			return
+		}
+		if runErr = analyse(program); runErr != nil {
 			return
 		}
 		env := vm.NewEnvironment()
@@ -62,6 +67,9 @@ func runIVM(src string) (string, error) {
 			runErr = err
 			return
 		}
+		if runErr = analyse(prog); runErr != nil {
+			return
+		}
 		chunk, err := ivm.Compile(prog)
 		if err != nil {
 			runErr = err
@@ -72,7 +80,21 @@ func runIVM(src string) (string, error) {
 	return out, runErr
 }
 
+// analyse runs semantic analysis, returning the first problem as an error.
+//
+// Both harnesses previously skipped analysis, so the parity suite exercised a
+// pipeline the real `english run` never uses: a program the compiler rejects
+// was executed here anyway, and the engines were compared on it.
+func analyse(prog *ast.Program) error {
+	diags := sema.Check(prog, sema.Config{Predefined: stdlib.PredefinedNames()})
+	if len(diags) == 0 {
+		return nil
+	}
+	return diags[0]
+}
+
 // captureStdout redirects stdout during fn and returns the captured text.
+
 func captureStdout(fn func()) string {
 	old := os.Stdout
 	r, w, _ := os.Pipe()
@@ -918,6 +940,10 @@ Print "still running".`, "caught")
 // TestParityBuiltinArity covers the crash class where calling a built-in with
 // too few arguments indexed past the end of the argument slice and panicked,
 // taking down the process (and the REPL) instead of reporting a user error.
+//
+// Semantic analysis now rejects these before either engine runs, so the
+// message comes from the checker rather than the standard library; the arity
+// guard inside the library remains as the backstop for a call it cannot see.
 func TestParityBuiltinArity(t *testing.T) {
 	for _, src := range []string{
 		`Call sqrt.`,
@@ -939,9 +965,13 @@ Print s's replace.`,
 			t.Errorf("output parity mismatch for:\n%s\n  astvm: %q\n  ivm:   %q", src, astOut, ivmOut)
 		}
 		if astErr != nil && ivmErr != nil {
-			// Both engines route through stdlib.Eval, so the message must match.
-			if !strings.Contains(astErr.Error(), "expects") || !strings.Contains(ivmErr.Error(), "expects") {
-				t.Errorf("arity errors not reported for:\n%s\n  astvm: %v\n  ivm:   %v", src, astErr, ivmErr)
+			// Both engines are checked by the same analyser, so the message
+			// must be identical, and it must name the arity that was wrong.
+			if astErr.Error() != ivmErr.Error() {
+				t.Errorf("error message mismatch for:\n%s\n  astvm: %v\n  ivm:   %v", src, astErr, ivmErr)
+			}
+			if !strings.Contains(astErr.Error(), "argument") {
+				t.Errorf("arity not described for:\n%s\n  got: %v", src, astErr)
 			}
 		}
 	}

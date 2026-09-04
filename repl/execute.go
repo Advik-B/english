@@ -39,6 +39,16 @@ func (r *REPL) execute(code string) {
 		return
 	}
 
+	// Analyse before evaluating, so the REPL applies the same rules as
+	// `english run`. It previously skipped analysis entirely, so a program
+	// the compiler rejects was accepted here.
+	if diags := r.analyzer.CheckNext(program); len(diags) > 0 {
+		for _, d := range diags {
+			fmt.Fprint(r.out, stacktraces.RenderWithColor(d, r.useColor))
+		}
+		return
+	}
+
 	// Evaluate – Print output goes directly to r.out via ev.out.
 	_, execErr := r.evaluator.Eval(program)
 	if execErr != nil {

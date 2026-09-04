@@ -19,7 +19,7 @@ Declare function add that takes a and b and does the following:
 	Return a + b.
 thats it.
 
-Set result to be the result of calling add with 5 and 10.
+Declare result to be the result of calling add with 5 and 10.
 
 # Loops
 repeat the following 5 times:

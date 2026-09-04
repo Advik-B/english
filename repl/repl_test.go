@@ -282,7 +282,7 @@ func TestIfOtherwiseIfBlock(t *testing.T) {
 
 func TestFunctionDeclarationAndCall(t *testing.T) {
 	out := runLoop(join(
-		"Declare function double that takes n and does the following:",
+		"Declare function double that takes n as number, and gives back a number, and does the following:",
 		"    Return n * 2.",
 		"thats it.",
 		"Declare result to be 0.",
@@ -294,7 +294,7 @@ func TestFunctionDeclarationAndCall(t *testing.T) {
 
 func TestFunctionWithMultipleParams(t *testing.T) {
 	out := runLoop(join(
-		"Declare function add that takes a and b and does the following:",
+		"Declare function add that takes a as number and b as number, and gives back a number, and does the following:",
 		"    Return a + b.",
 		"thats it.",
 		"Declare s to be 0.",
@@ -306,11 +306,10 @@ func TestFunctionWithMultipleParams(t *testing.T) {
 
 func TestFunctionPrintOutput(t *testing.T) {
 	out := runLoop(join(
-		"Declare function greet that takes name and does the following:",
+		"Declare function greet that takes name as text, and gives back nothing, and does the following:",
 		"    Print \"Hello,\", the value of name.",
 		"thats it.",
-		"Declare dummy to be 0.",
-		"Set dummy to be the result of calling greet with \"World\".",
+		"Call greet with \"World\".",
 	))
 	assertContains(t, out, "Hello,")
 	assertContains(t, out, "World")
@@ -438,7 +437,7 @@ func TestFibonacci(t *testing.T) {
 
 func TestFactorial(t *testing.T) {
 	out := runLoop(join(
-		"Declare function factorial that takes n and does the following:",
+		"Declare function factorial that takes n as number, and gives back a number, and does the following:",
 		"    If n is less than or equal to 1, then",
 		"        Return 1.",
 		"    thats it.",
@@ -509,7 +508,7 @@ func TestBlankLinesInsideBlock(t *testing.T) {
 
 func TestFunctionWithNestedIf(t *testing.T) {
 	out := runLoop(join(
-		"Declare function classify that takes n and does the following:",
+		"Declare function classify that takes n as number, and gives back nothing, and does the following:",
 		"    If n is greater than 0, then",
 		"        Print \"positive\".",
 		"    otherwise if n is less than 0, then",
@@ -518,10 +517,9 @@ func TestFunctionWithNestedIf(t *testing.T) {
 		"        Print \"zero\".",
 		"    thats it.",
 		"thats it.",
-		"Declare dummy to be 0.",
-		"Set dummy to be the result of calling classify with 5.",
-		"Set dummy to be the result of calling classify with 0.",
-		"Set dummy to be the result of calling classify with -3.",
+		"Call classify with 5.",
+		"Call classify with 0.",
+		"Call classify with -3.",
 	))
 	assertContains(t, out, "positive")
 	assertContains(t, out, "zero")

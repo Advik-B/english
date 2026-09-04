@@ -925,7 +925,7 @@ Print e.`)
 // error and hung the instruction VM indefinitely. Both engines must now report
 // a normal, identical, language-level error.
 func TestParityRunawayRecursion(t *testing.T) {
-	src := `Declare function boom that takes n and does the following:
+	src := `Declare function boom that takes n as number, and gives back a number, and does the following:
     Return boom of n.
 thats it.
 Print boom of 1.`
@@ -952,7 +952,7 @@ Print boom of 1.`
 // TestParityStackOverflowIsCatchable asserts the depth limit surfaces as an
 // ordinary catchable error rather than killing the program, in both engines.
 func TestParityStackOverflowIsCatchable(t *testing.T) {
-	assertOutputContains(t, `Declare function boom that takes n and does the following:
+	assertOutputContains(t, `Declare function boom that takes n as number, and gives back a number, and does the following:
     Return boom of n.
 thats it.
 
@@ -1328,4 +1328,20 @@ Try doing the following:
 but finally:
     Raise "cleanup failed" as CleanupError.
 thats it.`)
+}
+
+// TestParityEarlyReturnWithNoValue covers "Return." on its own, which finishes
+// a function that gives back nothing. A value was required after Return, so
+// such a function had no way out but to reach the end of its body.
+func TestParityEarlyReturnWithNoValue(t *testing.T) {
+	assertParity(t, `Declare function announce that takes label as text, and gives back nothing, and does the following:
+    If label is equal to "", then
+        Return.
+    thats it.
+    Print label.
+thats it.
+
+Call announce with "hi".
+Call announce with "".
+Print "done".`)
 }

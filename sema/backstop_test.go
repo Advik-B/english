@@ -162,7 +162,7 @@ func TestBackstopMethodParameterShadowsAField(t *testing.T) {
 	src := `Declare Person as a structure with the following fields:
     name is a text with "?" being the default.
 
-    let rename be a function that takes name and does the following:
+    let rename be a function that takes name as text, and gives back nothing, and does the following:
         Print name.
     thats it.
 thats it.

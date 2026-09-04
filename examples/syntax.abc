@@ -7,7 +7,7 @@ Declare z to always be "hello". # Alternative constant syntax
 
 # For function declaration
 
-Declare function say_hello that does the following:
+Declare function say_hello that gives back nothing, and does the following:
 	Print "Hello, World!".
 thats it.
 
@@ -15,7 +15,7 @@ Set x to be 15. # For assignment
 Call say_hello. # For function call
 
 # For "return" statements inside functions
-Declare function add that takes a and b and does the following:
+Declare function add that takes a as number and b as number, and gives back a number, and does the following:
 	Return a + b.
 thats it.
 

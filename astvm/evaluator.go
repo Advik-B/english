@@ -453,6 +453,11 @@ func (ev *Evaluator) evalOutput(os *ast.OutputStatement) (Value, error) {
 }
 
 func (ev *Evaluator) evalReturn(rs *ast.ReturnStatement) (Value, error) {
+	// "Return." on its own carries no value, and finishes a function that
+	// gives back nothing.
+	if rs.Value == nil {
+		return &ReturnValue{}, nil
+	}
 	value, err := ev.Eval(rs.Value)
 	if err != nil {
 		return nil, err

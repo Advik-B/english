@@ -241,15 +241,20 @@ func (p *Parser) parseStructMethod() (*ast.FunctionDecl, error) {
 				param := ast.Param{Base: at(paramToken), Name: paramToken.Value}
 				p.nextToken()
 
-				// Optional annotation: "takes x as number".
-				if p.curToken.Type == token.AS {
-					p.nextToken()
-					paramType, err := p.parseTypeName()
-					if err != nil {
-						return nil, err
-					}
-					param.Type = paramType
+				// Every parameter says what it takes, in a method as in a
+				// plain function.
+				if p.curToken.Type != token.AS {
+					return nil, p.syntaxErr(
+						fmt.Sprintf(msgFmtParameterNeedsType, param.Name),
+						fmt.Sprintf(hintFmtParameterType, param.Name),
+					)
 				}
+				p.nextToken()
+				paramType, err := p.parseTypeName()
+				if err != nil {
+					return nil, err
+				}
+				param.Type = paramType
 				parameters = append(parameters, param)
 
 				if p.curToken.Type != token.AND {
@@ -269,19 +274,10 @@ func (p *Parser) parseStructMethod() (*ast.FunctionDecl, error) {
 	p.skipOptional(token.COMMA)
 	p.skipOptional(token.AND)
 
-	// Optional return type: "gives back a number".
-	var returnType *ast.TypeExpr
-	if p.skipWord("gives") {
-		if !p.skipWord("back") {
-			return nil, p.syntaxErr(msgGivesNeedsBack, hintReturnType)
-		}
-		var err error
-		returnType, err = p.parseTypeName()
-		if err != nil {
-			return nil, err
-		}
-		p.skipOptional(token.COMMA)
-		p.skipOptional(token.AND)
+	// Every method says what it gives back, as every function does.
+	returnType, err := p.parseGivesBack(nameToken.Value)
+	if err != nil {
+		return nil, err
 	}
 
 	// Expect "that does" or just "does"

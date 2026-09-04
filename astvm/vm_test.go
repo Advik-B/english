@@ -592,7 +592,7 @@ thats it.`
 }
 
 func TestEvaluatorFunctionDeclarationAndCall(t *testing.T) {
-	code := `Declare function greet that does the following:
+	code := `Declare function greet that gives back nothing, and does the following:
     Print "Hello".
 thats it.
 Call greet.`
@@ -606,7 +606,7 @@ Call greet.`
 }
 
 func TestEvaluatorFunctionWithParams(t *testing.T) {
-	code := `Declare function add that takes a and b and does the following:
+	code := `Declare function add that takes a as number and b as number, and gives back a number, and does the following:
     Return a + b.
 thats it.
 Set result to be the result of calling add with 3 and 7.
@@ -621,7 +621,7 @@ Print the value of result.`
 }
 
 func TestEvaluatorFunctionReturn(t *testing.T) {
-	code := `Declare function double that takes x and does the following:
+	code := `Declare function double that takes x as number, and gives back a number, and does the following:
     Return x * 2.
 thats it.
 Set result to be the result of calling double with 5.
@@ -636,7 +636,7 @@ Print the value of result.`
 }
 
 func TestEvaluatorFunctionSingleParam(t *testing.T) {
-	code := `Declare function square that takes n and does the following:
+	code := `Declare function square that takes n as number, and gives back a number, and does the following:
     Return n * n.
 thats it.
 Set result to be the result of calling square with 4.
@@ -686,7 +686,7 @@ Set result to be x / y.`
 }
 
 func TestEvaluatorFunctionArgumentMismatch(t *testing.T) {
-	code := `Declare function add that takes a and b and does the following:
+	code := `Declare function add that takes a as number and b as number, and gives back a number, and does the following:
     Return a + b.
 thats it.
 Set result to be the result of calling add with 5.`
@@ -913,7 +913,7 @@ Print the value of x.`
 
 func TestEvaluatorNestedScopes(t *testing.T) {
 	code := `Declare x to be 5.
-Declare function change_local that does the following:
+Declare function change_local that gives back nothing, and does the following:
     Declare x to be 10.
     Print the value of x.
 thats it.
@@ -930,7 +930,7 @@ Print the value of x.`
 }
 
 func TestEvaluatorRecursion(t *testing.T) {
-	code := `Declare function factorial that takes n and does the following:
+	code := `Declare function factorial that takes n as number, and gives back a number, and does the following:
     If n is less than or equal to 1, then
         Return 1.
     otherwise
@@ -1171,7 +1171,7 @@ Declare combined to be list1 + list2.`
 }
 
 func TestEvaluatorReturnInLoop(t *testing.T) {
-	code := `Declare function findFirst that takes nums and does the following:
+	code := `Declare function findFirst that takes nums as list, and gives back a number, and does the following:
     for each n in nums, do the following:
         If n is greater than 5, then
             Return n.
@@ -1232,7 +1232,7 @@ func TestEvaluatorImport(t *testing.T) {
 
 	// Create a library file with functions and variables
 	libContent := `# Test library
-Declare function double that takes x and does the following:
+Declare function double that takes x as number, and gives back a number, and does the following:
     Return x * 2.
 thats it.
 
@@ -1266,7 +1266,7 @@ func TestEvaluatorImportWithFrom(t *testing.T) {
 	libFile := tempDir + "/helpers.abc"
 
 	// Create a library file
-	libContent := `Declare function square that takes n and does the following:
+	libContent := `Declare function square that takes n as number, and gives back a number, and does the following:
     Return n * n.
 thats it.
 `
@@ -1311,11 +1311,11 @@ func TestEvaluatorSelectiveImport(t *testing.T) {
 	libFile := tempDir + "/testlib.abc"
 
 	// Create a library file with multiple functions
-	libContent := `Declare function add that takes a and b and does the following:
+	libContent := `Declare function add that takes a as number and b as number, and gives back a number, and does the following:
     Return a + b.
 thats it.
 
-Declare function multiply that takes a and b and does the following:
+Declare function multiply that takes a as number and b as number, and gives back a number, and does the following:
     Return a * b.
 thats it.
 
@@ -1347,7 +1347,7 @@ func TestEvaluatorImportEverything(t *testing.T) {
 	libFile := tempDir + "/testlib.abc"
 
 	// Create a library file
-	libContent := `Declare function greet that takes name and does the following:
+	libContent := `Declare function greet that takes name as text, and gives back nothing, and does the following:
     Print "Hello,", the value of name.
 thats it.
 
@@ -1407,7 +1407,7 @@ func TestEvaluatorSafeImport(t *testing.T) {
 	// Create a library file with top-level code
 	libContent := `Print "This should not print in safe mode".
 
-Declare function test that does the following:
+Declare function test that gives back nothing, and does the following:
     Print "Test function".
 thats it.
 

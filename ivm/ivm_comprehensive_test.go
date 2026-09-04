@@ -326,7 +326,7 @@ func TestStructMethodCall(t *testing.T) {
 	out := captureOutput(func() {
 		_, err := run(`declare Person as a structure with the following fields:
     name is a string.
-    let greet be a function that does the following:
+    let greet be a function that gives back nothing, and does the following:
         Print "Hello from", name.
     thats it.
 thats it.
@@ -508,7 +508,7 @@ func TestFinallyRunsOnTypeMismatchFromFunction(t *testing.T) {
 	out := captureOutput(func() {
 		_, err := run(`Declare NetworkError as an error type.
 Declare ValidationError as an error type.
-Declare function validate that takes x and does the following:
+Declare function validate that takes x as number, and gives back nothing, and does the following:
     Raise "bad value" as ValidationError.
 thats it.
 Try doing the following:
@@ -988,7 +988,7 @@ Print the value of loc.`)
 
 func TestFunctionMultipleParams(t *testing.T) {
 	out := captureOutput(func() {
-		_, err := run(`Declare function add that takes a and b and does the following:
+		_, err := run(`Declare function add that takes a as number and b as number, and gives back a number, and does the following:
     Return a + b.
 thats it.
 Declare r to be 0.
@@ -1005,7 +1005,7 @@ Print the value of r.`)
 
 func TestFunctionRecursion(t *testing.T) {
 	out := captureOutput(func() {
-		_, err := run(`Declare function fact that takes n and does the following:
+		_, err := run(`Declare function fact that takes n as number, and gives back a number, and does the following:
     If n is less than or equal to 1, then
         Return 1.
     thats it.
@@ -1027,7 +1027,7 @@ Print the value of r.`)
 
 func TestFunctionNoParams(t *testing.T) {
 	out := captureOutput(func() {
-		_, err := run(`Declare function greet and does the following:
+		_, err := run(`Declare function greet that gives back nothing, and does the following:
     Print "hello from function".
 thats it.
 call greet.`)
@@ -1043,7 +1043,7 @@ call greet.`)
 func TestFunctionClosures(t *testing.T) {
 	out := captureOutput(func() {
 		_, err := run(`Declare base to be 10.
-Declare function addBase that takes n and does the following:
+Declare function addBase that takes n as number, and gives back a number, and does the following:
     Return n + base.
 thats it.
 Declare r to be 0.
@@ -1069,7 +1069,7 @@ func TestImportBasic(t *testing.T) {
 
 	libPath := filepath.Join(tmpDir, "mylib.abc")
 	if err := os.WriteFile(libPath, []byte(`
-Declare function square that takes n and does the following:
+Declare function square that takes n as number, and gives back a number, and does the following:
     Return n * n.
 thats it.
 Declare MY_CONST to always be 42.
@@ -1106,7 +1106,7 @@ func TestSelectiveImport(t *testing.T) {
 
 	libPath := filepath.Join(tmpDir, "lib.abc")
 	if err := os.WriteFile(libPath, []byte(`
-Declare function add that takes a and b and does the following:
+Declare function add that takes a as number and b as number, and gives back a number, and does the following:
     Return a + b.
 thats it.
 `), 0644); err != nil {
@@ -1288,7 +1288,7 @@ Print the item at position 99 in arr.`)
 }
 
 func TestFunctionArgCountError(t *testing.T) {
-	_, err := run(`Declare function add that takes a and b and does the following:
+	_, err := run(`Declare function add that takes a as number and b as number, and gives back a number, and does the following:
     Return a + b.
 thats it.
 Declare result to be 0.
@@ -1395,7 +1395,7 @@ Print "".`)
 // ─── Regression: correct output matches tree-walk evaluator ─────────────────
 
 func TestRegressionFibonacci(t *testing.T) {
-	src := `Declare function fib that takes n and does the following:
+	src := `Declare function fib that takes n as number, and gives back a number, and does the following:
     If n is less than or equal to 1, then
         Return n.
     thats it.
@@ -1629,7 +1629,7 @@ thats it.`)
 }
 
 func TestSleepInsideFunction(t *testing.T) {
-	_, err := run(`Declare function pause that does the following:
+	_, err := run(`Declare function pause that gives back nothing, and does the following:
     Sleep for 0ms.
 thats it.
 Call pause.`)
@@ -1706,7 +1706,7 @@ Please print the value of i.`)
 
 func TestPolitePrefix_InsideFunction(t *testing.T) {
 	out := captureOutput(func() {
-		_, err := run(`Please declare function greet that does the following:
+		_, err := run(`Please declare function greet that gives back nothing, and does the following:
     Please print "Hi".
 thats it.
 Please call greet.`)

@@ -17,7 +17,7 @@ Declare PI to be always 3.14.
 Set PI to be 3.  # Error: cannot reassign constant
 
 # This will cause an argument count mismatch
-Declare function add that takes a and b and does the following:
+Declare function add that takes a as number and b as number, and gives back a number, and does the following:
     Return a + b.
 thats it.
 

@@ -8,7 +8,7 @@ Declare arr to be [10, 25, 30, 45, 50, 65, 70, 85, 90].
 Print "Array: 10, 25, 30, 45, 50, 65, 70, 85, 90".
 
 # Function to perform linear search
-Declare function linearSearch that takes arr_size and target and does the following:
+Declare function linearSearch that takes arr_size as number and target as number, and gives back a number, and does the following:
     Declare idx to be 0.
     Declare current to be 0.
     repeat the following while idx is less than arr_size:

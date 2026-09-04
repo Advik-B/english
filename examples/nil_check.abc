@@ -53,7 +53,7 @@ Print "".
 Print "=== Guard Pattern ===".
 Declare user to be nothing.
 
-Declare function greet that takes username and does the following:
+Declare function greet that takes username as text, and gives back nothing, and does the following:
     If username is something, then
         Print "Hello, ".
         Print username.

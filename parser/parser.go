@@ -730,15 +730,19 @@ func (p *Parser) parseFunctionDeclaration() (ast.Statement, error) {
 			param := ast.Param{Base: at(paramToken), Name: paramToken.Value}
 			p.nextToken()
 
-			// Optional annotation: "takes x as number".
-			if p.curToken.Type == token.AS {
-				p.nextToken()
-				paramType, err := p.parseTypeName()
-				if err != nil {
-					return nil, err
-				}
-				param.Type = paramType
+			// Every parameter says what it takes: "takes x as number".
+			if p.curToken.Type != token.AS {
+				return nil, p.syntaxErr(
+					fmt.Sprintf(msgFmtParameterNeedsType, param.Name),
+					fmt.Sprintf(hintFmtParameterType, param.Name),
+				)
 			}
+			p.nextToken()
+			paramType, err := p.parseTypeName()
+			if err != nil {
+				return nil, err
+			}
+			param.Type = paramType
 			parameters = append(parameters, param)
 
 			if p.curToken.Type != token.AND {
@@ -757,19 +761,11 @@ func (p *Parser) parseFunctionDeclaration() (ast.Statement, error) {
 	p.skipOptional(token.COMMA)
 	p.skipOptional(token.AND)
 
-	// Optional return type: "gives back a number".
-	var returnType *ast.TypeExpr
-	if p.skipWord("gives") {
-		if !p.skipWord("back") {
-			return nil, p.syntaxErr(msgGivesNeedsBack, hintReturnType)
-		}
-		var err error
-		returnType, err = p.parseTypeName()
-		if err != nil {
-			return nil, err
-		}
-		p.skipOptional(token.COMMA)
-		p.skipOptional(token.AND)
+	// Every function says what it gives back: "gives back a number", or
+	// "gives back nothing" when it produces no value.
+	returnType, err := p.parseGivesBack(nameToken.Value)
+	if err != nil {
+		return nil, err
 	}
 
 	if err := p.expectToken(token.DOES); err != nil {
@@ -1443,9 +1439,16 @@ func (p *Parser) parseReturn() (ast.Statement, error) {
 	startPos := at(p.curToken)
 	p.nextToken()
 
-	value, err := p.parseExpression()
-	if err != nil {
-		return nil, err
+	// "Return." on its own finishes a function that gives back nothing. A
+	// value was required here, so such a function could not return early at
+	// all — its only way out was to reach the end of its body.
+	var value ast.Expression
+	if p.curToken.Type != token.PERIOD {
+		var err error
+		value, err = p.parseExpression()
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	if err := p.expectToken(token.PERIOD); err != nil {
@@ -1940,7 +1943,19 @@ func canNameAType(t token.Type) bool {
 // A name that matches a built-in type is normalised to lower case; anything
 // else keeps its original spelling, because it may name a struct — which only
 // the type checker can resolve.
+// parseTypeName reads a type annotation for a value: a variable, a parameter,
+// a struct field, a cast target.
 func (p *Parser) parseTypeName() (*ast.TypeExpr, error) {
+	return p.parseTypeNameAllowing(false)
+}
+
+// parseResultType reads the type a function gives back, which may be "nothing"
+// for a function that produces no value.
+func (p *Parser) parseResultType() (*ast.TypeExpr, error) {
+	return p.parseTypeNameAllowing(true)
+}
+
+func (p *Parser) parseTypeNameAllowing(nothingOK bool) (*ast.TypeExpr, error) {
 	pos := at(p.curToken)
 
 	// An article reads naturally here: "Declare x as a number to be 5."
@@ -1948,6 +1963,16 @@ func (p *Parser) parseTypeName() (*ast.TypeExpr, error) {
 		(strings.EqualFold(p.curToken.Value, "a") || strings.EqualFold(p.curToken.Value, "an")) {
 		p.nextToken()
 		pos = at(p.curToken)
+	}
+
+	// "nothing" names the absence of a result, which only a function can have.
+	// A variable of that type could hold nothing at all.
+	if p.curToken.Type == token.NOTHING {
+		if !nothingOK {
+			return nil, p.syntaxErr(msgNothingNotAValueType, hintNothingResultOnly)
+		}
+		p.nextToken()
+		return typeExprAt(pos, "nothing"), nil
 	}
 
 	if !canNameAType(p.curToken.Type) {
@@ -1994,6 +2019,34 @@ func (p *Parser) parseTypeName() (*ast.TypeExpr, error) {
 // once so that nothing downstream has to re-parse the name at run time.
 func typeExprAt(pos ast.Base, name string) *ast.TypeExpr {
 	return &ast.TypeExpr{Base: pos, Name: name, Kind: types.Parse(name)}
+}
+
+// parseGivesBack reads the "gives back <type>" clause that every function
+// declaration carries.
+//
+// It is required, and so are the parameter annotations, because a signature
+// that is optional is a signature that is usually absent: an unannotated
+// function is one whose calls cannot be checked, and the checking is the point
+// of writing it down. A function that produces no value says so, with
+// "gives back nothing", rather than staying silent — silence would be
+// indistinguishable from having forgotten.
+func (p *Parser) parseGivesBack(funcName string) (*ast.TypeExpr, error) {
+	if !p.skipWord("gives") {
+		return nil, p.syntaxErr(
+			fmt.Sprintf(msgFmtFunctionNeedsResult, funcName),
+			fmt.Sprintf(hintFmtFunctionResult, funcName),
+		)
+	}
+	if !p.skipWord("back") {
+		return nil, p.syntaxErr(msgGivesNeedsBack, hintReturnType)
+	}
+	returnType, err := p.parseResultType()
+	if err != nil {
+		return nil, err
+	}
+	p.skipOptional(token.COMMA)
+	p.skipOptional(token.AND)
+	return returnType, nil
 }
 
 func (p *Parser) parseAdditive() (ast.Expression, error) {

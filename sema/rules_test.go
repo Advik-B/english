@@ -126,13 +126,13 @@ func TestRules(t *testing.T) {
 		},
 		{
 			name: "calling a function with too few arguments",
-			bad: `Declare function add that takes a and b and does the following:
+			bad: `Declare function add that takes a as number and b as number, and gives back a number, and does the following:
     Return a + b.
 thats it.
 Print the result of calling add with 1.`,
 			line: 4, col: 11,
 			contains: "'add' takes 2 arguments, but 1 was given",
-			good: `Declare function add that takes a and b and does the following:
+			good: `Declare function add that takes a as number and b as number, and gives back a number, and does the following:
     Return a + b.
 thats it.
 Print the result of calling add with 1 and 2.`,
@@ -211,7 +211,7 @@ thats it.`,
 			bad:  "Return 1.",
 			line: 1, col: 1,
 			contains: "only allowed inside a function",
-			good:     "Declare function f that does the following:\n    Return 1.\nthats it.",
+			good:     "Declare function f that gives back a number, and does the following:\n    Return 1.\nthats it.",
 		},
 		{
 			name: "toggling something that is not a boolean",
@@ -288,6 +288,33 @@ thats it.`,
 			line: 1, col: 17,
 			contains: "cannot cast to list",
 			good:     "Print 1 cast to text.",
+		},
+		{
+			name: "returning a value from a function that gives back nothing",
+			bad: "Declare function announce that gives back nothing, and does the following:\n" +
+				"    Return 1.\nthats it.",
+			line: 2, col: 5,
+			contains: "gives back nothing, but this returns number",
+			good: "Declare function announce that gives back nothing, and does the following:\n" +
+				"    Print \"hi\".\n    Return.\nthats it.",
+		},
+		{
+			name: "using the result of a function that gives back nothing",
+			bad: "Declare function announce that gives back nothing, and does the following:\n" +
+				"    Print \"hi\".\nthats it.\nDeclare x to be the result of calling announce.",
+			line: 4, col: 21,
+			contains: "gives back nothing, so there is no value here",
+			good: "Declare function announce that gives back nothing, and does the following:\n" +
+				"    Print \"hi\".\nthats it.\nCall announce.",
+		},
+		{
+			name: "returning no value from a function that promises one",
+			bad: "Declare function answer that gives back a number, and does the following:\n" +
+				"    Return.\nthats it.",
+			line: 2, col: 5,
+			contains: "returns no value",
+			good: "Declare function answer that gives back a number, and does the following:\n" +
+				"    Return 42.\nthats it.",
 		},
 		{
 			// "x is NetworkError" parses for any x at all, and for anything

@@ -201,7 +201,7 @@ thats it.`)
 // ─── Functions ────────────────────────────────────────────────────────────────
 
 func TestFunctionDecl(t *testing.T) {
-	out := transpile(t, `Declare function add that takes a and b and does the following:
+	out := transpile(t, `Declare function add that takes a as number and b as number, and gives back a number, and does the following:
     Return a + b.
 thats it.`)
 	assertContains(t, out, "def add(a, b):")
@@ -209,7 +209,7 @@ thats it.`)
 }
 
 func TestFunctionCall(t *testing.T) {
-	out := transpile(t, `Declare function greet that takes name and does the following:
+	out := transpile(t, `Declare function greet that takes name as text, and gives back nothing, and does the following:
     Print "Hello", the value of name.
 thats it.
 Call greet with "Alice".`)
@@ -315,7 +315,7 @@ thats it.`)
 // TestRangeArgumentsAreEvaluatedOnce is the point of the helper: an argument
 // that does something as well as producing a value must appear once.
 func TestRangeArgumentsAreEvaluatedOnce(t *testing.T) {
-	out := transpile(t, `Declare function next_bound that does the following:
+	out := transpile(t, `Declare function next_bound that gives back a number, and does the following:
     Return 5.
 thats it.
 
@@ -390,7 +390,7 @@ func TestStructMethod(t *testing.T) {
 	out := transpile(t, `declare Counter as a structure with the following fields:
     count is a number with 0 being the default.
 
-    let increment be a function that does the following:
+    let increment be a function that gives back nothing, and does the following:
         Set count to be count + 1.
     thats it.
 thats it.`)
@@ -873,7 +873,7 @@ Print "hello".`)
 }
 
 func TestCommentInsideFunction(t *testing.T) {
-	out := transpile(t, `Declare function greet that takes name and does the following:
+	out := transpile(t, `Declare function greet that takes name as text, and gives back nothing, and does the following:
     # say hello
     Print "Hello", the value of name.
 thats it.`)
@@ -954,7 +954,7 @@ func TestImportInlining(t *testing.T) {
 	// Write a small library file to a temp dir.
 	dir := t.TempDir()
 	libPath := dir + "/mylib.abc"
-	libSrc := `Declare function double that takes n and does the following:
+	libSrc := `Declare function double that takes n as number, and gives back a number, and does the following:
     Return n * 2.
 thats it.
 `
@@ -978,11 +978,11 @@ Print the value of result.`
 func TestSelectiveImportInlining(t *testing.T) {
 	dir := t.TempDir()
 	libPath := dir + "/mathlib.abc"
-	libSrc := `Declare function square that takes x and does the following:
+	libSrc := `Declare function square that takes x as number, and gives back a number, and does the following:
     Return x * x.
 thats it.
 
-Declare function cube that takes x and does the following:
+Declare function cube that takes x as number, and gives back a number, and does the following:
     Return x * x * x.
 thats it.
 `
@@ -1048,7 +1048,7 @@ Print "hi".`)
 func TestUserDefinedFunctionOverridesStdlib(t *testing.T) {
 	// A user-defined function named "average" taking numbers should not be
 	// mis-translated to the stdlib average(list) expression.
-	out := transpile(t, `Declare function average that takes x and y and z and does the following:
+	out := transpile(t, `Declare function average that takes x as number and y as number and z as number, and gives back a number, and does the following:
     Return (x + y + z) / 3.
 thats it.
 
@@ -1095,7 +1095,7 @@ func TestTwoBlankLinesBeforeDef(t *testing.T) {
 	// A top-level function that follows regular code must be separated by
 	// exactly two blank lines.
 	out := transpile(t, `Print "hello".
-Declare function foo that takes x and does the following:
+Declare function foo that takes x as number, and gives back a number, and does the following:
     Return x.
 thats it.`)
 	// Two blank lines = three consecutive newlines between the print and def.
@@ -1104,11 +1104,11 @@ thats it.`)
 
 func TestTwoBlankLinesBetweenDefs(t *testing.T) {
 	// Two top-level functions must be separated by exactly two blank lines.
-	out := transpile(t, `Declare function foo that takes x and does the following:
+	out := transpile(t, `Declare function foo that takes x as number, and gives back a number, and does the following:
     Return x.
 thats it.
 
-Declare function bar that takes y and does the following:
+Declare function bar that takes y as number, and gives back a number, and does the following:
     Return y.
 thats it.`)
 	assertContains(t, out, "return x\n\n\ndef bar(y)")
@@ -1120,7 +1120,7 @@ func TestCommentAttachedToDef(t *testing.T) {
 	// and the def.
 	out := transpile(t, `Print "hi".
 # My function
-Declare function foo that takes x and does the following:
+Declare function foo that takes x as number, and gives back a number, and does the following:
     Return x.
 thats it.`)
 	// Blank lines must appear before the comment, not between comment and def.
@@ -1166,7 +1166,7 @@ thats it.`)
 func TestNoBlankLinesAtStartOfFile(t *testing.T) {
 	// A def at the very start of the file must not be preceded by blank lines.
 	// Use raw (non-trimmed) output so that leading newlines are visible.
-	prog := parse(t, `Declare function foo that does the following:
+	prog := parse(t, `Declare function foo that gives back nothing, and does the following:
     Print "hi".
 thats it.`)
 	raw := transpiler.NewTranspiler().Transpile(prog)

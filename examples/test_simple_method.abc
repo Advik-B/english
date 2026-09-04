@@ -3,7 +3,7 @@
 declare Person as a structure with the following fields:
     name is a string.
     
-    let talk be a function that does the following:
+    let talk be a function that gives back nothing, and does the following:
         print "Hello, my name is", name.
     thats it.
 thats it.

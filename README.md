@@ -9,7 +9,7 @@ Example below:
 ---
 
 ```english
-Declare function greet that takes name as text, and does the following:
+Declare function greet that takes name as text, and gives back nothing, and does the following:
     Print "Hello, " + name + "!".
 thats it.
 
@@ -329,20 +329,21 @@ thats it.
 
 ### Step 8 — Functions
 
-Declare a function with `Declare function … that does the following:` and close it with `thats it.`
+Every function says what it takes and what it gives back. A function that
+produces no value says `gives back nothing`:
 
 ```english
-Declare function say_hello that does the following:
+Declare function say_hello that gives back nothing, and does the following:
     Print "Hello from a function!".
 thats it.
 
 Call say_hello.
 ```
 
-**Parameters** use `that takes … and does the following:`
+**Parameters** use `that takes … as <type>`:
 
 ```english
-Declare function greet that takes name and does the following:
+Declare function greet that takes name as text, and gives back nothing, and does the following:
     Print "Hello, " + name + "!".
 thats it.
 
@@ -352,7 +353,7 @@ Call greet with "Alice".
 **Multiple parameters** are separated with `and`:
 
 ```english
-Declare function add that takes a and b and does the following:
+Declare function add that takes a as number and b as number, and gives back a number, and does the following:
     Return a + b.
 thats it.
 
@@ -361,28 +362,34 @@ Set result to be the result of calling add with 5 and 3.
 Print the value of result.   # 8
 ```
 
-**Types on parameters and on the result** — write `as <type>` after a
-parameter, and `gives back a <type>` for the result:
+The signature is what makes a call checkable, so it is required rather than
+offered: calling a function with the wrong number of arguments, with an
+argument of the wrong type, or returning something other than what it promised
+is reported before the program runs, with the line and column of the mistake.
+A function that declares a result must return one on every path through its
+body; one that gives back nothing must not return a value, and its result
+cannot be used as a value:
 
 ```english
-Declare function add that takes a as number and b as number, and gives back a number, and does the following:
-    Return a + b.
-thats it.
+Call say_hello.                                   # this is how it is called
+Declare x to be the result of calling say_hello.  # there is no value here
 ```
 
-An annotated function is checked before the program runs: calling it with the
-wrong number of arguments, with an argument of the wrong type, or returning
-something other than the declared type is reported then, with the line and
-column of the call. A function that declares a result must return one on every
-path through its body.
+`Return.` on its own finishes such a function early:
 
-Annotations are optional, and an unannotated parameter accepts any type — but
-then nothing about the call can be checked, so prefer writing them.
+```english
+Declare function announce that takes label as text, and gives back nothing, and does the following:
+    If label is equal to "", then
+        Return.
+    thats it.
+    Print label.
+thats it.
+```
 
 **Recursive functions** work naturally:
 
 ```english
-Declare function factorial that takes n and does the following:
+Declare function factorial that takes n as number, and gives back a number, and does the following:
     If n is less than or equal to 1, then
         Return 1.
     thats it.
@@ -635,7 +642,7 @@ Add methods to a struct and call them with the possessive `'s` syntax:
 declare Person as a structure with the following fields:
     name is a string.
 
-    let greet be a function that does the following:
+    let greet be a function that gives back nothing, and does the following:
         Print "Hello, my name is", name.
     thats it.
 thats it.
@@ -747,7 +754,7 @@ Example library (`math_library.abc`):
 ```english
 Print "Library loaded.".       # runs on normal import; skipped on safe import
 
-Declare function square that takes x and does the following:
+Declare function square that takes x as number, and gives back a number, and does the following:
     Return x * x.
 thats it.
 
@@ -1129,7 +1136,7 @@ Quick translation reference:
 | `repeat the following 5 times:` | `for _ in range(5):` |
 | `For each item in list, do the following:` | `for item in list:` |
 | `Repeat forever:` | `while True:` |
-| `Declare function foo that takes a …` | `def foo(a):` |
+| `Declare function foo that takes a as number …` | `def foo(a):` |
 | `Return x.` | `return x` |
 | `Try doing the following: … on error: …` | `try: … except Exception: …` |
 | `Raise "msg" as NetworkError.` | `raise NetworkError("msg")` |
@@ -1181,7 +1188,7 @@ thats it.
 ### Fibonacci Sequence
 
 ```english
-Declare function fib that takes n and does the following:
+Declare function fib that takes n as number, and gives back a number, and does the following:
     If n is less than or equal to 1, then
         Return n.
     thats it.
@@ -1233,7 +1240,7 @@ declare Point as a structure with the following fields:
     y is a number.
 thats it.
 
-Declare function distance that takes p and does the following:
+Declare function distance that takes p as Point, and gives back a number, and does the following:
     Declare px to be the x of p.
     Declare py to be the y of p.
     Return sqrt(px * px + py * py).
@@ -1254,7 +1261,7 @@ Print the value of d.   # 5
 ```english
 Declare NetworkError as an error type.
 
-Declare function fetch that takes url and does the following:
+Declare function fetch that takes url as text, and gives back nothing, and does the following:
     If url is equal to "", then
         Raise "URL must not be empty" as NetworkError.
     thats it.

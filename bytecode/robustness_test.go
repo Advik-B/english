@@ -15,7 +15,7 @@ func sampleV1Bytecode(t *testing.T) []byte {
 Declare count to be 0.
 Declare items to be [1, 2, 3].
 
-Declare function twice that takes n and does the following:
+Declare function twice that takes n as number, and gives back a number, and does the following:
     Return n * 2.
 thats it.
 

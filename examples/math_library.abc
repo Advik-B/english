@@ -2,17 +2,17 @@
 # A collection of useful math functions
 
 # Function to calculate the square of a number
-Declare function square that takes x and does the following:
+Declare function square that takes x as number, and gives back a number, and does the following:
     Return x * x.
 thats it.
 
 # Function to calculate the cube of a number
-Declare function cube that takes x and does the following:
+Declare function cube that takes x as number, and gives back a number, and does the following:
     Return x * x * x.
 thats it.
 
 # Function to check if a number is even
-Declare function isEven that takes n and does the following:
+Declare function isEven that takes n as number, and gives back a boolean, and does the following:
     Declare rem to be the remainder of n divided by 2.
     If rem is equal to 0, then
         Return true.

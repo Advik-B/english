@@ -95,6 +95,11 @@ func Parse(s string) TypeKind {
 		return TypeArray
 	case "lookup table", "lookup", "table":
 		return TypeLookup
+	case "nothing":
+		// Writable only as a function's result: "gives back nothing" is how a
+		// function says it produces no value. A variable cannot be declared
+		// with it, since there would be nothing to put in it.
+		return TypeNull
 	default:
 		return TypeUnknown
 	}

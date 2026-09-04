@@ -20,7 +20,7 @@ Declare Point as a structure with the following fields:
     y is a number with 0 being the default.
 thats it.
 
-Declare function add that takes a and b and does the following:
+Declare function add that takes a as number and b as number, and gives back a number, and does the following:
     Return a + b.
 thats it.
 

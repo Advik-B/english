@@ -41,12 +41,17 @@ func (a *Analyzer) checkStatement(stmt ast.Statement) {
 		}
 
 	case *ast.CallStatement:
+		// A statement is where a function that gives back nothing is meant to
+		// be called, so its result is not wanted here.
+		prev := a.discardingResult
+		a.discardingResult = true
 		switch {
 		case s.MethodCall != nil:
 			a.checkExpr(s.MethodCall)
 		case s.FunctionCall != nil:
 			a.checkExpr(s.FunctionCall)
 		}
+		a.discardingResult = prev
 
 	case *ast.ReturnStatement:
 		a.checkReturn(s)
@@ -289,8 +294,10 @@ func (a *Analyzer) checkFunctionBody(fd *ast.FunctionDecl, fields *structDef) {
 	a.checkStatements(fd.Body)
 	a.popScope()
 
-	// A function that promises a result must produce one on every path.
-	if fd.ReturnType != nil && !alwaysReturns(fd.Body) {
+	// A function that promises a result must produce one on every path. One
+	// that gives back nothing promises no such thing, and has no reason to end
+	// in a Return at all.
+	if givesAValue(fd.ReturnType) && !alwaysReturns(fd.Body) {
 		a.errorWithHint(fd.Pos(),
 			"Every path through the function must end in a 'Return'.",
 			"'%s' promises to give back %s, but it can finish without returning a value",
@@ -306,14 +313,37 @@ func (a *Analyzer) checkReturn(s *ast.ReturnStatement) {
 		a.errorAt(s.Pos(), "'Return' is only allowed inside a function")
 		return
 	}
+
+	// A function that gives back nothing may still return, to finish early —
+	// but it cannot return a value, because its callers were promised none.
+	if !givesAValue(a.returnType) {
+		if s.Value != nil {
+			a.errorWithHint(s.Pos(),
+				"Write 'Return.' on its own to finish early, or declare what the function gives back.",
+				"this function gives back nothing, but this returns %s", describe(value))
+		}
+		return
+	}
+
 	declared := a.resolve(a.returnType)
 	if declared == nil {
-		return // unannotated function; nothing to check against
+		return // the annotation itself was rejected; nothing to check against
+	}
+	if s.Value == nil {
+		a.errorAt(s.Pos(), "this function gives back %s, but this returns no value",
+			describe(declared))
+		return
 	}
 	if !assignable(declared, value) {
 		a.errorAt(s.Pos(), "this function gives back %s, but this returns %s",
 			describe(declared), describe(value))
 	}
+}
+
+// givesAValue reports whether a declared result type is one a caller can use.
+// A function annotated "gives back nothing" produces none.
+func givesAValue(te *ast.TypeExpr) bool {
+	return te != nil && te.Kind != types.TypeNull
 }
 
 // alwaysReturns reports whether a block always ends by returning or raising.

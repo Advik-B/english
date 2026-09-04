@@ -62,6 +62,9 @@ type Analyzer struct {
 	// loopDepth counts enclosing loops so that break and continue outside a
 	// loop can be reported.
 	loopDepth int
+	// discardingResult says the call being checked is a statement of its own,
+	// which is the one place a function that gives back nothing may be called.
+	discardingResult bool
 
 	// seenImports guards against re-analysing a file, including cycles.
 	seenImports map[string]bool

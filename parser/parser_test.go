@@ -382,7 +382,7 @@ func TestParserAssignmentWithoutBe(t *testing.T) {
 }
 
 func TestParserFunctionDeclarationWithoutParams(t *testing.T) {
-	input := `Declare function greet that does the following:
+	input := `Declare function greet that gives back nothing, and does the following:
     Print "Hello".
 thats it.`
 
@@ -410,7 +410,7 @@ thats it.`
 }
 
 func TestParserFunctionDeclarationWithParams(t *testing.T) {
-	input := `Declare function add that takes a and b and does the following:
+	input := `Declare function add that takes a as number and b as number, and gives back a number, and does the following:
     Return a + b.
 thats it.`
 
@@ -438,7 +438,7 @@ thats it.`
 }
 
 func TestParserFunctionDeclarationSingleParam(t *testing.T) {
-	input := `Declare function double that takes x and does the following:
+	input := `Declare function double that takes x as number, and gives back a number, and does the following:
     Return x * 2.
 thats it.`
 
@@ -1294,7 +1294,7 @@ func TestTypeAnnotationRejectsNonTypes(t *testing.T) {
 // statements after an unclosed block were absorbed into it.
 func TestBlockEndIsMandatory(t *testing.T) {
 	for _, src := range []string{
-		"Declare function f that does the following:\n    Print 1.\nPrint 2.",
+		"Declare function f that gives back nothing, and does the following:\n    Print 1.\nPrint 2.",
 		"If true, then\n    Print 1.",
 		"Declare x to be 0.\nRepeat the following while x is less than 1:\n    Set x to be 1.",
 	} {
@@ -1311,7 +1311,7 @@ func TestComparisonsAreFirstClass(t *testing.T) {
 	for _, src := range []string{
 		`Declare x to be 1.
 Declare b to be x is greater than 0.`,
-		`Declare function f that takes n and does the following:
+		`Declare function f that takes n as number, and gives back a number, and does the following:
     Return n is equal to 1.
 thats it.`,
 		`Declare x to be 1.
@@ -1329,7 +1329,7 @@ Print x is equal to 1.`,
 // "and" must remain an argument separator, not become an operator, in call
 // argument lists and after an "ask" prompt.
 func TestAndStillSeparatesArguments(t *testing.T) {
-	prog, err := parse(`Declare function add that takes a and b and does the following:
+	prog, err := parse(`Declare function add that takes a as number and b as number, and gives back a number, and does the following:
     Return a + b.
 thats it.
 Set s to be the result of calling add with 5 and 7.`)
@@ -1432,20 +1432,12 @@ thats it.`,
 			returnType: "number",
 		},
 		{
-			name: "unannotated still parses",
-			src: `Declare function add that takes a and b and does the following:
-    Return a + b.
+			name: "gives back nothing, for a function with no result",
+			src: `Declare function announce that takes label as text, and gives back nothing, and does the following:
+    Print label.
 thats it.`,
-			paramTypes: []string{"", ""},
-			returnType: "",
-		},
-		{
-			name: "mixed annotation",
-			src: `Declare function f that takes a as number and b and does the following:
-    Return a.
-thats it.`,
-			paramTypes: []string{"number", ""},
-			returnType: "",
+			paramTypes: []string{"text"},
+			returnType: "nothing",
 		},
 	}
 
@@ -1475,6 +1467,72 @@ thats it.`,
 				t.Errorf("return type is %q, want %q", got, test.returnType)
 			}
 		})
+	}
+}
+
+// TestSignaturesAreRequired covers the annotations themselves, which used to
+// be optional.
+//
+// An optional signature is one that is usually absent, and an unannotated
+// function is one whose calls cannot be checked — which is the whole point of
+// writing it down. A function that produces no value says so rather than
+// staying silent, since silence is indistinguishable from having forgotten.
+func TestSignaturesAreRequired(t *testing.T) {
+	for _, c := range []struct{ name, src, want string }{
+		{
+			name: "a parameter with no type",
+			src: `Declare function add that takes a and b and does the following:
+    Return a + b.
+thats it.`,
+			want: "The parameter 'a' needs a type",
+		},
+		{
+			name: "one parameter annotated and one not",
+			src: `Declare function f that takes a as number and b and does the following:
+    Return a.
+thats it.`,
+			want: "The parameter 'b' needs a type",
+		},
+		{
+			name: "no result",
+			src: `Declare function f that takes a as number, and does the following:
+    Return a.
+thats it.`,
+			want: "must say what it gives back",
+		},
+		{
+			name: "a method with no result",
+			src: `Declare Point as a structure with the following fields:
+    x is a number with 0 being the default.
+
+    let show be a function that does the following:
+        Print x.
+    thats it.
+thats it.`,
+			want: "must say what it gives back",
+		},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			_, err := parse(c.src)
+			if err == nil {
+				t.Fatal("parsed without a signature")
+			}
+			if !strings.Contains(err.Error(), c.want) {
+				t.Errorf("message is %v, want it to mention %q", err, c.want)
+			}
+		})
+	}
+}
+
+// TestNothingIsNotAValueType covers the one type name that only a result may
+// carry: a variable declared as nothing could hold nothing at all.
+func TestNothingIsNotAValueType(t *testing.T) {
+	_, err := parse("Declare x as nothing to be 1.")
+	if err == nil {
+		t.Fatal("a variable was declared as nothing")
+	}
+	if !strings.Contains(err.Error(), "not a type a value can have") {
+		t.Errorf("unexpected message: %v", err)
 	}
 }
 

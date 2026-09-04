@@ -237,7 +237,7 @@ Print the value of total.`)
 
 func TestFunctionCall(t *testing.T) {
 	out := captureOutput(func() {
-		_, err := run(`Declare function add that takes a and b and does the following:
+		_, err := run(`Declare function add that takes a as number and b as number, and gives back a number, and does the following:
     Return a + b.
 thats it.
 Declare result to be 0.
@@ -254,7 +254,7 @@ Print the value of result.`)
 
 func TestRecursion(t *testing.T) {
 	out := captureOutput(func() {
-		_, err := run(`Declare function factorial that takes n and does the following:
+		_, err := run(`Declare function factorial that takes n as number, and gives back a number, and does the following:
     If n is less than or equal to 1, then
         Return 1.
     thats it.
@@ -462,7 +462,7 @@ Declare y to be x + 8.`
 }
 
 func TestEncodeDecodeWithFunctions(t *testing.T) {
-	src := `Declare function double that takes x and does the following:
+	src := `Declare function double that takes x as number, and gives back a number, and does the following:
     Return x * 2.
 thats it.
 Declare result to be 0.
@@ -608,7 +608,7 @@ func TestSafeImportRunsOnlyDeclarations(t *testing.T) {
 	if err := os.WriteFile(libPath, []byte(`
 Print "SHOULD NOT PRINT".
 Declare version to always be "1.0".
-Declare function greet and does the following:
+Declare function greet that gives back nothing, and does the following:
     Print "Hello from lib".
 thats it.
 Print "ALSO SHOULD NOT PRINT".
@@ -802,7 +802,7 @@ thats it.`)
 }
 
 func TestDecompileFunction(t *testing.T) {
-	py, err := decompileSource(`Declare function double that takes x and does the following:
+	py, err := decompileSource(`Declare function double that takes x as number, and gives back a number, and does the following:
     Return x * 2.
 thats it.
 Declare result to be 0.

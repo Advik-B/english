@@ -4,7 +4,7 @@
 Print "=== Factorial Calculator ===".
 
 # Define a recursive factorial function
-Declare function factorial that takes n and does the following:
+Declare function factorial that takes n as number, and gives back a number, and does the following:
     If n is less than or equal to 1, then
         Return 1.
     thats it.

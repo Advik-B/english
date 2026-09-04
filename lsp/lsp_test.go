@@ -177,7 +177,7 @@ Print x + y.`)
 	})
 
 	t.Run("Analyze_Function", func(t *testing.T) {
-		doc := NewDocument("test", "english", 1, `Declare function greet that takes name and does the following:
+		doc := NewDocument("test", "english", 1, `Declare function greet that takes name as text, and gives back nothing, and does the following:
     Print name.
 Thats it.`)
 
@@ -305,7 +305,7 @@ Print x.`)
 
 	t.Run("GetDocumentSymbols", func(t *testing.T) {
 		doc := NewDocument("test", "english", 1, `Declare x to be 5.
-Declare function add that takes a and b and does the following:
+Declare function add that takes a as number and b as number, and gives back a number, and does the following:
     Return a + b.
 Thats it.`)
 		result := analyzer.Analyze(doc)

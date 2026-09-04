@@ -56,7 +56,7 @@ Declare Point as a structure with the following fields:
     x is a number with 0 being the default.
     y is a number with 0 being the default.
 
-    let magnitude be a function that does the following:
+    let magnitude be a function that gives back a number, and does the following:
         Return x * x + y * y.
     thats it.
 thats it.
@@ -70,7 +70,7 @@ Declare scores to be a lookup table.
 Declare span to be [1 .. 5].
 Declare nothing_here to be nothing.
 
-Declare function add that takes a and b and does the following:
+Declare function add that takes a as number and b as number, and gives back a number, and does the following:
     Return a + b.
 thats it.
 
@@ -300,7 +300,7 @@ Declare n as NUMBER to be 1.`)
 // before: nothing could check an argument's type at a call site, or a return
 // against what the function claims to give back.
 func TestFunctionParametersArePositioned(t *testing.T) {
-	prog, err := parse(`Declare function add that takes a and b and does the following:
+	prog, err := parse(`Declare function add that takes a as number and b as number, and gives back a number, and does the following:
     Return a + b.
 thats it.`)
 	if err != nil {
@@ -319,16 +319,19 @@ thats it.`)
 		if !p.Pos().IsKnown() {
 			t.Errorf("parameter %d (%s) has no position", i, p.Name)
 		}
-		if p.Type != nil {
-			t.Errorf("parameter %d (%s) has an annotation %v, but none was written",
-				i, p.Name, p.Type)
+		if ast.TypeName(p.Type) != "number" {
+			t.Errorf("parameter %d (%s) is annotated %q, want number",
+				i, p.Name, ast.TypeName(p.Type))
+		}
+		if p.Type != nil && !p.Type.Pos().IsKnown() {
+			t.Errorf("parameter %d (%s) has an annotation with no position", i, p.Name)
 		}
 	}
 	if fd.Params[1].Pos().Col <= fd.Params[0].Pos().Col {
 		t.Error("parameter positions are not in source order")
 	}
-	if fd.ReturnType != nil {
-		t.Errorf("return type is %v, but none was written", fd.ReturnType)
+	if ast.TypeName(fd.ReturnType) != "number" {
+		t.Errorf("return type is %q, want number", ast.TypeName(fd.ReturnType))
 	}
 
 	// ParamNames keeps the runtime's binding path simple.

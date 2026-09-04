@@ -498,6 +498,15 @@ func (a *Analyzer) checkUserCall(fn *funcSig, args []ast.Expression, pos ast.Pos
 				fn.Name, describe(want), p.Name, describe(argTypes[i]))
 		}
 	}
+
+	// A function that gives back nothing has no value to use, so a call to one
+	// only makes sense as a statement of its own.
+	if !givesAValue(fn.ReturnType) && !a.discardingResult {
+		a.errorWithHint(pos,
+			fmt.Sprintf("Write 'Call %s' as a statement of its own.", fn.Name),
+			"'%s' gives back nothing, so there is no value here", fn.Name)
+		return nil
+	}
 	return a.resolve(fn.ReturnType)
 }
 

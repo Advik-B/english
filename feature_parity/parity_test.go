@@ -24,6 +24,7 @@ import (
 	vm "github.com/Advik-B/english/astvm"
 	"github.com/Advik-B/english/ivm"
 	"github.com/Advik-B/english/parser"
+	"github.com/Advik-B/english/runtime"
 	"github.com/Advik-B/english/sema"
 	"github.com/Advik-B/english/stdlib"
 )
@@ -1287,4 +1288,44 @@ Set p's name to be "Bob".
 Set p's age to be 31.
 Print the name of p.
 Print the age of p.`)
+}
+
+// TestParityConsecutiveQuestions covers reading input twice. There were three
+// separate stdin readers — one per engine, one in the standard library's
+// "ask" — and each was built fresh for every read. A buffered reader reads
+// ahead as far as input is available, not as far as it was asked, so the first
+// question consumed the answer to the second and then threw it away.
+func TestParityConsecutiveQuestions(t *testing.T) {
+	src := `Ask "First: " and store in a.
+Ask "Second: " and store in b.
+Declare third to be ask("Third: ").
+Print a, b, third.`
+
+	for _, run := range []struct {
+		name string
+		fn   func(string) (string, error)
+	}{{"astvm", runAST}, {"ivm", runIVM}} {
+		runtime.SetInput(strings.NewReader("one\ntwo\nthree\n"))
+		out, err := run.fn(src)
+		if err != nil {
+			t.Errorf("%s: %v", run.name, err)
+			continue
+		}
+		if !strings.Contains(out, "one two three") {
+			t.Errorf("%s answered the questions as %q, want one, two and three", run.name, strings.TrimSpace(out))
+		}
+	}
+}
+
+// TestParityFinallyErrorIsReported covers an error raised in a "but finally"
+// block, which the tree-walking engine discarded along with the result of
+// every statement in the block: the cleanup appeared to succeed and the
+// program carried on.
+func TestParityFinallyErrorIsReported(t *testing.T) {
+	assertParityError(t, `Declare CleanupError as an error type.
+Try doing the following:
+    Print "trying".
+but finally:
+    Raise "cleanup failed" as CleanupError.
+thats it.`)
 }

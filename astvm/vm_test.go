@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"io"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -2902,5 +2903,50 @@ thats it.`)
 	})
 	if !strings.Contains(out, "caught") {
 		t.Errorf("a runtime failure should still be catchable, got %q", out)
+	}
+}
+
+// TestSelectiveImportSeesTheStandardLibrary covers an imported file's
+// environment, which was completely empty: a file that used pi, or called
+// sqrt, could not be imported at all, while the same import worked under the
+// instruction VM.
+func TestSelectiveImportSeesTheStandardLibrary(t *testing.T) {
+	dir := t.TempDir()
+	lib := filepath.Join(dir, "lib.abc")
+	if err := os.WriteFile(lib, []byte(
+		"Declare function area that takes r as number and gives back a number, and does the following:\n"+
+			"    Return pi * r * r.\n"+
+			"thats it.\n"), 0644); err != nil {
+		t.Fatalf("cannot write the library: %v", err)
+	}
+
+	out := captureOutput(func() {
+		evaluate(`Import area from "` + filepath.ToSlash(lib) + `".
+Print the result of calling area with 2.`)
+	})
+	if !strings.Contains(out, "12.56") {
+		t.Errorf("the imported function produced %q; it should have used pi", strings.TrimSpace(out))
+	}
+}
+
+// TestSelectiveImportDoesNotSeeTheImporter guards the change above: the
+// imported file gets the language, not the importing file's names.
+func TestSelectiveImportDoesNotSeeTheImporter(t *testing.T) {
+	dir := t.TempDir()
+	lib := filepath.Join(dir, "lib.abc")
+	if err := os.WriteFile(lib, []byte(
+		"Declare function leak that gives back a number, and does the following:\n"+
+			"    Return secret.\n"+
+			"thats it.\n"), 0644); err != nil {
+		t.Fatalf("cannot write the library: %v", err)
+	}
+
+	out := captureOutput(func() {
+		evaluate(`Declare secret to be 42.
+Import leak from "` + filepath.ToSlash(lib) + `".
+Print the result of calling leak.`)
+	})
+	if strings.Contains(out, "42") {
+		t.Errorf("the imported file could see the importing file's variables:\n%s", out)
 	}
 }

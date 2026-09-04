@@ -22,7 +22,7 @@ var predefinedConstants = map[string]interface{}{
 // registered with exactly the arity its signature declares.
 func Register(env *vm.Environment) {
 	for name, value := range predefinedConstants {
-		env.Define(name, value, true)
+		_ = env.DefinePredefined(name, value)
 	}
 	for _, s := range signatureList {
 		env.DefineFunction(s.Name, &vm.FunctionValue{

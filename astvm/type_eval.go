@@ -36,10 +36,7 @@ func (ev *Evaluator) evalTryStatement(node *ast.TryStatement) (Value, error) {
 	// condition, so a handler must not swallow it: catching one would let a
 	// program carry on with a type violation it never fixed.
 	if te, ok := tryError.(*TypeError); ok {
-		if len(node.FinallyBody) > 0 {
-			ev.executeFinallyBlock(node.FinallyBody)
-		}
-		return nil, te
+		return ev.runFinally(node, nil, te)
 	}
 
 	if tryError != nil && len(node.ErrorBody) > 0 {
@@ -65,10 +62,7 @@ func (ev *Evaluator) evalTryStatement(node *ast.TryStatement) (Value, error) {
 		// A match is exact type equality or any inherited parent type.
 		// If it doesn't match, skip the handler and propagate.
 		if node.ErrorType != "" && !ev.env.IsSubtypeOf(errorVal.ErrorType, node.ErrorType) {
-			if len(node.FinallyBody) > 0 {
-				ev.executeFinallyBlock(node.FinallyBody)
-			}
-			return nil, tryError
+			return ev.runFinally(node, nil, tryError)
 		}
 
 		// Bind error to variable in error handler scope
@@ -85,10 +79,7 @@ func (ev *Evaluator) evalTryStatement(node *ast.TryStatement) (Value, error) {
 			if err != nil {
 				// Error in error handler - restore environment and execute finally
 				ev.env = oldEnv
-				if len(node.FinallyBody) > 0 {
-					ev.executeFinallyBlock(node.FinallyBody)
-				}
-				return nil, err
+				return ev.runFinally(node, nil, err)
 			}
 			if _, ok := val.(*ReturnValue); ok {
 				tryResult = val
@@ -108,24 +99,47 @@ func (ev *Evaluator) evalTryStatement(node *ast.TryStatement) (Value, error) {
 		tryError = nil
 	}
 
-	// Execute finally block
-	if len(node.FinallyBody) > 0 {
-		ev.executeFinallyBlock(node.FinallyBody)
-	}
-
-	// If there was an unhandled error, return it
-	if tryError != nil {
-		return nil, tryError
-	}
-
-	return tryResult, nil
+	// The finally block runs whichever way the try finished, and can change
+	// the outcome: an error there replaces the one being carried, and a
+	// Return there is the value the try produces.
+	return ev.runFinally(node, tryResult, tryError)
 }
 
-// executeFinallyBlock executes the finally block (ignoring errors)
-func (ev *Evaluator) executeFinallyBlock(finallyBody []ast.Statement) {
+// executeFinallyBlock runs the "but finally" block, and reports what happened.
+//
+// It used to discard both results of every statement, so an error raised in a
+// finally block vanished — the block appeared to succeed and the program
+// carried on — and a Return or Break inside one was ignored. Now an error
+// there replaces whatever the try was going to produce, since the last thing
+// to go wrong is the thing to report, and a Return is honoured.
+func (ev *Evaluator) executeFinallyBlock(finallyBody []ast.Statement) (Value, error) {
 	for _, stmt := range finallyBody {
-		ev.Eval(stmt) // Ignore errors in finally block
+		val, err := ev.Eval(stmt)
+		if err != nil {
+			return nil, err
+		}
+		switch val.(type) {
+		case *ReturnValue, *BreakValue, *ContinueValue:
+			return val, nil
+		}
 	}
+	return nil, nil
+}
+
+// runFinally runs the finally block for a try that is already finishing, and
+// folds its outcome into the result the try was about to produce.
+func (ev *Evaluator) runFinally(node *ast.TryStatement, result Value, pending error) (Value, error) {
+	if len(node.FinallyBody) == 0 {
+		return result, pending
+	}
+	val, err := ev.executeFinallyBlock(node.FinallyBody)
+	if err != nil {
+		return nil, err
+	}
+	if val != nil {
+		return val, nil
+	}
+	return result, pending
 }
 
 // evalRaiseStatement evaluates a raise statement

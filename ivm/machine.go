@@ -1,9 +1,7 @@
 package ivm
 
 import (
-	"bufio"
 	"fmt"
-	"os"
 	"strings"
 
 	"github.com/Advik-B/english/runtime"
@@ -608,12 +606,7 @@ func (m *Machine) step(instr Instruction, chunk *Chunk) (result interface{}, sto
 			p := m.pop()
 			fmt.Print(ivmToString(p))
 		}
-		scanner := bufio.NewScanner(os.Stdin)
-		if scanner.Scan() {
-			m.push(scanner.Text())
-		} else {
-			m.push("")
-		}
+		m.push(runtime.ReadLine())
 
 	case OP_LOCATION:
 		name := chunk.Names[operand]

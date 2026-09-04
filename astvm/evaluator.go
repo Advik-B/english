@@ -1,7 +1,6 @@
 package vm
 
 import (
-	"bufio"
 	"fmt"
 	"io"
 	"os"
@@ -262,8 +261,10 @@ func (ev *Evaluator) evalSafeImport(program *ast.Program, is *ast.ImportStatemen
 
 // evalSelectiveImport imports only specific items from the file
 func (ev *Evaluator) evalSelectiveImport(program *ast.Program, is *ast.ImportStatement) (Value, error) {
-	// Create a temporary environment for the imported file
-	tempEnv := NewEnvironment()
+	// The imported file gets the language, and nothing of this file. It used
+	// to get a completely empty environment, so an imported file that used pi
+	// or called sqrt failed to import at all.
+	tempEnv := ev.env.NewImportScope()
 	tempEval := NewEvaluator(tempEnv, ev.builtinFn)
 
 	// Execute in temporary environment
@@ -390,18 +391,9 @@ func (ev *Evaluator) evalAskExpression(ae *ast.AskExpression) (Value, error) {
 		fmt.Fprint(ev.out, ToString(prompt))
 	}
 
-	// Read a line from stdin
-	reader := bufio.NewReader(os.Stdin)
-	line, err := reader.ReadString('\n')
-	if err != nil {
-		// EOF is acceptable (e.g. input from pipe)
-		if len(line) == 0 {
-			return "", nil
-		}
-	}
-	// Trim trailing newline characters
-	line = strings.TrimRight(line, "\r\n")
-	return line, nil
+	// One reader for the process, so a second question still has whatever the
+	// first read ahead. See runtime.ReadLine.
+	return runtime.ReadLine(), nil
 }
 
 func (ev *Evaluator) evalToggle(ts *ast.ToggleStatement) (Value, error) {

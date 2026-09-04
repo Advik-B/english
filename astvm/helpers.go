@@ -45,15 +45,21 @@ func levenshteinDistance(s1, s2 string) int {
 func findSimilarName(name string, candidates []string) string {
 	name = strings.ToLower(name)
 
-	// Simple similarity check (case-insensitive match or one-char difference)
+	// The closest candidate, and the first alphabetically among equally close
+	// ones. This used to return the first candidate within distance 2, and its
+	// callers collect candidates by iterating a Go map, whose order is
+	// deliberately randomised — so the suggestion for a typo could differ
+	// between two runs of the same program.
+	best, bestDistance := "", 0
 	for _, candidate := range candidates {
-		if strings.ToLower(candidate) == name {
-			return candidate
+		distance := levenshteinDistance(strings.ToLower(candidate), name)
+		if distance > 2 {
+			continue
 		}
-		if levenshteinDistance(strings.ToLower(candidate), name) <= 2 {
-			return candidate
+		if best == "" || distance < bestDistance ||
+			(distance == bestDistance && candidate < best) {
+			best, bestDistance = candidate, distance
 		}
 	}
-
-	return ""
+	return best
 }

@@ -15,7 +15,10 @@ type Environment struct {
 	functions        map[string]*FunctionValue
 	structs          map[string]*StructDefinition
 	customErrorTypes map[string]string // error type name → parent type name ("" for root types)
-	parent           *Environment
+	// predefined names the language itself provides, so that an imported file
+	// can be given those and only those. See NewImportScope.
+	predefined map[string]bool
+	parent     *Environment
 }
 
 // NewEnvironment creates a new root environment.
@@ -172,6 +175,44 @@ func (e *Environment) GetFunction(name string) (*FunctionValue, bool) {
 // DefineFunction registers a function in the current scope.
 func (e *Environment) DefineFunction(name string, fn *FunctionValue) {
 	e.functions[name] = fn
+}
+
+// DefinePredefined declares a constant the language itself provides, such as
+// pi. Recording which names those are is what lets an imported file be given
+// the same ones without also being given the importing file's names.
+func (e *Environment) DefinePredefined(name string, value Value) error {
+	if e.predefined == nil {
+		e.predefined = make(map[string]bool)
+	}
+	e.predefined[name] = true
+	return e.Define(name, value, true)
+}
+
+// NewImportScope returns a fresh environment holding what the language
+// provides — its constants and its built-in functions — and nothing else.
+//
+// An imported file used to run in a completely empty environment, so any file
+// that used pi, or called sqrt, failed to import. The other engine gave the
+// imported file the standard library and this one did not, so whether an
+// import worked depended on which engine was running it.
+func (e *Environment) NewImportScope() *Environment {
+	root := e
+	for root.parent != nil {
+		root = root.parent
+	}
+
+	scope := NewEnvironment()
+	for name := range root.predefined {
+		_ = scope.DefinePredefined(name, root.variables[name])
+	}
+	// A built-in is a function with no body: the evaluator dispatches those to
+	// the standard library rather than walking a body.
+	for name, fn := range root.functions {
+		if fn.Body == nil {
+			scope.DefineFunction(name, fn)
+		}
+	}
+	return scope
 }
 
 // GetAllVariables returns a shallow copy of variables in this scope only.

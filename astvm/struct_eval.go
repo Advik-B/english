@@ -237,12 +237,18 @@ func (ev *Evaluator) evalMethodCall(node *ast.MethodCall) (Value, error) {
 
 	// Bind struct fields to method environment
 	for fieldName, fieldValue := range structInst.Fields {
-		methodEnv.Define(fieldName, fieldValue, false)
+		_ = methodEnv.Define(fieldName, fieldValue, false)
 	}
 
-	// Bind parameters
+	// Bind parameters, which shadow a field of the same name for the length of
+	// the method. Define refuses to redeclare a name and its error was
+	// discarded here, so a parameter that shared a field's name was never
+	// bound at all: the method silently used the field's value in place of the
+	// argument it was called with.
+	shadowed := make(map[string]bool, len(method.Parameters))
 	for i, param := range method.Parameters {
-		methodEnv.Define(param, args[i], false)
+		methodEnv.Rebind(param, args[i])
+		shadowed[param] = true
 	}
 
 	// Save current environment and switch to method environment
@@ -273,9 +279,20 @@ func (ev *Evaluator) evalMethodCall(node *ast.MethodCall) (Value, error) {
 	ev.env = oldEnv
 	ev.callStack = ev.callStack[:len(ev.callStack)-1]
 
-	// Update struct fields from method environment (in case method modified them)
+	// Update struct fields from the method's own scope, in case the method
+	// changed one.
+	//
+	// Its *own* scope: this used to look the name up the whole chain, so a
+	// field whose name also existed in an enclosing scope was overwritten with
+	// that outer variable's value even though the method never touched it. And
+	// a name the method took as a parameter is that parameter, not the field,
+	// so writing it back would assign the argument to the field.
+	locals := methodEnv.GetAllVariables()
 	for fieldName := range structInst.Fields {
-		if val, ok := methodEnv.Get(fieldName); ok {
+		if shadowed[fieldName] {
+			continue
+		}
+		if val, ok := locals[fieldName]; ok {
 			structInst.Fields[fieldName] = val
 		}
 	}

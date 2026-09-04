@@ -177,6 +177,16 @@ func (e *Environment) DefineFunction(name string, fn *FunctionValue) {
 	e.functions[name] = fn
 }
 
+// Rebind declares a name in this scope, replacing any binding it already has
+// here. It is for a binding that must win over one made a moment earlier in
+// the same scope — a method's parameter over the struct field it shadows —
+// where Define would refuse and leave the earlier value in place.
+func (e *Environment) Rebind(name string, value Value) {
+	e.variables[name] = value
+	e.constants[name] = false
+	e.variableTypes[name] = inferTypeKind(value)
+}
+
 // DefinePredefined declares a constant the language itself provides, such as
 // pi. Recording which names those are is what lets an imported file be given
 // the same ones without also being given the importing file's names.

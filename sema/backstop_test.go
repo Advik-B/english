@@ -1,6 +1,7 @@
 package sema_test
 
 import (
+	"bytes"
 	"strings"
 	"testing"
 
@@ -34,6 +35,26 @@ func runUnchecked(t *testing.T, src string) (astErr, ivmErr error) {
 	}
 	_, ivmErr = ivm.Execute(chunk, stdlib.Eval, stdlib.PredefinedValues())
 	return astErr, ivmErr
+}
+
+// runUncheckedAST runs a program in the tree-walking engine without analysis
+// and returns what it printed, for a case whose point is the output.
+func runUncheckedAST(t *testing.T, src string) (string, error) {
+	t.Helper()
+	lexer := parser.NewLexer(src)
+	p := parser.NewParser(lexer.TokenizeAll())
+	prog, err := p.Parse()
+	if err != nil {
+		t.Fatalf("failed to parse: %v", err)
+	}
+
+	var out bytes.Buffer
+	env := vm.NewEnvironment()
+	stdlib.Register(env)
+	evaluator := vm.NewEvaluator(env, stdlib.Eval)
+	evaluator.SetOutput(&out)
+	_, err = evaluator.Eval(prog)
+	return out.String(), err
 }
 
 // TestBackstopTypeLock covers the guarantee the language leads with. Only
@@ -128,5 +149,35 @@ thats it.`)
 	}
 	if ivmErr != nil {
 		t.Errorf("ivm rejected a valid instantiation: %v", ivmErr)
+	}
+}
+
+// TestBackstopMethodParameterShadowsAField covers a method whose parameter has
+// the same name as a field of its own structure. The checker rejects that, so
+// this is what the engines do with bytecode that was not checked: the
+// parameter binding used to be silently dropped — the call that made it
+// refused to redeclare the name and its error was discarded — so the method
+// ran with the field's value in place of the argument it was called with.
+func TestBackstopMethodParameterShadowsAField(t *testing.T) {
+	src := `Declare Person as a structure with the following fields:
+    name is a text with "?" being the default.
+
+    let rename be a function that takes name and does the following:
+        Print name.
+    thats it.
+thats it.
+
+Declare p to be a new instance of Person with the following fields:
+    name is "Alice".
+thats it.
+call rename from p with "Bob".`
+
+	out, err := runUncheckedAST(t, src)
+	if err != nil {
+		t.Fatalf("astvm: %v", err)
+	}
+	if !strings.Contains(out, "Bob") {
+		t.Errorf("the method printed %q; it should see the argument it was called with",
+			strings.TrimSpace(out))
 	}
 }

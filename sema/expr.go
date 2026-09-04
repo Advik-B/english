@@ -101,7 +101,10 @@ func (a *Analyzer) inferExpr(expr ast.Expression) *types.TypeInfo {
 		return types.InfoFor(types.TypeBool)
 
 	case *ast.ErrorTypeCheckExpression:
-		a.checkExpr(e.Value)
+		// Only an error can be of an error type. "x is NetworkError" parses
+		// for any x at all, and for anything but an error the answer is always
+		// false — which is not a comparison anyone writes on purpose.
+		a.requireKind(e.Value, types.TypeError, "an error type check")
 		a.useErrorType(e.TypeName, e.Pos())
 		return types.InfoFor(types.TypeBool)
 

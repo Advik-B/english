@@ -289,6 +289,19 @@ thats it.`,
 			contains: "cannot cast to list",
 			good:     "Print 1 cast to text.",
 		},
+		{
+			// "x is NetworkError" parses for any x at all, and for anything
+			// but an error the answer is always false — not a comparison
+			// anyone writes on purpose.
+			name: "an error type check on something that is not an error",
+			bad: "Declare NetworkError as an error type.\nDeclare x to be 5.\n" +
+				"If x is NetworkError, then\n    Print \"yes\".\nthats it.",
+			line: 3, col: 4,
+			contains: "an error type check needs error",
+			good: "Declare NetworkError as an error type.\nTry doing the following:\n" +
+				"    Raise \"down\" as NetworkError.\non error:\n" +
+				"    If error is NetworkError, then\n        Print \"yes\".\n    thats it.\nthats it.",
+		},
 	}
 
 	for _, c := range cases {

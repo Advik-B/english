@@ -10,6 +10,7 @@ import (
 	"github.com/Advik-B/english/ast"
 	"github.com/Advik-B/english/bytecode"
 	"github.com/Advik-B/english/parser"
+	"github.com/Advik-B/english/runtime"
 	"github.com/Advik-B/english/types"
 )
 
@@ -327,42 +328,12 @@ func (ev *Evaluator) evalIndexAssignment(ia *ast.IndexAssignment) (Value, error)
 	if err != nil {
 		return nil, err
 	}
-	index, err := ToNumber(indexVal)
-	if err != nil {
-		return nil, ev.runtimeError("index must be a number")
-	}
-	idx := int(index)
-
 	value, err := ev.Eval(ia.Value)
 	if err != nil {
 		return nil, err
 	}
-
-	switch items := list.(type) {
-	case []interface{}:
-		if idx < 0 || idx >= len(items) {
-			return nil, ev.runtimeError(fmt.Sprintf("index %d out of range for list of length %d", idx, len(items)))
-		}
-		items[idx] = value
-	case *ArrayValue:
-		if idx < 0 || idx >= len(items.Elements) {
-			return nil, ev.runtimeError(fmt.Sprintf("index %d out of range for array of length %d", idx, len(items.Elements)))
-		}
-		// Type-check the new value against the array's element type
-		if value != nil && items.ElementType != types.TypeUnknown {
-			vk := types.Canonical(inferTypeKind(value))
-			if vk != types.Canonical(items.ElementType) {
-				return nil, ev.runtimeError(fmt.Sprintf(
-					"TypeError: cannot assign %s to array of %s",
-					typeKindName(inferTypeKind(value)), typeKindName(items.ElementType),
-				))
-			}
-		}
-		items.Elements[idx] = value
-	case *RangeValue:
-		return nil, ev.runtimeError("cannot modify a range")
-	default:
-		return nil, ev.runtimeError(fmt.Sprintf("cannot index into %s", typeKindName(inferTypeKind(list))))
+	if err := runtime.SetIndex(list, indexVal, value); err != nil {
+		return nil, ev.runtimeError(err.Error())
 	}
 	return nil, nil
 }
@@ -377,32 +348,11 @@ func (ev *Evaluator) evalIndexExpression(ie *ast.IndexExpression) (Value, error)
 	if err != nil {
 		return nil, err
 	}
-	index, err := ToNumber(indexVal)
+	value, err := runtime.Index(list, indexVal)
 	if err != nil {
-		return nil, ev.runtimeError("index must be a number")
+		return nil, ev.runtimeError(err.Error())
 	}
-	idx := int(index)
-
-	switch items := list.(type) {
-	case []interface{}:
-		if idx < 0 || idx >= len(items) {
-			return nil, ev.runtimeError(fmt.Sprintf("index %d out of range for list of length %d", idx, len(items)))
-		}
-		return items[idx], nil
-	case *ArrayValue:
-		if idx < 0 || idx >= len(items.Elements) {
-			return nil, ev.runtimeError(fmt.Sprintf("index %d out of range for array of length %d", idx, len(items.Elements)))
-		}
-		return items.Elements[idx], nil
-	case *RangeValue:
-		val, ok := items.Get(idx)
-		if !ok {
-			return nil, ev.runtimeError(fmt.Sprintf("index %d out of range for range of length %d", idx, items.Length()))
-		}
-		return val, nil
-	default:
-		return nil, ev.runtimeError(fmt.Sprintf("TypeError: cannot index into %s", typeKindName(inferTypeKind(list))))
-	}
+	return value, nil
 }
 
 func (ev *Evaluator) evalLengthExpression(le *ast.LengthExpression) (Value, error) {
@@ -411,20 +361,11 @@ func (ev *Evaluator) evalLengthExpression(le *ast.LengthExpression) (Value, erro
 		return nil, err
 	}
 
-	switch v := list.(type) {
-	case []interface{}:
-		return float64(len(v)), nil
-	case *ArrayValue:
-		return float64(len(v.Elements)), nil
-	case *LookupTableValue:
-		return float64(len(v.Entries)), nil
-	case *RangeValue:
-		return float64(v.Length()), nil
-	case string:
-		return float64(len(v)), nil
-	default:
-		return nil, ev.runtimeError(fmt.Sprintf("cannot get length of %s", typeKindName(inferTypeKind(list))))
+	length, err := runtime.Length(list)
+	if err != nil {
+		return nil, ev.runtimeError(err.Error())
 	}
+	return length, nil
 }
 
 func (ev *Evaluator) evalLocationExpression(loc *ast.LocationExpression) (Value, error) {
@@ -434,7 +375,9 @@ func (ev *Evaluator) evalLocationExpression(loc *ast.LocationExpression) (Value,
 		return nil, ev.runtimeError(fmt.Sprintf("undefined variable '%s'", loc.Name))
 	}
 	// Return a unique identifier based on the variable name and environment
-	return fmt.Sprintf("0x%p:%s", ev.env, loc.Name), nil
+	// %p already writes the 0x prefix; the literal one made every location
+	// print as "0x0x…".
+	return fmt.Sprintf("%p:%s", ev.env, loc.Name), nil
 }
 
 func (ev *Evaluator) evalAskExpression(ae *ast.AskExpression) (Value, error) {
@@ -1139,36 +1082,23 @@ func (ev *Evaluator) findSimilarFunction(name string) string {
 
 func (ev *Evaluator) evalArrayLiteral(al *ast.ArrayLiteral) (Value, error) {
 	elements := make([]interface{}, 0, len(al.Elements))
-
-	// Determine element type: from explicit hint or infer from first element
-	elemType := types.TypeUnknown
-	if al.ElemType != nil {
-		elemType = al.ElemType.Kind
-	}
-
 	for _, expr := range al.Elements {
 		val, err := ev.Eval(expr)
 		if err != nil {
 			return nil, err
 		}
-		valType := types.Canonical(inferTypeKind(val))
-
-		// Infer element type from first element if not explicitly given
-		if elemType == types.TypeUnknown && val != nil {
-			elemType = valType
-		}
-
-		// Enforce homogeneity
-		if elemType != types.TypeUnknown && val != nil && types.Canonical(valType) != types.Canonical(elemType) {
-			return nil, fmt.Errorf(
-				"TypeError: array element has wrong type: expected %s, got %s",
-				typeKindName(elemType), typeKindName(valType),
-			)
-		}
 		elements = append(elements, val)
 	}
 
-	return &ArrayValue{ElementType: elemType, Elements: elements}, nil
+	declared := types.TypeUnknown
+	if al.ElemType != nil {
+		declared = al.ElemType.Kind
+	}
+	array, err := runtime.NewArray(declared, elements)
+	if err != nil {
+		return nil, ev.runtimeError(err.Error())
+	}
+	return array, nil
 }
 
 // ─── Lookup table ─────────────────────────────────────────────────────────────
@@ -1178,26 +1108,15 @@ func (ev *Evaluator) evalLookupKeyAccess(la *ast.LookupKeyAccess) (Value, error)
 	if err != nil {
 		return nil, err
 	}
-	lt, ok := tableVal.(*LookupTableValue)
-	if !ok {
-		return nil, fmt.Errorf("TypeError: cannot index %s with a key; expected lookup table",
-			typeKindName(inferTypeKind(tableVal)))
-	}
-
 	keyVal, err := ev.Eval(la.Key)
 	if err != nil {
 		return nil, err
 	}
-	serialKey, err := types.SerializeKey(keyVal)
+	value, err := runtime.LookupGet(tableVal, keyVal)
 	if err != nil {
-		return nil, err
+		return nil, ev.runtimeError(err.Error())
 	}
-
-	val, exists := lt.Entries[serialKey]
-	if !exists {
-		return nil, fmt.Errorf("KeyError: key %s not found in lookup table", ToString(keyVal))
-	}
-	return val, nil
+	return value, nil
 }
 
 func (ev *Evaluator) evalLookupKeyAssignment(la *ast.LookupKeyAssignment) (Value, error) {
@@ -1205,27 +1124,17 @@ func (ev *Evaluator) evalLookupKeyAssignment(la *ast.LookupKeyAssignment) (Value
 	if !ok {
 		return nil, fmt.Errorf("undefined variable '%s'", la.TableName)
 	}
-	lt, ok := tableVal.(*LookupTableValue)
-	if !ok {
-		return nil, fmt.Errorf("TypeError: '%s' is not a lookup table (got %s)",
-			la.TableName, typeKindName(inferTypeKind(tableVal)))
-	}
-
 	keyVal, err := ev.Eval(la.Key)
 	if err != nil {
 		return nil, err
 	}
-	serialKey, err := types.SerializeKey(keyVal)
-	if err != nil {
-		return nil, err
-	}
-
 	value, err := ev.Eval(la.Value)
 	if err != nil {
 		return nil, err
 	}
-
-	lt.Set(serialKey, value)
+	if err := runtime.LookupSet(tableVal, keyVal, value); err != nil {
+		return nil, ev.runtimeError(err.Error())
+	}
 	return nil, nil
 }
 
@@ -1234,23 +1143,15 @@ func (ev *Evaluator) evalHasExpression(he *ast.HasExpression) (Value, error) {
 	if err != nil {
 		return nil, err
 	}
-	lt, ok := tableVal.(*LookupTableValue)
-	if !ok {
-		return nil, fmt.Errorf("TypeError: 'has' requires a lookup table, got %s",
-			typeKindName(inferTypeKind(tableVal)))
-	}
-
 	keyVal, err := ev.Eval(he.Key)
 	if err != nil {
 		return nil, err
 	}
-	serialKey, err := types.SerializeKey(keyVal)
+	present, err := runtime.LookupHas(tableVal, keyVal)
 	if err != nil {
-		return nil, err
+		return nil, ev.runtimeError(err.Error())
 	}
-
-	_, exists := lt.Entries[serialKey]
-	return exists, nil
+	return present, nil
 }
 
 // evalNilCheckExpression evaluates "x is something" / "x has a value" (IsSomethingCheck=true)

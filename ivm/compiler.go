@@ -39,6 +39,17 @@ func (c *Compiler) nextHidden() string {
 
 func (c *Compiler) compileStatements(stmts []ast.Statement) error {
 	for _, stmt := range stmts {
+		// Record the source line before each statement, so that a failure
+		// anywhere inside it can be attributed.
+		//
+		// This was emitted only for assignments, so the line the machine
+		// reported was whichever assignment ran most recently — or nothing at
+		// all in a program with none. Every runtime error from a declaration,
+		// a Print, a condition, an index or a call was reported against the
+		// wrong line or no line.
+		if line := stmt.Pos().Line; line > 0 {
+			c.chunk.Emit(OP_SET_LINE, uint32(line))
+		}
 		if err := c.compileStatement(stmt); err != nil {
 			return err
 		}
@@ -85,9 +96,6 @@ func (c *Compiler) compileStatement(stmt ast.Statement) error {
 		}
 
 	case *ast.Assignment:
-		if s.Line > 0 {
-			c.chunk.Emit(OP_SET_LINE, uint32(s.Line))
-		}
 		if err := c.compileExpression(s.Value); err != nil {
 			return err
 		}

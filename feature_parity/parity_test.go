@@ -107,23 +107,49 @@ func captureStdout(fn func()) string {
 	return buf.String()
 }
 
-// assertParity is the core assertion: both VMs must produce the same stdout.
-// If expectErr is true, both VMs must also return a non-nil error.
+// assertParity is the core assertion: both engines must produce the same
+// output and, when a program fails, the same message.
+//
+// It used to compare only stdout and whether an error occurred, never the
+// message. That is why the two engines were free to drift: they disagreed on
+// the length of a non-ASCII string, on whether text could be indexed, on
+// whether a missing lookup key was an error, on what a type is called, and on
+// the wording of nearly every diagnostic, and the suite passed throughout.
 func assertParity(t *testing.T, src string) {
 	t.Helper()
 	astOut, astErr := runAST(src)
 	ivmOut, ivmErr := runIVM(src)
 
-	// Error agreement
 	if (astErr != nil) != (ivmErr != nil) {
-		t.Errorf("error parity mismatch:\n  astvm err: %v\n  ivm   err: %v", astErr, ivmErr)
+		t.Errorf("one engine failed and the other did not, for:\n%s\n  astvm: %v\n  ivm:   %v",
+			src, astErr, ivmErr)
+		return
 	}
-
-	// Stdout agreement
+	if astErr != nil && errorText(astErr) != errorText(ivmErr) {
+		t.Errorf("the engines report the same failure differently, for:\n%s\n  astvm: %s\n  ivm:   %s",
+			src, errorText(astErr), errorText(ivmErr))
+	}
 	if astOut != ivmOut {
 		t.Errorf("output parity mismatch for:\n%s\n\nastvm output:\n%q\n\nivm output:\n%q",
 			src, astOut, ivmOut)
 	}
+}
+
+// errorText reduces an error to the part both engines should agree on.
+//
+// Each wraps a failure in its own envelope — one adds a call stack, the other
+// a frame label — so the comparison is of the message itself.
+func errorText(err error) string {
+	if err == nil {
+		return ""
+	}
+	msg := err.Error()
+	if i := strings.Index(msg, "\nCall Stack"); i >= 0 {
+		msg = msg[:i]
+	}
+	msg = strings.TrimPrefix(msg, "Runtime Error: ")
+	msg = strings.TrimSpace(msg)
+	return msg
 }
 
 // assertParityError is like assertParity but also asserts that BOTH VMs fail.
@@ -974,5 +1000,146 @@ Print s's replace.`,
 				t.Errorf("arity not described for:\n%s\n  got: %v", src, astErr)
 			}
 		}
+	}
+}
+
+// ─── Divergences the shared runtime settled ──────────────────────────────────
+//
+// Each of these behaved differently in the two engines. The suite compared
+// only stdout and whether an error occurred, so none of them failed a test.
+
+// TestParityTextLength covers string length, which one engine measured in
+// bytes and the other in characters.
+func TestParityTextLength(t *testing.T) {
+	assertOutputContains(t, `Print the length of "héllo".`, "5")
+	assertParity(t, `Print the length of "日本語".`)
+}
+
+// TestParityTextIndexing covers indexing text, which one engine allowed and
+// the other rejected.
+func TestParityTextIndexing(t *testing.T) {
+	assertOutputContains(t, `Print the item at position 1 in "abc".`, "b")
+	assertParity(t, `Print the item at position 0 in "héllo".`)
+}
+
+// TestParityMissingLookupKey covers a key that is not present, which one
+// engine reported and the other silently answered with nothing.
+func TestParityMissingLookupKey(t *testing.T) {
+	src := `Declare scores to be a lookup table.
+Set scores at "a" to be 1.
+Print scores at "b".`
+	astOut, astErr := runAST(src)
+	ivmOut, ivmErr := runIVM(src)
+
+	if astErr == nil || ivmErr == nil {
+		t.Fatalf("both engines should report a missing key\n  astvm: %v\n  ivm:   %v", astErr, ivmErr)
+	}
+	if errorText(astErr) != errorText(ivmErr) {
+		t.Errorf("different messages:\n  astvm: %s\n  ivm:   %s", errorText(astErr), errorText(ivmErr))
+	}
+	if astOut != ivmOut {
+		t.Errorf("different output: %q vs %q", astOut, ivmOut)
+	}
+}
+
+// TestParityCopyOfArray covers "a copy of", which one engine deep-copied for
+// arrays and the other returned unchanged, so the copy aliased its source.
+func TestParityCopyOfArray(t *testing.T) {
+	assertOutputContains(t, `Declare original to be an array of number [1, 2, 3].
+Declare duplicate to be a copy of original.
+Set the item at position 0 in duplicate to be 99.
+Print original.`, "[1, 2, 3]")
+}
+
+// TestParityCollectionEquality covers Equals, which handled numbers, text and
+// booleans and answered false for everything else: two identical lists were
+// unequal, as were two identical arrays and tables.
+func TestParityCollectionEquality(t *testing.T) {
+	for _, src := range []string{
+		`Print [1, 2, 3] is equal to [1, 2, 3].`,
+		`Print [1, 2] is equal to [1, 3].`,
+		`Declare a to be an array of number [1, 2].
+Declare b to be an array of number [1, 2].
+Print a is equal to b.`,
+		`Declare x to be a lookup table.
+Declare y to be a lookup table.
+Set x at "k" to be 1.
+Set y at "k" to be 1.
+Print x is equal to y.`,
+	} {
+		assertParity(t, src)
+	}
+	assertOutputContains(t, `Print [1, 2, 3] is equal to [1, 2, 3].`, "true")
+	assertOutputContains(t, `Print [1, 2] is equal to [1, 3].`, "false")
+}
+
+// TestParityStructEquality covers two struct values with equal fields.
+func TestParityStructEquality(t *testing.T) {
+	assertOutputContains(t, `Declare Point as a structure with the following fields:
+    x is a number with 0 being the default.
+thats it.
+
+Declare a to be a new instance of Point with the following fields:
+    x is 1.
+thats it.
+Declare b to be a new instance of Point with the following fields:
+    x is 1.
+thats it.
+Print a is equal to b.`, "true")
+}
+
+// TestParityCastThenArithmetic covers the asymmetry where Add accepted only
+// float64 while every other arithmetic operation accepted all numeric
+// representations, so after a cast `a - b` worked and `a + b` did not.
+func TestParityCastThenArithmetic(t *testing.T) {
+	src := `Declare a to be 7 cast to integer.
+Declare b to be 2 cast to integer.
+Print a + b.
+Print a - b.
+Print a is equal to b.
+Print a is equal to (7 cast to integer).`
+	assertParity(t, src)
+	assertOutputContains(t, src, "9")
+}
+
+// TestParityTypeNamesInMessages covers diagnostics naming a type, which one
+// engine reported as "f64" and the other as "number".
+func TestParityTypeNamesInMessages(t *testing.T) {
+	for _, src := range []string{
+		`Declare flag to be true.
+Print flag - 1.`,
+		`Print the length of 5.`,
+		`Declare n to be 1.
+Print n's uppercase.`,
+	} {
+		assertParity(t, src)
+	}
+}
+
+// TestParityLookupTableIteration covers "for each" over a lookup table, which
+// yields its keys.
+func TestParityLookupTableIteration(t *testing.T) {
+	assertParity(t, `Declare scores to be a lookup table.
+Set scores at "a" to be 1.
+Set scores at "b" to be 2.
+For each key in scores, do the following:
+    Print key.
+thats it.`)
+}
+
+// TestParityNumberFormatting covers rendering, including the values whose
+// conversion to an integer is undefined: one engine guarded against them and
+// the other relied on undefined behaviour to produce the right answer.
+func TestParityNumberFormatting(t *testing.T) {
+	for _, src := range []string{
+		`Print 5.`,
+		`Print 10 / 2.`,
+		`Print 1 / 3.`,
+		`Print infinity.`,
+		`Print 0 - infinity.`,
+		`Print -0.5.`,
+		`Print 1000000.`,
+	} {
+		assertParity(t, src)
 	}
 }

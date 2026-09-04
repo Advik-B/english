@@ -128,6 +128,9 @@ func Execute(chunk *Chunk, builtin BuiltinFunc, predefined map[string]interface{
 		ip:    0,
 		stack: []interface{}{},
 		env:   root,
+		// The outermost frame is named so that a call stack from this engine
+		// reads the same as one from the other.
+		name: topLevelFrame,
 	}
 	return m.execute(root)
 }

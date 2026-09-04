@@ -3,6 +3,7 @@ package ivm
 import (
 	"fmt"
 
+	"github.com/Advik-B/english/runtime"
 	"github.com/Advik-B/english/types"
 )
 
@@ -192,3 +193,28 @@ func (s *StructInstance) EnglishType() *types.TypeInfo {
 func (r *ReferenceValue) EnglishType() *types.TypeInfo {
 	return &types.TypeInfo{Kind: types.TypeRef, Name: "reference"}
 }
+
+// EnglishTypeName implements runtime.Fielded, so that the shared runtime can
+// compare and print a struct without knowing this engine's definition record.
+func (s *StructInstance) EnglishTypeName() string {
+	if s.DefName == "" {
+		return "struct"
+	}
+	return s.DefName
+}
+
+// EnglishFields implements runtime.Fielded.
+func (s *StructInstance) EnglishFields() map[string]interface{} { return s.Fields }
+
+// EnglishCopy implements runtime.Copier: only this engine can build a new
+// instance around its own definition record.
+func (s *StructInstance) EnglishCopy() interface{} {
+	fields := make(map[string]interface{}, len(s.Fields))
+	for name, value := range s.Fields {
+		fields[name] = runtime.DeepCopy(value)
+	}
+	return &StructInstance{DefName: s.DefName, DefRef: s.DefRef, Fields: fields}
+}
+
+// EnglishString implements runtime.Displayer for references.
+func (r *ReferenceValue) EnglishString() string { return "<ref: " + r.Name + ">" }

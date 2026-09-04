@@ -87,3 +87,7 @@ func (c *Chunk) PatchJump(pos int, target uint32) {
 func (f *FuncChunk) EnglishType() *types.TypeInfo {
 	return &types.TypeInfo{Kind: types.TypeFunction, Name: "function"}
 }
+
+// EnglishString implements runtime.Displayer so that the shared renderer can
+// print a function value without knowing what a body is made of.
+func (f *FuncChunk) EnglishString() string { return "<function " + f.Name + ">" }

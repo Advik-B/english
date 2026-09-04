@@ -6,6 +6,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/Advik-B/english/runtime"
 	"github.com/Advik-B/english/types"
 )
 
@@ -119,6 +120,26 @@ func (e *machineError) Error() string {
 		return fmt.Sprintf("Runtime Error at line %d: %s", e.line, e.message)
 	}
 	return fmt.Sprintf("Runtime Error: %s", e.message)
+}
+
+// The three methods below make this a stacktraces.RuntimeError, so that a
+// failure from this engine is rendered as a runtime error with its location
+// and call frame, the way the other engine's already was. Without them the
+// renderer fell back to printing "Error: " and the bare message, so the same
+// failure looked different depending on which engine produced it.
+
+// RuntimeMessage implements stacktraces.RuntimeError.
+func (e *machineError) RuntimeMessage() string { return e.message }
+
+// RuntimeLine implements stacktraces.RuntimeError.
+func (e *machineError) RuntimeLine() int { return e.line }
+
+// RuntimeCallStack implements stacktraces.RuntimeError.
+func (e *machineError) RuntimeCallStack() []string {
+	if e.frame == "" {
+		return []string{}
+	}
+	return []string{e.frame}
 }
 
 // execute runs the machine until the outermost frame returns.
@@ -552,7 +573,11 @@ func (m *Machine) step(instr Instruction, chunk *Chunk) (result interface{}, sto
 			var castErr error
 			res, castErr = types.Cast(val, target)
 			if castErr != nil {
-				return nil, false, &types.ErrorValue{Message: castErr.Error(), ErrorType: "TypeError"}
+				return nil, false, &types.ErrorValue{
+					Message:   castErr.Error(),
+					ErrorType: "TypeError",
+					CallStack: m.callStack(),
+				}
 			}
 		}
 		m.push(res)
@@ -820,6 +845,15 @@ func (m *Machine) step(instr Instruction, chunk *Chunk) (result interface{}, sto
 	case OP_SET_LINE:
 		m.cur.line = int(operand)
 
+	case OP_ITER_GET:
+		index := m.pop()
+		collection := m.pop()
+		item, err := runtime.Element(collection, index)
+		if err != nil {
+			return nil, false, m.runtimeErr(err.Error())
+		}
+		m.push(item)
+
 	case OP_POP:
 		if len(m.cur.stack) > 0 {
 			m.pop()
@@ -998,4 +1032,25 @@ func (m *Machine) executeDefaultChunk(chunk *Chunk) (interface{}, error) {
 		env:   env,
 	}
 	return subMachine.execute(env)
+}
+
+// topLevelFrame is the name of the outermost call frame, matching what the
+// other engine calls it so that a call stack reads identically.
+const topLevelFrame = "<main>"
+
+// callStack returns the frame names, innermost first, for an error value.
+//
+// A raised or failed-cast error from this engine carried no stack, so the same
+// failure printed with one under the other engine and without one here.
+func (m *Machine) callStack() []string {
+	stack := make([]string, 0, len(m.frames)+1)
+	if m.cur != nil && m.cur.name != "" {
+		stack = append(stack, m.cur.name)
+	}
+	for i := len(m.frames) - 1; i >= 0; i-- {
+		if m.frames[i] != nil && m.frames[i].name != "" {
+			stack = append(stack, m.frames[i].name)
+		}
+	}
+	return stack
 }

@@ -114,3 +114,10 @@ func (f *FunctionValue) EnglishType() *types.TypeInfo {
 func (r *ReferenceValue) EnglishType() *types.TypeInfo {
 	return &types.TypeInfo{Kind: types.TypeRef, Name: "reference"}
 }
+
+// EnglishString implements runtime.Displayer so that the shared renderer can
+// print a function value without knowing what a body is made of.
+func (f *FunctionValue) EnglishString() string { return "<function " + f.Name + ">" }
+
+// EnglishString implements runtime.Displayer for references.
+func (r *ReferenceValue) EnglishString() string { return "<ref: " + r.Name + ">" }

@@ -111,6 +111,19 @@ const (
 
 	// ── Stack management ──────────────────────────────────────────────────
 	OP_POP // discard top of stack
+
+	// ── Iteration ─────────────────────────────────────────────────────────
+	// OP_ITER_GET reads the nth item of a collection for "for each".
+	//
+	// It is separate from OP_INDEX_GET because iterating a lookup table
+	// yields its keys, which is not what indexing one would mean. The loop
+	// used to emit OP_INDEX_GET and rely on indexing a table returning the
+	// key at that position, which made an undocumented and engine-specific
+	// indexing rule load-bearing for the loop.
+	//
+	// New opcodes are appended so that the numeric value of every existing
+	// one stays put.
+	OP_ITER_GET
 )
 
 // BinOp encodes a binary operator.
@@ -251,6 +264,8 @@ func OpName(op Opcode) string {
 		return "SET_LINE"
 	case OP_POP:
 		return "POP"
+	case OP_ITER_GET:
+		return "ITER_GET"
 	default:
 		return "UNKNOWN"
 	}

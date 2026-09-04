@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/Advik-B/english/ast"
+	"github.com/Advik-B/english/runtime"
 	"github.com/Advik-B/english/types"
 )
 
@@ -266,37 +267,5 @@ func (ev *Evaluator) evalCopyExpression(node *ast.CopyExpression) (Value, error)
 	}
 
 	// Perform deep copy based on type
-	return deepCopy(val), nil
-}
-
-// deepCopy performs a deep copy of a value
-func deepCopy(val Value) Value {
-	switch v := val.(type) {
-	case []interface{}:
-		// Deep copy list
-		copied := make([]interface{}, len(v))
-		for i, elem := range v {
-			copied[i] = deepCopy(elem)
-		}
-		return copied
-	case *StructInstance:
-		// Deep copy struct instance
-		copiedFields := make(map[string]Value)
-		for fieldName, fieldVal := range v.Fields {
-			copiedFields[fieldName] = deepCopy(fieldVal)
-		}
-		return &StructInstance{
-			Definition: v.Definition,
-			Fields:     copiedFields,
-		}
-	case *types.TypedValue:
-		// Deep copy typed value
-		return &types.TypedValue{
-			Value:    deepCopy(v.Value),
-			TypeInfo: v.TypeInfo,
-		}
-	default:
-		// For primitive types, just return the value (they're immutable or copied by value)
-		return val
-	}
+	return runtime.DeepCopy(val), nil
 }

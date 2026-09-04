@@ -45,6 +45,7 @@ const (
 	hintSetCallResult = "For example: 'Set result to be the result of calling square of x.'"
 	hintSetListName   = "For example: 'Set the item at position 1 in myList to be 99.'"
 	hintSetTableFull  = "The full form is: 'Set tableName at key to be value.'"
+	hintSetField      = "For example: 'Set person's name to be \"Alice\".'"
 
 	// Call statements.
 	hintCallName = "For example: 'Call greet.' or 'Call add with 3 and 5.'"
@@ -118,6 +119,7 @@ const (
 	msgSetVarName           = "I expected a variable name after 'Set'."
 	msgSetCallFuncName      = "I expected the name of a function to call here."
 	msgSetListName          = "I expected the name of the list here."
+	msgSetFieldName         = "I expected the name of a field after the apostrophe-s."
 	msgCallName             = "I expected a function or method name after 'Call'."
 	msgForEachVar           = "I expected a loop variable name here."
 	msgPrintOrWrite         = "I expected 'Print' or 'Write' here."

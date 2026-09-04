@@ -1268,3 +1268,23 @@ Declare ys to be an array of number [1, 2, 3].
 Print xs.
 Print ys.`)
 }
+
+// TestParityFieldAssignment covers writing to a struct field, which had no
+// syntax until now: the node was implemented by both engines and the parser
+// never built one, so nothing exercised either implementation.
+func TestParityFieldAssignment(t *testing.T) {
+	assertParity(t, `Declare Person as a structure with the following fields:
+    name is a text with "?" being the default.
+    age is a number with 0 being the default.
+thats it.
+
+Declare p to be a new instance of Person with the following fields:
+    name is "Alice".
+    age is 30.
+thats it.
+
+Set p's name to be "Bob".
+Set p's age to be 31.
+Print the name of p.
+Print the age of p.`)
+}

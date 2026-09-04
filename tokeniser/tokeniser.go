@@ -163,19 +163,21 @@ func (l *Lexer) readNumber() string {
 	return l.input[start:l.position]
 }
 
+// readIdentifier reads a name.
+//
+// The possessive "'s" is not part of it. This used to swallow the apostrophe-s
+// into the identifier, so "person's" was one token whose value ended in "'s",
+// while a possessive after anything else — a string, a number, a closing
+// bracket — was emitted as a separate POSSESSIVE token. Two spellings of one
+// construct meant two parsers for it, which had drifted: "Print x's length."
+// worked and "Call x's length." did not. It also made the IDENTIFIER case in
+// isPossessiveContext unreachable, since an identifier never reached the
+// apostrophe.
 func (l *Lexer) readIdentifier() string {
 	start := l.position
 	for unicode.IsLetter(rune(l.ch)) || unicode.IsDigit(rune(l.ch)) || l.ch == '_' {
 		l.readChar()
 	}
-
-	// Check for possessive form: identifier's
-	// If we see an apostrophe followed by 's', include it in the identifier
-	if l.ch == '\'' && l.peekChar() == 's' {
-		l.readChar() // consume apostrophe
-		l.readChar() // consume 's'
-	}
-
 	return l.input[start:l.position]
 }
 

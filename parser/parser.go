@@ -771,6 +771,43 @@ func (p *Parser) parseAssignment() (ast.Statement, error) {
 	}
 	p.nextToken()
 
+	// "Set PERSON's name to be VALUE." — write a struct field.
+	//
+	// ast.FieldAssignment was implemented by both engines, the transpiler and
+	// the disassembler, and the parser never built one, so there was no way to
+	// change a field from source at all: a structure could be created and read
+	// but not modified.
+	if p.curToken.Type == token.POSSESSIVE {
+		p.nextToken() // consume 's
+		if p.curToken.Type != token.IDENTIFIER && !token.IsKeyword(p.curToken.Type) {
+			return nil, p.syntaxErr(msgSetFieldName, hintSetField)
+		}
+		fieldName := p.curToken.Value
+		p.nextToken()
+
+		if err := p.expectToken(token.TO); err != nil {
+			return nil, err
+		}
+		p.nextToken()
+		p.skipOptional(token.BE)
+
+		value, err := p.parseExpression()
+		if err != nil {
+			return nil, err
+		}
+		if err := p.expectToken(token.PERIOD); err != nil {
+			return nil, err
+		}
+		p.nextToken()
+
+		return &ast.FieldAssignment{
+			ObjectName: nameToken.Value,
+			Field:      fieldName,
+			Value:      value,
+			Base:       setPos,
+		}, nil
+	}
+
 	// "Set TABLE at KEY to be VALUE." — lookup table shorthand write
 	if p.curToken.Type == token.AT {
 		p.nextToken() // consume AT
@@ -901,7 +938,7 @@ func (p *Parser) parseCall() (ast.Statement, error) {
 	// First identifier could be:
 	// 1. Function name: "call greet with args."
 	// 2. Method name: "call talk from p2." or "call talk on p2."
-	// 3. Object name with possessive: "call p2's talk." (p2's is a single token)
+	// 3. Object name with possessive: "call p2's talk."
 
 	firstIdent := p.curToken.Value
 	if p.curToken.Type != token.IDENTIFIER {
@@ -912,26 +949,20 @@ func (p *Parser) parseCall() (ast.Statement, error) {
 	}
 	p.nextToken()
 
-	// Check for possessive syntax: "call p2's talk."
-	// The identifier will end with 's (e.g., "p2's")
-	if len(firstIdent) > 2 && firstIdent[len(firstIdent)-2:] == "'s" {
-		// This is possessive: extract object name (remove 's)
-		objectName := firstIdent[:len(firstIdent)-2]
-
-		if p.curToken.Type != token.IDENTIFIER {
-			return nil, p.syntaxErr(
-				fmt.Sprintf(msgFmtCallPossessive, objectName),
-				hintCallName,
-			)
-		}
-		methodName := p.curToken.Value
-		p.nextToken()
-
-		// Parse optional arguments
-		var args []ast.Expression
-		if p.curToken.Type == token.WITH {
-			p.nextToken()
-			args = p.parseCallArguments()
+	// Possessive syntax: "call p2's talk."
+	//
+	// This used to test whether the identifier's text ended in "'s", because
+	// the lexer folded the possessive into the name here while emitting a
+	// POSSESSIVE token everywhere else. The two spellings had drifted: this
+	// path required a plain name for the method where the expression path
+	// accepted a keyword too, so "Print x's length." worked and
+	// "Call x's length." did not.
+	if p.curToken.Type == token.POSSESSIVE {
+		p.nextToken() // consume 's
+		methodCall, err := p.parseMethodAfterPossessive(
+			&ast.Identifier{Base: callPos, Name: firstIdent})
+		if err != nil {
+			return nil, err
 		}
 
 		if err := p.expectToken(token.PERIOD); err != nil {
@@ -939,15 +970,7 @@ func (p *Parser) parseCall() (ast.Statement, error) {
 		}
 		p.nextToken()
 
-		// Return as method call
-		return &ast.CallStatement{
-			MethodCall: &ast.MethodCall{
-				Object:     &ast.Identifier{Base: callPos, Name: objectName},
-				MethodName: methodName,
-				Arguments:  args,
-			},
-			Base: callPos,
-		}, nil
+		return &ast.CallStatement{MethodCall: methodCall, Base: callPos}, nil
 	}
 
 	// Check for "from" or "on" (method call syntax)
@@ -1777,27 +1800,35 @@ func (p *Parser) parseCastExpr(start ast.Base) (ast.Expression, error) {
 	}
 
 	// Postfix possessive: expr's method
-	// Handles string literals and other non-identifier expressions:
-	//   "hello"'s title   →   MethodCall{Object: "hello", MethodName: "title"}
+	//   x's length       →   MethodCall{Object: x,       MethodName: "length"}
+	//   "hello"'s title  →   MethodCall{Object: "hello", MethodName: "title"}
 	if p.curToken.Type == token.POSSESSIVE {
 		p.nextToken() // consume 's
-		if !isPossessiveMethodNameToken(p.curToken.Type) {
-			return nil, p.syntaxErr(
-				msgPossessive,
-				hintPossessive,
-			)
-		}
-		methodName := p.curToken.Value
-		p.nextToken()
-		var args []ast.Expression
-		if p.curToken.Type == token.WITH {
-			p.nextToken()
-			args = p.parseCallArguments()
-		}
-		return &ast.MethodCall{Object: expr, MethodName: methodName, Arguments: args}, nil
+		return p.parseMethodAfterPossessive(expr)
 	}
 
 	return expr, nil
+}
+
+// parseMethodAfterPossessive reads the method name and arguments that follow a
+// consumed "'s", for any object expression.
+//
+// This is the one place the construct is parsed. There used to be three, one
+// per way the possessive could reach the parser, and they disagreed about what
+// may follow the apostrophe and whether arguments are allowed.
+func (p *Parser) parseMethodAfterPossessive(object ast.Expression) (*ast.MethodCall, error) {
+	if !isPossessiveMethodNameToken(p.curToken.Type) {
+		return nil, p.syntaxErr(msgPossessive, hintPossessive)
+	}
+	methodName := p.curToken.Value
+	p.nextToken()
+
+	var args []ast.Expression
+	if p.curToken.Type == token.WITH {
+		p.nextToken()
+		args = p.parseCallArguments()
+	}
+	return &ast.MethodCall{Object: object, MethodName: methodName, Arguments: args}, nil
 }
 
 // canNameAType reports whether a token may begin a type annotation.
@@ -1955,9 +1986,6 @@ func (p *Parser) parsePrimary() (ast.Expression, error) {
 }
 
 func (p *Parser) parsePrimaryExpr() (ast.Expression, error) {
-	// Position for nodes synthesised from a token consumed further below.
-	nodeStart := at(p.curToken)
-
 	switch p.curToken.Type {
 	case token.NUMBER:
 		value, _ := strconv.ParseFloat(p.curToken.Value, 64)
@@ -2129,27 +2157,10 @@ func (p *Parser) parsePrimaryExpr() (ast.Expression, error) {
 
 		p.nextToken()
 
-		// Possessive expression: "x's method" → MethodCall{Object: x, MethodName: method}
-		// e.g. "her_love_txt's casefold" → casefold applied to her_love_txt
-		if len(name) > 2 && name[len(name)-2:] == "'s" {
-			objectName := name[:len(name)-2]
-			if isPossessiveMethodNameToken(p.curToken.Type) {
-				methodName := p.curToken.Value
-				p.nextToken()
-				var args []ast.Expression
-				if p.curToken.Type == token.WITH {
-					p.nextToken()
-					args = p.parseCallArguments()
-				}
-				return &ast.MethodCall{
-					Object:     &ast.Identifier{Base: nodeStart, Name: objectName},
-					MethodName: methodName,
-					Arguments:  args,
-				}, nil
-			}
-			// No method name after possessive — treat as plain identifier
-			name = objectName
-		}
+		// A possessive after a name — "x's length" — is handled by the postfix
+		// layer, which sees the POSSESSIVE token after this returns the plain
+		// identifier. This used to test the identifier's own text for a "'s"
+		// suffix, because the lexer folded the possessive into the name.
 
 		// Check if it's a function call
 		if p.curToken.Type == token.LPAREN {

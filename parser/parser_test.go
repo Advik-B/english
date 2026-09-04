@@ -1514,3 +1514,75 @@ thats it.`)
 		t.Errorf("method return type is %q, want \"number\"", ast.TypeName(m.ReturnType))
 	}
 }
+
+// TestFieldAssignmentSyntax covers writing to a struct field, which had no
+// syntax at all: ast.FieldAssignment was implemented by both engines, the
+// transpiler and the disassembler, and the parser never built one, so a
+// structure could be created and read but never changed.
+func TestFieldAssignmentSyntax(t *testing.T) {
+	prog, err := parse(`Set person's name to be "Alice".`)
+	if err != nil {
+		t.Fatalf("Set person's name to be …: %v", err)
+	}
+	if len(prog.Statements) != 1 {
+		t.Fatalf("parsed %d statements, want 1", len(prog.Statements))
+	}
+	assign, ok := prog.Statements[0].(*ast.FieldAssignment)
+	if !ok {
+		t.Fatalf("parsed a %T, want a *ast.FieldAssignment", prog.Statements[0])
+	}
+	if assign.ObjectName != "person" {
+		t.Errorf("object is %q, want person", assign.ObjectName)
+	}
+	if assign.Field != "name" {
+		t.Errorf("field is %q, want name", assign.Field)
+	}
+	if _, ok := assign.Value.(*ast.StringLiteral); !ok {
+		t.Errorf("value is a %T, want a string literal", assign.Value)
+	}
+
+	// "to" without "be" is accepted for a field, as it is for a variable.
+	if _, err := parse(`Set person's age to 31.`); err != nil {
+		t.Errorf("Set person's age to 31: %v", err)
+	}
+
+	// A field name that is also a keyword still works.
+	if _, err := parse(`Set person's type to be "human".`); err != nil {
+		t.Errorf("a keyword field name was rejected: %v", err)
+	}
+}
+
+// TestPossessiveIsOneConstruct covers the possessive, which the lexer spelled
+// two ways: folded into the identifier after a name, and a separate token
+// after anything else. Two spellings meant two parsers, and they had drifted —
+// "Print x's length." worked while "Call x's length." did not, because the
+// call path required a plain name where the expression path accepted a
+// keyword too.
+func TestPossessiveIsOneConstruct(t *testing.T) {
+	// The lexer emits the name and the possessive separately, always.
+	tokens := NewLexer(`person's name`).TokenizeAll()
+	want := []token.Type{token.IDENTIFIER, token.POSSESSIVE, token.IDENTIFIER, token.EOF}
+	if len(tokens) != len(want) {
+		t.Fatalf("lexed %d tokens, want %d: %v", len(tokens), len(want), tokens)
+	}
+	for i, w := range want {
+		if tokens[i].Type != w {
+			t.Fatalf("token %d is %v, want %v", i, tokens[i].Type, w)
+		}
+	}
+	if tokens[0].Value != "person" {
+		t.Errorf("the name lexed as %q; the possessive is not part of it", tokens[0].Value)
+	}
+
+	// Both statements reach the same construct, keyword method name included.
+	for _, src := range []string{
+		`Print x's length.`,
+		`Call x's length.`,
+		`Print x's title.`,
+		`Call x's talk with "hi".`,
+	} {
+		if _, err := parse(src); err != nil {
+			t.Errorf("%s: %v", src, err)
+		}
+	}
+}

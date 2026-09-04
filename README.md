@@ -620,6 +620,15 @@ Print the name of alice.     # Alice
 Print the age of alice.      # 30
 ```
 
+Change a field with the possessive `'s`:
+
+```english
+Set alice's age to be 31.
+Print the age of alice.      # 31
+
+Set alice's age to be "old". # field 'age' of Person is number, but this is text
+```
+
 Add methods to a struct and call them with the possessive `'s` syntax:
 
 ```english

@@ -62,9 +62,9 @@ becomes __tmp0 = f3(0); __tmp1 = f2(__tmp0); x = f1(__tmp1)).  Use
 				os.Exit(1)
 			}
 
-			// Try ivm v2 format first; if recognised, extract the embedded
-			// source and show the AST-level view from it (inspect = AST view).
-			if len(data) >= 5 && data[4] == ivm.InstructionFormatVersion {
+			// The instruction format carries the original source; extract it
+			// and show the AST-level view from that (inspect = AST view).
+			if ivm.IsInstructionFormat(data) {
 				_, embeddedSrc, decodeErr := ivm.DecodeFileAll(data)
 				if decodeErr != nil {
 					fmt.Fprintf(os.Stderr, "Error decoding bytecode: %v\n", decodeErr)

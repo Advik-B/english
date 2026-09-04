@@ -13,6 +13,19 @@ var MagicBytes = []byte{0x10, 0x1E, 0x4E, 0x47}
 // InstructionFormatVersion is the bytecode format version for instruction-based .101 files.
 const InstructionFormatVersion uint8 = 4
 
+// IsInstructionFormat reports whether a .101 file holds an instruction chunk
+// rather than the older serialised AST.
+//
+// Both formats share the same magic bytes and are told apart by the version
+// byte alone. Four places asked that question with their own copy of the test,
+// and each had to know that the version lives at offset 4 and that a file
+// shorter than five bytes has no version at all — so the fact that the two
+// formats overlap was spread across the tree instead of being stated once.
+func IsInstructionFormat(data []byte) bool {
+	return len(data) >= 5 && bytes.Equal(data[:4], MagicBytes) &&
+		data[4] == InstructionFormatVersion
+}
+
 // EncodeFile serialises chunk with magic header + version byte.
 func EncodeFile(chunk *Chunk) ([]byte, error) {
 	return EncodeFileWithSource(chunk, "")

@@ -111,7 +111,7 @@ func init() {
 // disassemble. Without it there is nothing for an AST disassembler to show,
 // and "english inspect-ivm" is the tool for the opcode listing.
 func decodeAnyBytecode(data []byte, filename string) (*ast.Program, error) {
-	if len(data) >= 5 && data[4] == ivm.InstructionFormatVersion {
+	if ivm.IsInstructionFormat(data) {
 		_, embeddedSrc, err := ivm.DecodeFileAll(data)
 		if err != nil {
 			return nil, err

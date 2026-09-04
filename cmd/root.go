@@ -596,9 +596,7 @@ func transpileBytecode(filename string, inline bool) (string, error) {
 		return "", fmt.Errorf("cannot read %s: %w", filename, err)
 	}
 
-	// Two formats share the same magic bytes and are told apart by the version
-	// byte: the instruction format this engine writes, and the older AST one.
-	if len(data) >= 5 && data[4] == ivm.InstructionFormatVersion {
+	if ivm.IsInstructionFormat(data) {
 		chunk, embeddedSrc, err := ivm.DecodeFileAll(data)
 		if err != nil {
 			return "", fmt.Errorf("bytecode error in %s: %w", filename, err)
@@ -681,8 +679,7 @@ func RunBytecode(filename string) {
 		os.Exit(1)
 	}
 
-	// Told apart by the version byte; see the note in transpileWithOptions.
-	if len(data) >= 5 && data[4] == ivm.InstructionFormatVersion {
+	if ivm.IsInstructionFormat(data) {
 		chunk, decodeErr := ivm.DecodeFile(data)
 		if decodeErr != nil {
 			fmt.Fprintf(os.Stderr, "Bytecode error: %v\n", decodeErr)

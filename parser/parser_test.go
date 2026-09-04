@@ -1701,3 +1701,24 @@ func TestTruncatedInputIsNotRecoveredFrom(t *testing.T) {
 		t.Errorf("reported %d errors for truncated input, want 1", got)
 	}
 }
+
+// TestImportItemListNeedsEveryName covers the import list, which broke out of
+// its loop when a separator was not followed by a name: "Import a, from
+// "lib.abc"." silently imported only "a" and said nothing about the stray
+// comma.
+func TestImportItemListNeedsEveryName(t *testing.T) {
+	if _, err := parse(`Import a, from "lib.abc".`); err == nil {
+		t.Error(`Import a, from "lib.abc". was accepted`)
+	}
+	for _, src := range []string{
+		`Import a from "lib.abc".`,
+		`Import a and b from "lib.abc".`,
+		`Import a, b and c from "lib.abc".`,
+		`Import everything from "lib.abc".`,
+		`Import "lib.abc".`,
+	} {
+		if _, err := parse(src); err != nil {
+			t.Errorf("%s: %v", src, err)
+		}
+	}
+}

@@ -531,9 +531,14 @@ func (p *Parser) parseImport() (ast.Statement, error) {
 				break
 			}
 
-			// Expect another identifier
+			// A separator promises another name. This used to break out of
+			// the loop instead, so "Import a, from "lib.abc"." silently
+			// imported only "a" and the stray comma went unmentioned.
 			if p.curToken.Type != token.IDENTIFIER {
-				break
+				return nil, p.syntaxErr(
+					fmt.Sprintf(msgFmtImportItem, tokenFriendlyValue(p.curToken.Type, p.curToken.Value)),
+					hintImportPath,
+				)
 			}
 		}
 	}

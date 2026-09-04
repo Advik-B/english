@@ -222,10 +222,36 @@ func RenderWithColor(err error, color bool) string {
 	if err == nil {
 		return ""
 	}
+	err = renderable(err)
 	if !color {
 		return renderPlain(err)
 	}
 	return renderColored(err)
+}
+
+// renderable digs out the error this knows how to lay out.
+//
+// The renderers dispatch on what an error *is*, so an error that merely wraps
+// one of them — a parse that collected several syntax errors, say — would fall
+// through to the plain "Error: …" form and lose its header, its position and
+// its hint. Unwrapping finds the one inside.
+func renderable(err error) error {
+	for err != nil {
+		switch err.(type) {
+		case RuntimeError, SyntaxError, CompileError:
+			return err
+		}
+		unwrapped, ok := err.(interface{ Unwrap() error })
+		if !ok {
+			return err
+		}
+		next := unwrapped.Unwrap()
+		if next == nil {
+			return err
+		}
+		err = next
+	}
+	return err
 }
 
 // Print writes the formatted error to stderr.

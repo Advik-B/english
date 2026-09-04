@@ -124,6 +124,7 @@ const (
 	msgSetFieldName         = "I expected the name of a field after the apostrophe-s."
 	msgFmtNumberOutOfRange  = "The number %s is too large to represent."
 	msgFmtArraySeparator    = "I expected a comma between array elements, but found %s."
+	msgFmtImportItem        = "I expected another name to import here, but found %s."
 	msgCallName             = "I expected a function or method name after 'Call'."
 	msgForEachVar           = "I expected a loop variable name here."
 	msgPrintOrWrite         = "I expected 'Print' or 'Write' here."

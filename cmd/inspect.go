@@ -84,7 +84,7 @@ becomes __tmp0 = f3(0); __tmp1 = f2(__tmp0); x = f1(__tmp1)).  Use
 				p := parser.NewParser(tokens)
 				program, parseErr := p.Parse()
 				if parseErr != nil {
-					stacktraces.Print(parseErr)
+					report(parseErr)
 					os.Exit(1)
 				}
 				fmt.Print(disasm.Disassemble(program, filename, useColor, inspectFriendly, inspectImportDepth, inspectUnrollDepth))
@@ -113,7 +113,7 @@ becomes __tmp0 = f3(0); __tmp1 = f2(__tmp0); x = f1(__tmp1)).  Use
 		p := parser.NewParser(tokens)
 		program, err := p.Parse()
 		if err != nil {
-			stacktraces.Print(err)
+			report(err)
 			os.Exit(1)
 		}
 		fmt.Print(disasm.Disassemble(program, filename, useColor, inspectFriendly, inspectImportDepth, inspectUnrollDepth))

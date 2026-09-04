@@ -686,3 +686,23 @@ func TestSyntaxErrorDiagnosticUsesTheParsersPosition(t *testing.T) {
 		t.Errorf("the underline runs past the end of the line: %v", d.Range)
 	}
 }
+
+// TestEverySyntaxErrorIsReported covers the editor's diagnostics, which
+// stopped at the first syntax error in a file: a document with two typos
+// needed two round trips to clear, since the analyser also gives up before
+// extracting any symbols while a parse fails.
+func TestEverySyntaxErrorIsReported(t *testing.T) {
+	doc := NewDocument("file:///two.abc", "english", 1,
+		"Declare x to be 1.\nDeclare to be 2.\nPrint x.\nSet 5 to be 3.\n")
+	result := NewAnalyzer().Analyze(doc)
+
+	if len(result.Diagnostics) != 2 {
+		t.Fatalf("reported %d diagnostic(s), want 2: %v", len(result.Diagnostics), result.Diagnostics)
+	}
+	if result.Diagnostics[0].Range.Start.Line != 1 {
+		t.Errorf("the first diagnostic is on line %d, want 1", result.Diagnostics[0].Range.Start.Line)
+	}
+	if result.Diagnostics[1].Range.Start.Line != 3 {
+		t.Errorf("the second diagnostic is on line %d, want 3", result.Diagnostics[1].Range.Start.Line)
+	}
+}

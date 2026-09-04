@@ -1,6 +1,7 @@
 package parser
 
 import (
+	"errors"
 	"strings"
 	"testing"
 
@@ -1645,5 +1646,58 @@ func TestArrayElementsNeedSeparators(t *testing.T) {
 	}
 	if _, err := parse(`Declare xs to be an array of number [].`); err != nil {
 		t.Errorf("an empty array literal was rejected: %v", err)
+	}
+}
+
+// TestParseReportsEveryError covers error recovery. The parser stopped at the
+// first syntax error, so a file with two typos took two runs to fix, and the
+// editor — which shows one diagnostic per parse and then gives up before
+// extracting any symbols — told you nothing else about a file until its last
+// syntax error was gone.
+func TestParseReportsEveryError(t *testing.T) {
+	_, err := parse(`Declare x to be 1.
+Declare to be 2.
+Print x.
+Set 5 to be 3.
+Print "ok".`)
+	if err == nil {
+		t.Fatal("a program with two syntax errors parsed")
+	}
+
+	errs := Errors(err)
+	if len(errs) != 2 {
+		t.Fatalf("reported %d error(s), want 2:\n%v", len(errs), err)
+	}
+	if errs[0].Line != 2 {
+		t.Errorf("the first error is on line %d, want 2", errs[0].Line)
+	}
+	if errs[1].Line != 4 {
+		t.Errorf("the second error is on line %d, want 4", errs[1].Line)
+	}
+
+	// Anything that asks "is this a syntax error, and where?" still gets the
+	// first one, unchanged.
+	var one *SyntaxError
+	if !errors.As(err, &one) {
+		t.Fatal("a multi-error parse failure is not recognised as a syntax error")
+	}
+	if one.Line != 2 {
+		t.Errorf("the unwrapped error is on line %d, want 2", one.Line)
+	}
+}
+
+// TestTruncatedInputIsNotRecoveredFrom guards the interactive prompt: input
+// that simply ran out has nothing after it to resynchronise on, and the prompt
+// needs to see it as "more is coming" rather than as a mistake.
+func TestTruncatedInputIsNotRecoveredFrom(t *testing.T) {
+	_, err := parse("If x is greater than 1, then\n    Print 1.\n")
+	if err == nil {
+		t.Fatal("an unclosed block parsed")
+	}
+	if !IsTruncated(err) {
+		t.Errorf("an unclosed block was not reported as truncated: %v", err)
+	}
+	if got := len(Errors(err)); got != 1 {
+		t.Errorf("reported %d errors for truncated input, want 1", got)
 	}
 }

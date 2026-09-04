@@ -69,7 +69,7 @@ displayed; the listing is always derived from the opcode stream.`,
 			p := parser.NewParser(tokens)
 			program, parseErr := p.Parse()
 			if parseErr != nil {
-				stacktraces.Print(parseErr)
+				report(parseErr)
 				os.Exit(1)
 			}
 			analyse(program, filename)

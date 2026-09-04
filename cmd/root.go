@@ -307,13 +307,24 @@ func mustHide(cmd *cobra.Command, name string) {
 	}
 }
 
-// report prints an error the way the command line should: a set of semantic
-// diagnostics one at a time, and anything else through the renderer.
+// report prints an error the way the command line should: a set of problems
+// one at a time, each through the renderer that knows how to lay it out, and
+// anything else as it comes.
+//
+// Both kinds of failure can be plural — a parse reports every syntax error it
+// finds, and a check reports everything wrong with the program — and a set
+// handed to the renderer whole would come out as one undifferentiated line.
 func report(err error) {
 	var diags diagnostics
 	if errors.As(err, &diags) {
 		for _, d := range diags {
 			stacktraces.Print(d)
+		}
+		return
+	}
+	if syntaxErrs := parser.Errors(err); len(syntaxErrs) > 1 {
+		for _, e := range syntaxErrs {
+			stacktraces.Print(e)
 		}
 		return
 	}
@@ -384,7 +395,7 @@ func RunFileIVM(filename string, minPoliteness float64) {
 	p := parser.NewParser(tokens)
 	program, err := p.Parse()
 	if err != nil {
-		stacktraces.Print(err)
+		report(err)
 		os.Exit(1)
 	}
 
@@ -431,7 +442,7 @@ func RunFileAST(filename string, minPoliteness float64) {
 	p := parser.NewParser(tokens)
 	program, err := p.Parse()
 	if err != nil {
-		stacktraces.Print(err)
+		report(err)
 		os.Exit(1)
 	}
 
@@ -477,7 +488,7 @@ func CompileFileOptions(filename string, output string, stripSource bool) {
 	p := parser.NewParser(tokens)
 	program, err := p.Parse()
 	if err != nil {
-		stacktraces.Print(err)
+		report(err)
 		os.Exit(1)
 	}
 

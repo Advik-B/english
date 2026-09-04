@@ -103,9 +103,14 @@ func (a *Analyzer) Analyze(doc *Document) *AnalysisResult {
 	p := parser.NewParser(result.Tokens)
 	program, err := p.Parse()
 	if err != nil {
-		// Add parse error as diagnostic
-		diag := a.parseErrorToDiagnostic(err, doc)
-		result.Diagnostics = append(result.Diagnostics, diag)
+		// Every syntax error the parse found, not just the first: the editor
+		// used to show one, so a file with two typos needed two round trips.
+		for _, syntaxErr := range parser.Errors(err) {
+			result.Diagnostics = append(result.Diagnostics, a.parseErrorToDiagnostic(syntaxErr, doc))
+		}
+		if len(result.Diagnostics) == 0 {
+			result.Diagnostics = append(result.Diagnostics, a.parseErrorToDiagnostic(err, doc))
+		}
 		return result
 	}
 	result.Program = program

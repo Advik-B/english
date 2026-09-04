@@ -3,6 +3,7 @@ package parser
 import (
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/Advik-B/english/token"
 	"github.com/Advik-B/english/tokeniser"
@@ -74,6 +75,45 @@ func (p *Parser) markTruncated(err error) error {
 		syntaxErr.Truncated = true
 	}
 	return err
+}
+
+// SyntaxErrors is every syntax error one parse found, reported together.
+//
+// The parser used to stop at the first, so a file with two typos took two runs
+// to fix, and the editor — which shows one diagnostic per parse and then gives
+// up before extracting any symbols — told you nothing else about a file until
+// its last syntax error was gone.
+type SyntaxErrors []*SyntaxError
+
+func (e SyntaxErrors) Error() string {
+	parts := make([]string, 0, len(e))
+	for _, err := range e {
+		parts = append(parts, err.Error())
+	}
+	return strings.Join(parts, "\n\n")
+}
+
+// Unwrap returns the first error, so that anything asking "is this a syntax
+// error, and where?" keeps working unchanged.
+func (e SyntaxErrors) Unwrap() error {
+	if len(e) == 0 {
+		return nil
+	}
+	return e[0]
+}
+
+// Errors returns every syntax error behind a parse failure, which is one error
+// for most callers and the whole set for anything that shows them all.
+func Errors(err error) []*SyntaxError {
+	var many SyntaxErrors
+	if errors.As(err, &many) {
+		return many
+	}
+	var one *SyntaxError
+	if errors.As(err, &one) {
+		return []*SyntaxError{one}
+	}
+	return nil
 }
 
 // IsTruncated reports whether a parse failed only because the input ended

@@ -1,6 +1,7 @@
 package parser
 
 import (
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -133,9 +134,21 @@ func (p *Parser) makeExpectError(expected token.Type) error {
 	}
 }
 
-// Parse parses the tokens and returns the AST
+// maxReportedSyntaxErrors caps a single parse's report. Past a certain point
+// the later errors are consequences of the earlier ones rather than separate
+// mistakes, and a wall of them is less use than a handful.
+const maxReportedSyntaxErrors = 20
+
+// Parse parses the tokens and returns the AST.
+//
+// It reports every syntax error it can find, not just the first. Stopping at
+// the first meant a file with two typos took two runs to fix, and the editor —
+// which shows one diagnostic per parse and gives up before extracting any
+// symbols — showed nothing else about a file until the last syntax error in it
+// was gone.
 func (p *Parser) Parse() (*ast.Program, error) {
 	program := &ast.Program{}
+	var errs SyntaxErrors
 
 	for p.curToken.Type != token.EOF {
 		// Check whether the upcoming statement starts with a PLEASE prefix.
@@ -151,7 +164,22 @@ func (p *Parser) Parse() (*ast.Program, error) {
 		// already consumed it above, curToken is no longer PLEASE here.
 		stmt, err := p.parseStatement()
 		if err != nil {
-			return nil, p.markTruncated(err)
+			err = p.markTruncated(err)
+
+			// Input that simply ran out is not something to recover from:
+			// there is nothing after it to resynchronise on, and an
+			// interactive prompt needs to see it as "more is coming".
+			var syntaxErr *SyntaxError
+			if IsTruncated(err) || !errors.As(err, &syntaxErr) {
+				return nil, err
+			}
+
+			errs = append(errs, syntaxErr)
+			if len(errs) >= maxReportedSyntaxErrors {
+				return nil, errs
+			}
+			p.synchronise()
+			continue
 		}
 		program.Statements = append(program.Statements, stmt)
 		// Comments don't count toward the politeness tally.
@@ -169,7 +197,45 @@ func (p *Parser) Parse() (*ast.Program, error) {
 		}
 	}
 
+	if len(errs) > 0 {
+		return nil, errs
+	}
 	return program, nil
+}
+
+// synchronise skips to where the next statement plausibly begins, after an
+// error, so that one mistake does not hide every later one.
+//
+// A statement ends with a period, so the token after one is the natural place
+// to resume; failing that, a keyword that can only begin a statement will do.
+// It always consumes at least one token, or a parser that failed on a
+// statement keyword would fail on it again forever.
+func (p *Parser) synchronise() {
+	p.nextToken()
+	for p.curToken.Type != token.EOF {
+		if p.curToken.Type == token.PERIOD {
+			p.nextToken()
+			return
+		}
+		if startsStatement(p.curToken.Type) {
+			return
+		}
+		p.nextToken()
+	}
+}
+
+// startsStatement reports whether a token can only appear at the start of a
+// statement, which makes it a safe place to resume parsing after an error.
+func startsStatement(t token.Type) bool {
+	switch t {
+	case token.PLEASE, token.COMMENT, token.IMPORT, token.DECLARE, token.LET,
+		token.BREAK, token.CONTINUE, token.SKIP, token.ASK, token.SET,
+		token.CALL, token.IF, token.REPEAT, token.FOR, token.PRINT,
+		token.WRITE, token.RETURN, token.TOGGLE, token.TRY, token.RAISE,
+		token.SWAP, token.SLEEP:
+		return true
+	}
+	return false
 }
 
 // errorTokenErr turns a lexer ERROR token into a syntax error. The lexer emits

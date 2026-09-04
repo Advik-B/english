@@ -8,6 +8,8 @@ import (
 
 	"github.com/Advik-B/english/ast"
 	"github.com/Advik-B/english/parser"
+	"github.com/Advik-B/english/sema"
+	"github.com/Advik-B/english/stdlib"
 	"github.com/Advik-B/english/token"
 )
 
@@ -101,10 +103,55 @@ func (a *Analyzer) Analyze(doc *Document) *AnalysisResult {
 	}
 	result.Program = program
 
+	// Report the same problems the compiler would. The editor previously saw
+	// only syntax errors, so a type error showed up for the first time when
+	// the program was run.
+	for _, d := range sema.Check(program, sema.Config{Predefined: stdlib.PredefinedNames()}) {
+		result.Diagnostics = append(result.Diagnostics, semaDiagnostic(d, doc))
+	}
+
 	// Extract symbols and references
 	a.extractSymbols(program, result, doc)
 
 	return result
+}
+
+// semaDiagnostic converts a semantic-analysis problem into an editor
+// diagnostic, using the position the analyser recorded rather than searching
+// the document text for it.
+func semaDiagnostic(d *sema.Diagnostic, doc *Document) Diagnostic {
+	// Editor positions are zero-based; the analyser's are one-based.
+	line := d.Pos.Line - 1
+	if line < 0 {
+		line = 0
+	}
+	col := d.Pos.Col - 1
+	if col < 0 {
+		col = 0
+	}
+
+	// Underline to the end of the offending word where one can be found.
+	end := col + 1
+	if lines := strings.Split(doc.Content, "\n"); line < len(lines) {
+		text := lines[line]
+		for end < len(text) && isWordChar(text[end]) {
+			end++
+		}
+	}
+
+	message := d.Message
+	if d.Hint != "" {
+		message += "\n" + d.Hint
+	}
+	return Diagnostic{
+		Range: Range{
+			Start: Position{Line: line, Character: col},
+			End:   Position{Line: line, Character: end},
+		},
+		Severity: DiagnosticSeverityError,
+		Source:   "english",
+		Message:  message,
+	}
 }
 
 // tokenizeAll returns all tokens with NEWLINE tokens stripped, matching the

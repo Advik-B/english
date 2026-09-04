@@ -1,6 +1,7 @@
 package lsp
 
 import (
+	"strings"
 	"testing"
 )
 
@@ -407,5 +408,57 @@ func TestTextDocumentSyncKind(t *testing.T) {
 	}
 	if TextDocumentSyncKindIncremental != 2 {
 		t.Errorf("Expected TextDocumentSyncKindIncremental to be 2, got %d", TextDocumentSyncKindIncremental)
+	}
+}
+
+// TestAnalyzerReportsTypeErrors covers the editor seeing the same problems the
+// compiler does. The analyser previously produced one diagnostic — a syntax
+// error — and nothing else, so a type error first appeared when the program
+// was run.
+func TestAnalyzerReportsTypeErrors(t *testing.T) {
+	doc := &Document{
+		URI:     "file:///test.abc",
+		Content: "Declare total to be 0.\nSet total to be \"text\".\n",
+	}
+	result := NewAnalyzer().Analyze(doc)
+
+	if len(result.Diagnostics) == 0 {
+		t.Fatal("expected a diagnostic for assigning text to a number")
+	}
+	d := result.Diagnostics[0]
+	if !strings.Contains(d.Message, "cannot assign text") {
+		t.Errorf("unexpected message: %q", d.Message)
+	}
+	if d.Severity != DiagnosticSeverityError {
+		t.Errorf("severity is %v, want error", d.Severity)
+	}
+	// The problem is on the second line, which is line 1 zero-based.
+	if d.Range.Start.Line != 1 {
+		t.Errorf("diagnostic is on line %d, want 1", d.Range.Start.Line)
+	}
+	if d.Range.End.Character <= d.Range.Start.Character {
+		t.Errorf("diagnostic range is empty: %v", d.Range)
+	}
+}
+
+// TestAnalyzerAcceptsValidProgram guards the change above against reporting
+// problems in correct code.
+func TestAnalyzerAcceptsValidProgram(t *testing.T) {
+	doc := &Document{
+		URI: "file:///ok.abc",
+		Content: `Declare function double that takes n as number and gives back a number, and does the following:
+    Return n * 2.
+thats it.
+
+Declare total to be 0.
+Set total to be the result of calling double with 21.
+Print total.
+`,
+	}
+	result := NewAnalyzer().Analyze(doc)
+	if len(result.Diagnostics) != 0 {
+		for _, d := range result.Diagnostics {
+			t.Errorf("unexpected diagnostic: %s", d.Message)
+		}
 	}
 }

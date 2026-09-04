@@ -1,6 +1,7 @@
 package parser
 
 import (
+	"errors"
 	"fmt"
 
 	"github.com/Advik-B/english/token"
@@ -16,6 +17,11 @@ type SyntaxError struct {
 	Line int    // 1-based source line (0 = unknown)
 	Col  int    // 1-based source column (0 = unknown)
 	Hint string // optional guidance for the programmer
+	// Truncated reports that the parser ran out of input rather than finding
+	// something it did not expect: the text so far is the beginning of
+	// something valid. An interactive prompt reads this to decide between
+	// asking for another line and reporting a mistake.
+	Truncated bool
 }
 
 // Error implements the standard error interface.
@@ -49,6 +55,39 @@ func (p *Parser) syntaxErr(msg string, hint string) *SyntaxError {
 		Col:  p.curToken.Col,
 		Hint: hint,
 	}
+}
+
+// markTruncated records whether the parser stopped because the input ended
+// part-way through a block.
+//
+// Two things have to hold. The parser returns without advancing when it fails,
+// so the current token being the end of input means it ran out of tokens
+// rather than finding the wrong one. And a block body has to have reached that
+// end unclosed, which is what parseBlock records: without it, a plainly
+// incomplete statement like "Declare x to be" would read as "more to come"
+// and an interactive prompt would wait instead of reporting it.
+//
+// Stamping this in one place keeps every error site from having to know.
+func (p *Parser) markTruncated(err error) error {
+	var syntaxErr *SyntaxError
+	if errors.As(err, &syntaxErr) && p.curToken.Type == token.EOF && p.blockAtEOF {
+		syntaxErr.Truncated = true
+	}
+	return err
+}
+
+// IsTruncated reports whether a parse failed only because the input ended
+// part-way through something valid.
+//
+// This is what an interactive prompt needs in order to decide between asking
+// for another line and reporting a mistake. The REPL used to answer it with a
+// text search for "thats it." and a check for a line ending in "then", so
+// printing the text "thats it." inside a loop ended the block, a comment
+// mentioning "do the following:" opened one, and neither could be told from
+// the real thing.
+func IsTruncated(err error) bool {
+	var syntaxErr *SyntaxError
+	return errors.As(err, &syntaxErr) && syntaxErr.Truncated
 }
 
 // tokenFriendlyName returns a human-readable name for the expected token type.

@@ -528,6 +528,48 @@ func TestFunctionWithNestedIf(t *testing.T) {
 	assertContains(t, out, "negative")
 }
 
+// ── Block detection ──────────────────────────────────────────────────────────
+
+// TestBlockCloserInsideTextIsNotACloser covers where a block ends, which the
+// REPL decided by searching each line's text for "thats it.". Printing that
+// text inside a loop ended the block early, so half a loop was executed and
+// the rest of it became a stray "thats it." at the top level.
+func TestBlockCloserInsideTextIsNotACloser(t *testing.T) {
+	out := runLoop(join(
+		"For each n in [1, 2], do the following:",
+		"    Print \"thats it.\".",
+		"    Print n.",
+		"thats it.",
+	))
+	// The loop ran twice and printed both lines each time.
+	if got := strings.Count(out, "thats it."); got != 2 {
+		t.Errorf("the loop body printed the text %d time(s), want 2\nfull output:\n%s", got, out)
+	}
+	assertContains(t, out, "1", "2")
+	assertNotContains(t, out, "Syntax Error")
+}
+
+// TestBlockOpenerInsideACommentIsNotAnOpener covers the other half: a line
+// containing "following" and ending in ":" opened a block, so a comment
+// describing one left the prompt waiting for a "thats it." that belonged to
+// nothing.
+func TestBlockOpenerInsideACommentIsNotAnOpener(t *testing.T) {
+	out := runLoop(join(
+		"# do the following:",
+		"Print \"after the comment\".",
+	))
+	assertContains(t, out, "after the comment")
+	assertNotContains(t, out, "Syntax Error")
+}
+
+// TestUnfinishedStatementIsReportedNotAwaited covers the prompt's other
+// obligation: a statement that no further line can complete is a mistake, and
+// waiting for more input would hide it.
+func TestUnfinishedStatementIsReportedNotAwaited(t *testing.T) {
+	out := runLoop(join("Declare x to be"))
+	assertContains(t, out, "Syntax Error")
+}
+
 // ── join helper ───────────────────────────────────────────────────────────────
 
 // join concatenates the given lines with newlines appended, producing an input

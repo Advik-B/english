@@ -22,6 +22,10 @@ type Parser struct {
 	position  int
 	curToken  token.Token
 	peekToken token.Token
+	// blockAtEOF records that a block body ran into the end of the input
+	// without being closed. It answers one question, for an interactive
+	// prompt: is more of this program still to come? See markTruncated.
+	blockAtEOF bool
 }
 
 // NewParser creates a new parser for the given tokens
@@ -147,7 +151,7 @@ func (p *Parser) Parse() (*ast.Program, error) {
 		// already consumed it above, curToken is no longer PLEASE here.
 		stmt, err := p.parseStatement()
 		if err != nil {
-			return nil, err
+			return nil, p.markTruncated(err)
 		}
 		program.Statements = append(program.Statements, stmt)
 		// Comments don't count toward the politeness tally.
@@ -1502,6 +1506,13 @@ func (p *Parser) parseBlock() ([]ast.Statement, error) {
 			return nil, err
 		}
 		statements = append(statements, stmt)
+	}
+
+	// Every block body goes through here, so this is where an unclosed one is
+	// visible. The caller reports the missing "thats it."; recording it lets an
+	// interactive prompt tell "there is more to come" from "that is wrong".
+	if p.curToken.Type == token.EOF {
+		p.blockAtEOF = true
 	}
 
 	return statements, nil

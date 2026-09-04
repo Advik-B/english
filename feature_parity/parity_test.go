@@ -1143,3 +1143,83 @@ func TestParityNumberFormatting(t *testing.T) {
 		assertParity(t, src)
 	}
 }
+
+// TestParityStructFieldOrder covers silent data corruption in the instruction
+// VM: it emitted only the field values, in the order the instantiation wrote
+// them, while binding them in the order the definition declared them. Writing
+// the fields in any other order put every value in the wrong field.
+func TestParityStructFieldOrder(t *testing.T) {
+	src := `Declare Person as a structure with the following fields:
+    name is a text with "?" being the default.
+    age is a number with 0 being the default.
+thats it.
+
+Declare p to be a new instance of Person with the following fields:
+    age is 30.
+    name is "Alice".
+thats it.
+
+Print the name of p.
+Print the age of p.`
+
+	assertParity(t, src)
+	out, err := runIVM(src)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if out != "Alice\n30\n" {
+		t.Errorf("fields were bound in the wrong order: got %q, want %q", out, "Alice\n30\n")
+	}
+}
+
+// TestParityStructPartialFields covers omitting a non-final field, which used
+// to shift every field after it.
+func TestParityStructPartialFields(t *testing.T) {
+	src := `Declare Person as a structure with the following fields:
+    name is a text with "?" being the default.
+    age is a number with 7 being the default.
+    city is a text with "nowhere" being the default.
+thats it.
+
+Declare p to be a new instance of Person with the following fields:
+    city is "Paris".
+thats it.
+
+Print the name of p.
+Print the age of p.
+Print the city of p.`
+
+	assertParity(t, src)
+	assertOutputContains(t, src, "Paris")
+	out, _ := runIVM(src)
+	if out != "?\n7\nParis\n" {
+		t.Errorf("defaults were not applied correctly: got %q, want %q", out, "?\n7\nParis\n")
+	}
+}
+
+// TestParityStructUnknownField covers a field the struct does not declare,
+// which one engine rejected and the other quietly added.
+func TestParityStructUnknownField(t *testing.T) {
+	src := `Declare Point as a structure with the following fields:
+    x is a number with 0 being the default.
+thats it.
+
+Declare p to be a new instance of Point with the following fields:
+    y is 1.
+thats it.`
+	assertParityError(t, src)
+}
+
+// TestParityStructFieldType covers a field value of the wrong type, which
+// neither engine checked at run time.
+func TestParityStructFieldType(t *testing.T) {
+	src := `Declare Point as a structure with the following fields:
+    x is a number with 0 being the default.
+thats it.
+
+Declare label to be "left".
+Declare p to be a new instance of Point with the following fields:
+    x is label.
+thats it.`
+	assertParityError(t, src)
+}

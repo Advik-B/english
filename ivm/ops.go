@@ -100,3 +100,23 @@ func deepCopyValue(val interface{}) interface{} { return runtime.DeepCopy(val) }
 func typeDefault(typeName string) interface{} {
 	return runtime.TypeDefault(types.Parse(typeName))
 }
+
+// checkFieldType verifies a struct field value against its declared type.
+//
+// Neither the field values written at instantiation nor those assigned later
+// were checked by this engine at all, so a text value could be stored in a
+// number field and only fail much later, somewhere else.
+func checkFieldType(structName string, fd *FieldDef, value interface{}) error {
+	if value == nil || fd.TypeName == "" {
+		return nil
+	}
+	declared := types.Parse(fd.TypeName)
+	if declared == types.TypeUnknown {
+		return nil // a struct-typed field; only the checker can resolve it
+	}
+	if got := types.Infer(value); types.Canonical(got) != types.Canonical(declared) {
+		return runtime.TypeErrorf("TypeError: field '%s' of %s is %s, but this is %s",
+			fd.Name, structName, types.Name(declared), types.Name(got))
+	}
+	return nil
+}

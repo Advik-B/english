@@ -633,47 +633,55 @@ func (m *Machine) step(instr Instruction, chunk *Chunk) (result interface{}, sto
 			return nil, false, m.runtimeErr(fmt.Sprintf("undefined struct '%s'", structName))
 		}
 
-		// Pop field values in reverse order (last field pushed = top of stack)
-		fieldVals := make([]interface{}, fieldCount)
+		// Each written field arrives as a name followed by its value, so bind
+		// them by name rather than by position.
+		written := make(map[string]interface{}, fieldCount)
+		order := make([]string, fieldCount)
 		for i := fieldCount - 1; i >= 0; i-- {
-			fieldVals[i] = m.pop()
+			value := m.pop()
+			name, ok := m.pop().(string)
+			if !ok {
+				return nil, false, m.runtimeErr("corrupt bytecode: struct field name is not text")
+			}
+			written[name] = value
+			order[i] = name
 		}
 
 		inst := &StructInstance{
 			DefName: structName,
 			DefRef:  sd,
-			Fields:  make(map[string]interface{}),
+			Fields:  make(map[string]interface{}, len(sd.Fields)),
 		}
 
-		// Assign fields in FieldOrder from StructInstantiation (same order as compiled)
-		// The fieldCount fields were compiled from FieldOrder, so we use sd.Fields for defaults
-		// and the compiled values for specified ones.
-		// Since we compile in FieldOrder (from StructInstantiation), we need to map them back.
-		// However, the compiler pushes them in the FieldOrder from the instantiation,
-		// not necessarily the struct definition order.
-		// We store them positionally, so we need the same order.
-		// For simplicity: if fieldCount > 0, use fieldVals as-is in the order they were compiled.
-		// The struct definition's field order is in sd.Fields (slice).
-		// The instantiation's field order is what was compiled. We don't have that info here.
-		// Solution: compile ALL struct fields in struct definition order (see compileStructInstantiation).
-
-		// We reconstruct by matching against sd.Fields order
-		for i, fd := range sd.Fields {
-			var fval interface{}
-			if i < fieldCount {
-				fval = fieldVals[i]
+		// A field the struct does not declare is a mistake, not something to
+		// quietly add.
+		declared := make(map[string]bool, len(sd.Fields))
+		for _, fd := range sd.Fields {
+			declared[fd.Name] = true
+		}
+		for _, name := range order {
+			if !declared[name] {
+				return nil, false, m.runtimeErr(fmt.Sprintf(
+					"struct '%s' has no field named '%s'", structName, name))
 			}
-			if fval == nil && fd.DefaultExprChunk != nil {
-				// Execute default expression chunk
-				var defErr error
-				fval, defErr = m.executeDefaultChunk(fd.DefaultExprChunk)
-				if defErr != nil {
-					return nil, false, m.runtimeErr(defErr.Error())
+		}
+
+		for _, fd := range sd.Fields {
+			fval, given := written[fd.Name]
+			if !given || fval == nil {
+				if fd.DefaultExprChunk != nil {
+					var defErr error
+					fval, defErr = m.executeDefaultChunk(fd.DefaultExprChunk)
+					if defErr != nil {
+						return nil, false, m.runtimeErr(defErr.Error())
+					}
 				}
 			}
 			if fval == nil {
-				// Use type default
 				fval = typeDefault(fd.TypeName)
+			}
+			if err := checkFieldType(structName, fd, fval); err != nil {
+				return nil, false, m.runtimeErr(err.Error())
 			}
 			inst.Fields[fd.Name] = fval
 		}

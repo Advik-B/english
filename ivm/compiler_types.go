@@ -38,30 +38,45 @@ func (c *Compiler) compileStructDecl(s *ast.StructDecl) error {
 	return nil
 }
 
+// compileStructInstantiation emits a name and a value for each field written
+// in the instantiation, so that OP_NEW_STRUCT can bind them by name.
+//
+// It used to emit only the values, in the order the instantiation wrote them,
+// while the machine bound them in the order the *definition* declared them. So
+// writing the fields in any order but the declared one silently put each value
+// in the wrong field:
+//
+//	Declare Person as a structure with the following fields:
+//	    name is a text with "?" being the default.
+//	    age is a number with 0 being the default.
+//	thats it.
+//
+//	a new instance of Person with the following fields:
+//	    age is 30.
+//	    name is "Alice".
+//	thats it.
+//
+// gave name = 30 and age = "Alice", with nothing reported. Omitting a
+// non-final field shifted every field after it.
 func (c *Compiler) compileStructInstantiation(e *ast.StructInstantiation) error {
-	// We need the StructDef to know field order and defaults.
-	// Since we don't have access to the struct definition at compile time,
-	// we compile the provided fields in the order they appear in FieldOrder,
-	// and let the machine look up defaults for missing fields.
-	// Stack: [field_value1, field_value2, ...] for each field in FieldOrder
-	// Then the machine uses NEW_STRUCT to construct the instance.
-
-	// Push the struct name so the machine can look up the def
+	// The struct name, so the machine can find the definition.
 	snIdx := c.chunk.AddName(e.StructName)
 
-	// Push each specified field in order
+	// A (name, value) pair per field written.
 	for _, fieldName := range e.FieldOrder {
+		nameIdx := c.chunk.AddConst(fieldName)
+		c.chunk.Emit(OP_LOAD_CONST, nameIdx)
+
 		val, ok := e.FieldValues[fieldName]
 		if !ok {
 			c.chunk.Emit(OP_LOAD_NOTHING, 0)
-		} else {
-			if err := c.compileExpression(val); err != nil {
-				return err
-			}
+			continue
+		}
+		if err := c.compileExpression(val); err != nil {
+			return err
 		}
 	}
 
-	// Encode field_count<<16 | struct_name_idx
 	fieldCount := uint32(len(e.FieldOrder))
 	c.chunk.Emit(OP_NEW_STRUCT, fieldCount<<16|snIdx)
 	return nil

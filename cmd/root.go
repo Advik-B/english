@@ -462,7 +462,9 @@ func transpileWithOptions(filename string, inline bool, seen map[string]bool) {
 			os.Exit(1)
 		}
 
-		// Detect format: version 2 = ivm instruction format, version 1 = AST format.
+		// Two formats share the same magic bytes and are told apart by the
+		// version byte: the instruction format this engine writes, and the
+		// older AST format.
 		// v2 files compiled with `english compile` carry the original source code as
 		// a trailing section; extract it and parse normally so the transpiler works
 		// from a full AST (identical output to transpiling the .abc directly).
@@ -570,7 +572,7 @@ func RunBytecode(filename string) {
 		os.Exit(1)
 	}
 
-	// Detect format version: version 2 = instruction-based ivm format
+	// Told apart by the version byte; see the note in transpileWithOptions.
 	if len(data) >= 5 && data[4] == ivm.InstructionFormatVersion {
 		chunk, decodeErr := ivm.DecodeFile(data)
 		if decodeErr != nil {
@@ -585,7 +587,7 @@ func RunBytecode(filename string) {
 		return
 	}
 
-	// Version 1: AST-based format
+	// The older AST-based format.
 	decoder := bytecode.NewDecoder(data)
 	program, err := decoder.Decode()
 	if err != nil {

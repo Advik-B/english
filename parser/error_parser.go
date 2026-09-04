@@ -19,7 +19,7 @@ import (
 //	thats it.
 func (p *Parser) parseTryStatement() (ast.Statement, error) {
 	// Skip "try"
-	startLine := p.curToken.Line
+	startPos := at(p.curToken)
 	p.nextToken()
 
 	// Expect "doing"
@@ -126,7 +126,7 @@ func (p *Parser) parseTryStatement() (ast.Statement, error) {
 		ErrorType:   errorType,
 		ErrorBody:   errorBody,
 		FinallyBody: finallyBody,
-		Line:        startLine,
+		Base:        startPos,
 	}, nil
 }
 
@@ -136,7 +136,7 @@ func (p *Parser) parseTryStatement() (ast.Statement, error) {
 //	raise "error message".
 func (p *Parser) parseRaiseStatement() (ast.Statement, error) {
 	// Skip "raise"
-	startLine := p.curToken.Line
+	startPos := at(p.curToken)
 	p.nextToken()
 
 	// Parse error message expression
@@ -171,7 +171,7 @@ func (p *Parser) parseRaiseStatement() (ast.Statement, error) {
 	return &ast.RaiseStatement{
 		Message:   message,
 		ErrorType: errorType,
-		Line:      startLine,
+		Base:      startPos,
 	}, nil
 }
 
@@ -179,7 +179,7 @@ func (p *Parser) parseRaiseStatement() (ast.Statement, error) {
 // Syntax: swap a and b.
 func (p *Parser) parseSwapStatement() (ast.Statement, error) {
 	// Skip "swap"
-	startLine := p.curToken.Line
+	startPos := at(p.curToken)
 	p.nextToken()
 
 	if p.curToken.Type != token.IDENTIFIER {
@@ -215,7 +215,7 @@ func (p *Parser) parseSwapStatement() (ast.Statement, error) {
 	return &ast.SwapStatement{
 		Name1: name1,
 		Name2: name2,
-		Line:  startLine,
+		Base:  startPos,
 	}, nil
 }
 

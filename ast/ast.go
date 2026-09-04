@@ -2,9 +2,42 @@
 // for the English programming language.
 package ast
 
+// Position identifies a location in source text.
+//
+// Line and Col are 1-based; Offset is the byte offset of the first character.
+// Col and Offset count bytes, not runes.
+type Position struct {
+	Line   int
+	Col    int
+	Offset int
+}
+
+// IsKnown reports whether the position was actually recorded.
+func (p Position) IsKnown() bool { return p.Line > 0 }
+
+// Base carries a node's source position. Every node embeds it — expressions
+// included, which previously had no position at all, so an error inside an
+// expression could never be pointed at more precisely than the enclosing
+// statement's line, and never at a column.
+//
+// Position's fields are promoted through Base, so node.Line keeps working.
+type Base struct {
+	Position
+}
+
+// Pos returns the node's source position.
+func (b Base) Pos() Position { return b.Position }
+
+// At builds a Base for the given position.
+func At(line, col, offset int) Base {
+	return Base{Position{Line: line, Col: col, Offset: offset}}
+}
+
 // Node is the base interface for all AST nodes
 type Node interface {
 	node()
+	// Pos reports where the node starts in the source.
+	Pos() Position
 }
 
 // Statement is the interface for all statement nodes
@@ -21,6 +54,7 @@ type Expression interface {
 
 // Program is the root node of the AST
 type Program struct {
+	Base
 	Statements []Statement
 
 	// PolitenessStats is populated by the parser when it processes statements.
@@ -38,6 +72,7 @@ func (p *Program) node() {}
 
 // ImportStatement represents an import statement
 type ImportStatement struct {
+	Base
 	Path      string   // The file path to import
 	Items     []string // Specific items to import (empty means import all)
 	ImportAll bool     // True for "import everything/all"
@@ -49,10 +84,10 @@ func (is *ImportStatement) statementNode() {}
 
 // VariableDecl represents a variable declaration
 type VariableDecl struct {
+	Base
 	Name       string
 	IsConstant bool
 	Value      Expression
-	Line       int
 }
 
 func (vd *VariableDecl) node()          {}
@@ -60,9 +95,9 @@ func (vd *VariableDecl) statementNode() {}
 
 // Assignment represents a variable assignment
 type Assignment struct {
+	Base
 	Name  string
 	Value Expression
-	Line  int
 }
 
 func (a *Assignment) node()          {}
@@ -70,10 +105,10 @@ func (a *Assignment) statementNode() {}
 
 // FunctionDecl represents a function declaration
 type FunctionDecl struct {
+	Base
 	Name       string
 	Parameters []string
 	Body       []Statement
-	Line       int
 }
 
 func (fd *FunctionDecl) node()          {}
@@ -81,6 +116,7 @@ func (fd *FunctionDecl) statementNode() {}
 
 // FunctionCall represents a function call expression
 type FunctionCall struct {
+	Base
 	Name      string
 	Arguments []Expression
 }
@@ -90,9 +126,9 @@ func (fc *FunctionCall) expressionNode() {}
 
 // CallStatement represents a function call as a statement
 type CallStatement struct {
+	Base
 	FunctionCall *FunctionCall
 	MethodCall   *MethodCall
-	Line         int
 }
 
 func (cs *CallStatement) node()          {}
@@ -100,11 +136,11 @@ func (cs *CallStatement) statementNode() {}
 
 // IfStatement represents an if-then-else statement
 type IfStatement struct {
+	Base
 	Condition Expression
 	Then      []Statement
 	ElseIf    []*ElseIfPart
 	Else      []Statement
-	Line      int
 }
 
 func (is *IfStatement) node()          {}
@@ -112,15 +148,16 @@ func (is *IfStatement) statementNode() {}
 
 // ElseIfPart represents an else-if branch
 type ElseIfPart struct {
+	Base
 	Condition Expression
 	Body      []Statement
 }
 
 // WhileLoop represents a while loop
 type WhileLoop struct {
+	Base
 	Condition Expression
 	Body      []Statement
-	Line      int
 }
 
 func (wl *WhileLoop) node()          {}
@@ -128,9 +165,9 @@ func (wl *WhileLoop) statementNode() {}
 
 // ForLoop represents a counted for loop
 type ForLoop struct {
+	Base
 	Count Expression
 	Body  []Statement
-	Line  int
 }
 
 func (fl *ForLoop) node()          {}
@@ -138,10 +175,10 @@ func (fl *ForLoop) statementNode() {}
 
 // ForEachLoop represents a for-each loop over a collection
 type ForEachLoop struct {
+	Base
 	Item string
 	List Expression
 	Body []Statement
-	Line int // source line of the loop-variable declaration
 }
 
 func (fel *ForEachLoop) node()          {}
@@ -149,6 +186,7 @@ func (fel *ForEachLoop) statementNode() {}
 
 // NumberLiteral represents a numeric literal
 type NumberLiteral struct {
+	Base
 	Value float64
 }
 
@@ -157,6 +195,7 @@ func (nl *NumberLiteral) expressionNode() {}
 
 // StringLiteral represents a string literal
 type StringLiteral struct {
+	Base
 	Value string
 }
 
@@ -165,6 +204,7 @@ func (sl *StringLiteral) expressionNode() {}
 
 // ListLiteral represents a list/array literal
 type ListLiteral struct {
+	Base
 	Elements []Expression
 }
 
@@ -174,6 +214,7 @@ func (ll *ListLiteral) expressionNode() {}
 // RangeLiteral represents a range expression like [1 .. 30] or a range from 1 to 30
 // Optionally supports custom step: [1 .. 10 by 2] or a range from 1 to 10 by 2
 type RangeLiteral struct {
+	Base
 	Start Expression
 	End   Expression
 	Step  Expression // optional, nil for default step of 1 or -1
@@ -184,6 +225,7 @@ func (rl *RangeLiteral) expressionNode() {}
 
 // Identifier represents a variable reference
 type Identifier struct {
+	Base
 	Name string
 }
 
@@ -192,6 +234,7 @@ func (i *Identifier) expressionNode() {}
 
 // BinaryExpression represents a binary operation (e.g., a + b)
 type BinaryExpression struct {
+	Base
 	Left     Expression
 	Operator string
 	Right    Expression
@@ -202,6 +245,7 @@ func (be *BinaryExpression) expressionNode() {}
 
 // UnaryExpression represents a unary operation (e.g., -x)
 type UnaryExpression struct {
+	Base
 	Operator string
 	Right    Expression
 }
@@ -211,6 +255,7 @@ func (ue *UnaryExpression) expressionNode() {}
 
 // IndexExpression represents array indexing (e.g., list[0])
 type IndexExpression struct {
+	Base
 	List  Expression
 	Index Expression
 }
@@ -220,10 +265,10 @@ func (ie *IndexExpression) expressionNode() {}
 
 // IndexAssignment represents assigning to an array index
 type IndexAssignment struct {
+	Base
 	ListName string
 	Index    Expression
 	Value    Expression
-	Line     int
 }
 
 func (ia *IndexAssignment) node()          {}
@@ -231,6 +276,7 @@ func (ia *IndexAssignment) statementNode() {}
 
 // LengthExpression represents getting the length of a list or string
 type LengthExpression struct {
+	Base
 	List Expression
 }
 
@@ -239,8 +285,8 @@ func (le *LengthExpression) expressionNode() {}
 
 // ReturnStatement represents a return statement
 type ReturnStatement struct {
+	Base
 	Value Expression
-	Line  int
 }
 
 func (rs *ReturnStatement) node()          {}
@@ -248,9 +294,9 @@ func (rs *ReturnStatement) statementNode() {}
 
 // OutputStatement represents a print statement
 type OutputStatement struct {
+	Base
 	Values  []Expression
 	Newline bool // true for Print, false for Write
-	Line    int
 }
 
 func (os *OutputStatement) node()          {}
@@ -258,21 +304,22 @@ func (os *OutputStatement) statementNode() {}
 
 // ToggleStatement toggles a boolean variable
 type ToggleStatement struct {
+	Base
 	Name string
-	Line int
 }
 
 func (ts *ToggleStatement) node()          {}
 func (ts *ToggleStatement) statementNode() {}
 
 // BreakStatement breaks out of a loop
-type BreakStatement struct{}
+type BreakStatement struct{ Base }
 
 func (bs *BreakStatement) node()          {}
 func (bs *BreakStatement) statementNode() {}
 
 // BooleanLiteral represents a boolean literal (true/false)
 type BooleanLiteral struct {
+	Base
 	Value bool
 }
 
@@ -281,6 +328,7 @@ func (bl *BooleanLiteral) expressionNode() {}
 
 // LocationExpression returns the memory address of a variable
 type LocationExpression struct {
+	Base
 	Name string
 }
 
@@ -289,6 +337,7 @@ func (le *LocationExpression) expressionNode() {}
 
 // StructDecl represents a struct type declaration
 type StructDecl struct {
+	Base
 	Name    string
 	Fields  []*StructField
 	Methods []*FunctionDecl
@@ -299,6 +348,7 @@ func (sd *StructDecl) statementNode() {}
 
 // StructField represents a field in a struct definition
 type StructField struct {
+	Base
 	Name         string
 	TypeName     string
 	DefaultValue Expression
@@ -307,6 +357,7 @@ type StructField struct {
 
 // StructInstantiation creates a new instance of a struct
 type StructInstantiation struct {
+	Base
 	StructName  string
 	FieldValues map[string]Expression
 	FieldOrder  []string // Maintain field order
@@ -317,6 +368,7 @@ func (si *StructInstantiation) expressionNode() {}
 
 // FieldAccess accesses a field of a struct
 type FieldAccess struct {
+	Base
 	Object Expression
 	Field  string
 }
@@ -326,6 +378,7 @@ func (fa *FieldAccess) expressionNode() {}
 
 // FieldAssignment assigns a value to a struct field
 type FieldAssignment struct {
+	Base
 	ObjectName string
 	Field      string
 	Value      Expression
@@ -336,12 +389,12 @@ func (fa *FieldAssignment) statementNode() {}
 
 // TryStatement represents try/error/finally block
 type TryStatement struct {
+	Base
 	TryBody     []Statement
 	ErrorVar    string // Variable name to bind the error to
 	ErrorType   string // If non-empty, only catch errors of this type
 	ErrorBody   []Statement
 	FinallyBody []Statement
-	Line        int
 }
 
 func (ts *TryStatement) node()          {}
@@ -349,9 +402,9 @@ func (ts *TryStatement) statementNode() {}
 
 // RaiseStatement raises an error
 type RaiseStatement struct {
+	Base
 	Message   Expression
 	ErrorType string // Optional error type
-	Line      int
 }
 
 func (rs *RaiseStatement) node()          {}
@@ -363,6 +416,7 @@ func (rs *RaiseStatement) statementNode() {}
 //	Declare NetworkError as an error type.
 //	Declare CustomErr1 as a type of NetworkError.
 type ErrorTypeDecl struct {
+	Base
 	Name       string
 	ParentType string // empty for root error types; parent name for subtypes
 }
@@ -372,6 +426,7 @@ func (etd *ErrorTypeDecl) statementNode() {}
 
 // TypeExpression gets the type of a value
 type TypeExpression struct {
+	Base
 	Value Expression
 }
 
@@ -380,6 +435,7 @@ func (te *TypeExpression) expressionNode() {}
 
 // CastExpression casts a value to a type
 type CastExpression struct {
+	Base
 	Value    Expression
 	TypeName string
 }
@@ -389,6 +445,7 @@ func (ce *CastExpression) expressionNode() {}
 
 // ReferenceExpression creates a reference to a variable
 type ReferenceExpression struct {
+	Base
 	Name string
 }
 
@@ -397,6 +454,7 @@ func (re *ReferenceExpression) expressionNode() {}
 
 // CopyExpression creates a copy of a value
 type CopyExpression struct {
+	Base
 	Value Expression
 }
 
@@ -405,28 +463,29 @@ func (ce *CopyExpression) expressionNode() {}
 
 // SwapStatement swaps two variables
 type SwapStatement struct {
+	Base
 	Name1 string
 	Name2 string
-	Line  int
 }
 
 func (ss *SwapStatement) node()          {}
 func (ss *SwapStatement) statementNode() {}
 
 // ContinueStatement skips the rest of the current loop iteration
-type ContinueStatement struct{}
+type ContinueStatement struct{ Base }
 
 func (cs *ContinueStatement) node()          {}
 func (cs *ContinueStatement) statementNode() {}
 
 // NothingLiteral represents a null/nil value (nothing, none, null)
-type NothingLiteral struct{}
+type NothingLiteral struct{ Base }
 
 func (nl *NothingLiteral) node()           {}
 func (nl *NothingLiteral) expressionNode() {}
 
 // AskExpression reads a line of user input after displaying an optional prompt
 type AskExpression struct {
+	Base
 	Prompt Expression // optional prompt to display
 }
 
@@ -435,6 +494,7 @@ func (ae *AskExpression) expressionNode() {}
 
 // ArrayLiteral is a typed homogeneous array literal: "an array of number [1, 2, 3]"
 type ArrayLiteral struct {
+	Base
 	ElementType string // "number", "text", "boolean" — empty = infer from elements
 	Elements    []Expression
 }
@@ -443,13 +503,14 @@ func (al *ArrayLiteral) node()           {}
 func (al *ArrayLiteral) expressionNode() {}
 
 // LookupTableLiteral creates an empty lookup table: "a lookup table"
-type LookupTableLiteral struct{}
+type LookupTableLiteral struct{ Base }
 
 func (lt *LookupTableLiteral) node()           {}
 func (lt *LookupTableLiteral) expressionNode() {}
 
 // LookupKeyAccess reads a value from a lookup table: "TABLE at KEY" or "the entry KEY in TABLE"
 type LookupKeyAccess struct {
+	Base
 	Table Expression
 	Key   Expression
 }
@@ -459,10 +520,10 @@ func (la *LookupKeyAccess) expressionNode() {}
 
 // LookupKeyAssignment sets a value in a lookup table: "Set TABLE at KEY to be VALUE." or "Set the entry KEY in TABLE to be VALUE."
 type LookupKeyAssignment struct {
+	Base
 	TableName string
 	Key       Expression
 	Value     Expression
-	Line      int
 }
 
 func (la *LookupKeyAssignment) node()          {}
@@ -470,6 +531,7 @@ func (la *LookupKeyAssignment) statementNode() {}
 
 // HasExpression checks whether a lookup table contains a key: "TABLE has KEY"
 type HasExpression struct {
+	Base
 	Table Expression
 	Key   Expression
 }
@@ -481,6 +543,7 @@ func (he *HasExpression) expressionNode() {}
 //   - IsSomethingCheck == true  → "x is something" / "x has a value"  (returns true when x != nil)
 //   - IsSomethingCheck == false → "x is nothing"   / "x has no value" (returns true when x == nil)
 type NilCheckExpression struct {
+	Base
 	Value            Expression
 	IsSomethingCheck bool // true = "is something"; false = "is nothing"
 }
@@ -490,11 +553,11 @@ func (nc *NilCheckExpression) expressionNode() {}
 
 // TypedVariableDecl represents a variable declaration with explicit type
 type TypedVariableDecl struct {
+	Base
 	Name       string
 	TypeName   string
 	IsConstant bool
 	Value      Expression
-	Line       int
 }
 
 func (tvd *TypedVariableDecl) node()          {}
@@ -502,6 +565,7 @@ func (tvd *TypedVariableDecl) statementNode() {}
 
 // MethodCall represents calling a method on an object
 type MethodCall struct {
+	Base
 	Object     Expression
 	MethodName string
 	Arguments  []Expression
@@ -514,6 +578,7 @@ func (mc *MethodCall) expressionNode() {}
 // error type (including inherited types).
 // Syntax: error is NetworkError
 type ErrorTypeCheckExpression struct {
+	Base
 	Value    Expression
 	TypeName string
 }
@@ -524,8 +589,32 @@ func (etc *ErrorTypeCheckExpression) expressionNode() {}
 // CommentStatement carries a source comment through to the output.
 // Text holds the comment body (everything after the leading '#', trimmed).
 type CommentStatement struct {
+	Base
 	Text string
 }
 
 func (cs *CommentStatement) node()          {}
 func (cs *CommentStatement) statementNode() {}
+
+// setPos records a position on a node unless it already carries one.
+// Promoted through Base, so every node has it.
+func (b *Base) setPos(p Position) {
+	if !b.Position.IsKnown() {
+		b.Position = p
+	}
+}
+
+// SetPosIfUnknown records pos on n unless n already has a position.
+//
+// The parser calls this once per precedence layer rather than threading a
+// position through all ~66 node constructions, so no expression can be built
+// without one. Expression nodes previously had no position field at all, which
+// is why the type checker reported every argument-type error at "line 0".
+func SetPosIfUnknown(n Node, pos Position) {
+	if n == nil {
+		return
+	}
+	if s, ok := n.(interface{ setPos(Position) }); ok {
+		s.setPos(pos)
+	}
+}

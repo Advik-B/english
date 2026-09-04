@@ -191,6 +191,7 @@ func (p *Parser) parseStructField() (*ast.StructField, error) {
 
 // parseStructMethod parses a method within a struct definition
 func (p *Parser) parseStructMethod() (*ast.FunctionDecl, error) {
+	methodPos := at(p.curToken)
 	// Skip "let"
 	p.nextToken()
 
@@ -298,6 +299,7 @@ func (p *Parser) parseStructMethod() (*ast.FunctionDecl, error) {
 	}
 
 	return &ast.FunctionDecl{
+		Base:       methodPos,
 		Name:       nameToken.Value,
 		Parameters: parameters,
 		Body:       body,
@@ -487,6 +489,6 @@ func (p *Parser) parseTypedVariableDecl() (ast.Statement, error) {
 		TypeName:   typeName,
 		IsConstant: isConstant,
 		Value:      value,
-		Line:       nameToken.Line,
+		Base:       at(nameToken),
 	}, nil
 }

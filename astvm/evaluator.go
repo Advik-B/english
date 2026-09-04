@@ -63,46 +63,6 @@ func (ev *Evaluator) checkCallDepth(name string) error {
 	}
 }
 
-// getStatementLine extracts the source line from an AST statement node.
-// Returns 0 if the node type does not carry line information.
-func getStatementLine(stmt ast.Statement) int {
-	switch s := stmt.(type) {
-	case *ast.VariableDecl:
-		return s.Line
-	case *ast.TypedVariableDecl:
-		return s.Line
-	case *ast.OutputStatement:
-		return s.Line
-	case *ast.Assignment:
-		return s.Line
-	case *ast.IndexAssignment:
-		return s.Line
-	case *ast.LookupKeyAssignment:
-		return s.Line
-	case *ast.CallStatement:
-		return s.Line
-	case *ast.ReturnStatement:
-		return s.Line
-	case *ast.IfStatement:
-		return s.Line
-	case *ast.WhileLoop:
-		return s.Line
-	case *ast.ForLoop:
-		return s.Line
-	case *ast.ForEachLoop:
-		return s.Line
-	case *ast.ToggleStatement:
-		return s.Line
-	case *ast.RaiseStatement:
-		return s.Line
-	case *ast.TryStatement:
-		return s.Line
-	case *ast.SwapStatement:
-		return s.Line
-	}
-	return 0
-}
-
 // Eval evaluates an AST node
 func (ev *Evaluator) Eval(node interface{}) (Value, error) {
 	switch node := node.(type) {
@@ -221,7 +181,7 @@ func (ev *Evaluator) Eval(node interface{}) (Value, error) {
 func (ev *Evaluator) evalProgram(prog *ast.Program) (Value, error) {
 	var result Value
 	for _, stmt := range prog.Statements {
-		if line := getStatementLine(stmt); line > 0 {
+		if line := stmt.Pos().Line; line > 0 {
 			ev.currentLine = line
 		}
 		val, err := ev.Eval(stmt)
@@ -1085,7 +1045,7 @@ func (ev *Evaluator) evalFunctionCall(fc *ast.FunctionCall) (Value, error) {
 	}()
 
 	for _, stmt := range fn.Body {
-		if line := getStatementLine(stmt); line > 0 {
+		if line := stmt.Pos().Line; line > 0 {
 			ev.currentLine = line
 		}
 		val, err := ev.Eval(stmt)
@@ -1146,7 +1106,7 @@ func (ev *Evaluator) callFunction(name string, args []Value) (Value, error) {
 	}()
 
 	for _, stmt := range fn.Body {
-		if line := getStatementLine(stmt); line > 0 {
+		if line := stmt.Pos().Line; line > 0 {
 			ev.currentLine = line
 		}
 		val, err := ev.Eval(stmt)

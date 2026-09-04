@@ -32,7 +32,14 @@ func NewParser(tokens []token.Token) *Parser {
 	return p
 }
 
+// at converts a token's location into a node position. Every AST node embeds
+// ast.Base, so this is the single place the parser records where a node starts.
+func at(t token.Token) ast.Base {
+	return ast.At(t.Line, t.Col, t.Pos)
+}
+
 func (p *Parser) nextToken() {
+
 	p.curToken = p.peekToken
 	if p.position < len(p.tokens) {
 		p.peekToken = p.tokens[p.position]
@@ -117,7 +124,7 @@ func (p *Parser) Parse() (*ast.Program, error) {
 			if polite {
 				program.PoliteCount++
 			} else {
-				line := stmtLine(stmt)
+				line := stmt.Pos().Line
 				if line == 0 {
 					line = stmtStartLine
 				}
@@ -181,7 +188,22 @@ func (p *Parser) expectBlockEndNoPeriod() error {
 	return nil
 }
 
+// parseStatement parses one statement and records where it started.
+//
+// Stamping here covers every statement kind from one place, including the ones
+// that carried no position at all: imports, struct and error-type
+// declarations, break, continue and comments.
 func (p *Parser) parseStatement() (ast.Statement, error) {
+	start := at(p.curToken)
+	stmt, err := p.parseStatementInner()
+	if err != nil {
+		return nil, err
+	}
+	ast.SetPosIfUnknown(stmt, start.Position)
+	return stmt, nil
+}
+
+func (p *Parser) parseStatementInner() (ast.Statement, error) {
 
 	// A politeness prefix (please / kindly / could you / would you kindly) may
 	// appear inside blocks (loops, function bodies, if-branches) as well as at
@@ -356,7 +378,7 @@ func (p *Parser) parseLetDeclaration() (ast.Statement, error) {
 		Name:       nameToken.Value,
 		IsConstant: isConstant,
 		Value:      value,
-		Line:       nameToken.Line,
+		Base:       at(nameToken),
 	}, nil
 }
 
@@ -514,7 +536,7 @@ func (p *Parser) parseDeclaration() (ast.Statement, error) {
 		Name:       nameToken.Value,
 		IsConstant: isConstant,
 		Value:      value,
-		Line:       nameToken.Line,
+		Base:       at(nameToken),
 	}, nil
 }
 
@@ -569,7 +591,7 @@ func (p *Parser) parseFunctionDeclaration() (ast.Statement, error) {
 	if err := p.expectToken(token.FUNCTION); err != nil {
 		return nil, err
 	}
-	funcLine := p.curToken.Line
+	funcPos := at(p.curToken)
 	p.nextToken()
 
 	nameToken := p.curToken
@@ -650,7 +672,7 @@ func (p *Parser) parseFunctionDeclaration() (ast.Statement, error) {
 		Name:       nameToken.Value,
 		Parameters: parameters,
 		Body:       body,
-		Line:       funcLine,
+		Base:       funcPos,
 	}, nil
 }
 
@@ -658,7 +680,7 @@ func (p *Parser) parseAssignment() (ast.Statement, error) {
 	if err := p.expectToken(token.SET); err != nil {
 		return nil, err
 	}
-	setLine := p.curToken.Line
+	setPos := at(p.curToken)
 	p.nextToken()
 
 	// Check for "Set the item at position X in Y to be Z"
@@ -666,10 +688,10 @@ func (p *Parser) parseAssignment() (ast.Statement, error) {
 	if p.curToken.Type == token.THE {
 		p.nextToken()
 		if p.curToken.Type == token.ITEM {
-			return p.parseIndexAssignment(setLine)
+			return p.parseIndexAssignment(setPos)
 		}
 		if p.curToken.Type == token.ENTRY {
-			return p.parseLookupKeyAssignment(setLine)
+			return p.parseLookupKeyAssignment(setPos)
 		}
 		return nil, p.syntaxErr(
 			fmt.Sprintf(msgFmtSetThe, p.curToken.Value),
@@ -711,7 +733,7 @@ func (p *Parser) parseAssignment() (ast.Statement, error) {
 			return nil, err
 		}
 		p.nextToken()
-		return &ast.LookupKeyAssignment{TableName: nameToken.Value, Key: key, Value: value, Line: setLine}, nil
+		return &ast.LookupKeyAssignment{TableName: nameToken.Value, Key: key, Value: value, Base: setPos}, nil
 	}
 
 	if err := p.expectToken(token.TO); err != nil {
@@ -754,10 +776,11 @@ func (p *Parser) parseAssignment() (ast.Statement, error) {
 				return &ast.Assignment{
 					Name: nameToken.Value,
 					Value: &ast.FunctionCall{
+						Base:      setPos,
 						Name:      funcName,
 						Arguments: args,
 					},
-					Line: setLine,
+					Base: setPos,
 				}, nil
 			}
 		}
@@ -776,12 +799,12 @@ func (p *Parser) parseAssignment() (ast.Statement, error) {
 	return &ast.Assignment{
 		Name:  nameToken.Value,
 		Value: value,
-		Line:  setLine,
+		Base:  setPos,
 	}, nil
 }
 
 // parseIndexAssignment parses "the item at position X in Y to be Z"
-func (p *Parser) parseIndexAssignment(setLine int) (ast.Statement, error) {
+func (p *Parser) parseIndexAssignment(setPos ast.Base) (ast.Statement, error) {
 	// Already consumed "Set the", now at "item"
 	if err := p.expectToken(token.ITEM); err != nil {
 		return nil, err
@@ -841,7 +864,7 @@ func (p *Parser) parseIndexAssignment(setLine int) (ast.Statement, error) {
 		ListName: listName,
 		Index:    index,
 		Value:    value,
-		Line:     setLine,
+		Base:     setPos,
 	}, nil
 }
 
@@ -849,7 +872,7 @@ func (p *Parser) parseCall() (ast.Statement, error) {
 	if err := p.expectToken(token.CALL); err != nil {
 		return nil, err
 	}
-	callLine := p.curToken.Line
+	callPos := at(p.curToken)
 	p.nextToken()
 
 	// First identifier could be:
@@ -896,11 +919,11 @@ func (p *Parser) parseCall() (ast.Statement, error) {
 		// Return as method call
 		return &ast.CallStatement{
 			MethodCall: &ast.MethodCall{
-				Object:     &ast.Identifier{Name: objectName},
+				Object:     &ast.Identifier{Base: callPos, Name: objectName},
 				MethodName: methodName,
 				Arguments:  args,
 			},
-			Line: callLine,
+			Base: callPos,
 		}, nil
 	}
 
@@ -934,11 +957,11 @@ func (p *Parser) parseCall() (ast.Statement, error) {
 		// Return as method call
 		return &ast.CallStatement{
 			MethodCall: &ast.MethodCall{
-				Object:     &ast.Identifier{Name: objectName},
+				Object:     &ast.Identifier{Base: callPos, Name: objectName},
 				MethodName: methodName,
 				Arguments:  args,
 			},
-			Line: callLine,
+			Base: callPos,
 		}, nil
 	}
 
@@ -961,7 +984,7 @@ func (p *Parser) parseCall() (ast.Statement, error) {
 			Name:      funcName,
 			Arguments: args,
 		},
-		Line: callLine,
+		Base: callPos,
 	}, nil
 }
 
@@ -989,7 +1012,7 @@ func (p *Parser) parseIfStatement() (ast.Statement, error) {
 	if err := p.expectToken(token.IF); err != nil {
 		return nil, err
 	}
-	startLine := p.curToken.Line
+	startPos := at(p.curToken)
 	p.nextToken()
 
 	condition, err := p.parseExpression()
@@ -1057,7 +1080,7 @@ func (p *Parser) parseIfStatement() (ast.Statement, error) {
 		Then:      thenBody,
 		ElseIf:    elseIfParts,
 		Else:      elseBody,
-		Line:      startLine,
+		Base:      startPos,
 	}, nil
 }
 
@@ -1065,7 +1088,7 @@ func (p *Parser) parseRepeat() (ast.Statement, error) {
 	if err := p.expectToken(token.REPEAT); err != nil {
 		return nil, err
 	}
-	startLine := p.curToken.Line
+	startPos := at(p.curToken)
 	p.nextToken()
 
 	// Check for "repeat forever" syntax
@@ -1089,7 +1112,7 @@ func (p *Parser) parseRepeat() (ast.Statement, error) {
 		return &ast.WhileLoop{
 			Condition: &ast.BooleanLiteral{Value: true},
 			Body:      body,
-			Line:      startLine,
+			Base:      startPos,
 		}, nil
 	}
 
@@ -1128,7 +1151,7 @@ func (p *Parser) parseRepeat() (ast.Statement, error) {
 		return &ast.WhileLoop{
 			Condition: condition,
 			Body:      body,
-			Line:      startLine,
+			Base:      startPos,
 		}, nil
 	}
 
@@ -1160,7 +1183,7 @@ func (p *Parser) parseRepeat() (ast.Statement, error) {
 	return &ast.ForLoop{
 		Count: countExpr,
 		Body:  body,
-		Line:  startLine,
+		Base:  startPos,
 	}, nil
 }
 
@@ -1238,7 +1261,7 @@ func (p *Parser) parseForEach() (ast.Statement, error) {
 		Item: itemName,
 		List: listExpr,
 		Body: body,
-		Line: itemToken.Line,
+		Base: at(itemToken),
 	}, nil
 }
 
@@ -1250,7 +1273,7 @@ func (p *Parser) parseOutput(newline bool) (ast.Statement, error) {
 			hintPrintOrWrite,
 		)
 	}
-	startLine := p.curToken.Line
+	startPos := at(p.curToken)
 	p.nextToken()
 
 	var values []ast.Expression
@@ -1280,7 +1303,7 @@ func (p *Parser) parseOutput(newline bool) (ast.Statement, error) {
 	return &ast.OutputStatement{
 		Values:  values,
 		Newline: newline,
-		Line:    startLine,
+		Base:    startPos,
 	}, nil
 }
 
@@ -1288,7 +1311,7 @@ func (p *Parser) parseReturn() (ast.Statement, error) {
 	if err := p.expectToken(token.RETURN); err != nil {
 		return nil, err
 	}
-	startLine := p.curToken.Line
+	startPos := at(p.curToken)
 	p.nextToken()
 
 	value, err := p.parseExpression()
@@ -1303,7 +1326,7 @@ func (p *Parser) parseReturn() (ast.Statement, error) {
 
 	return &ast.ReturnStatement{
 		Value: value,
-		Line:  startLine,
+		Base:  startPos,
 	}, nil
 }
 
@@ -1471,12 +1494,13 @@ func (p *Parser) parseOr() (ast.Expression, error) {
 	}
 
 	for p.curToken.Type == token.OR {
+		opPos := at(p.curToken)
 		p.nextToken()
 		right, err := p.parseAnd()
 		if err != nil {
 			return nil, err
 		}
-		left = &ast.BinaryExpression{Left: left, Operator: "or", Right: right}
+		left = &ast.BinaryExpression{Base: opPos, Left: left, Operator: "or", Right: right}
 	}
 
 	return left, nil
@@ -1490,12 +1514,13 @@ func (p *Parser) parseAnd() (ast.Expression, error) {
 	}
 
 	for p.curToken.Type == token.AND {
+		opPos := at(p.curToken)
 		p.nextToken()
 		right, err := p.parseNot()
 		if err != nil {
 			return nil, err
 		}
-		left = &ast.BinaryExpression{Left: left, Operator: "and", Right: right}
+		left = &ast.BinaryExpression{Base: opPos, Left: left, Operator: "and", Right: right}
 	}
 
 	return left, nil
@@ -1509,18 +1534,34 @@ func (p *Parser) parseAnd() (ast.Expression, error) {
 // "(not x) is equal to y".
 func (p *Parser) parseNot() (ast.Expression, error) {
 	if p.curToken.Type == token.NOT {
+		opPos := at(p.curToken)
 		p.nextToken()
 		right, err := p.parseNot()
 		if err != nil {
 			return nil, err
 		}
-		return &ast.UnaryExpression{Operator: "not", Right: right}, nil
+		return &ast.UnaryExpression{Base: opPos, Operator: "not", Right: right}, nil
 	}
 	return p.parseRelational()
 }
 
 // parseRelational handles comparison operators like "is equal to", "is less than", etc.
+// parseRelational parses a comparison and records where it started.
+//
+// The nodes built here — comparisons, the "is true"/"is nothing" sugar, and
+// error-type checks — are created after the left operand has been consumed, so
+// they are stamped from the wrapper rather than inline.
 func (p *Parser) parseRelational() (ast.Expression, error) {
+	start := at(p.curToken)
+	expr, err := p.parseRelationalExpr()
+	if err != nil {
+		return nil, err
+	}
+	ast.SetPosIfUnknown(expr, start.Position)
+	return expr, nil
+}
+
+func (p *Parser) parseRelationalExpr() (ast.Expression, error) {
 	left, err := p.parseCast()
 	if err != nil {
 		return nil, err
@@ -1649,6 +1690,16 @@ func isPossessiveMethodNameToken(t token.Type) bool {
 //   - "cast to <type>" / "casted to <type>" — explicit type conversion
 //   - "has <key>"                            — lookup table key check
 func (p *Parser) parseCast() (ast.Expression, error) {
+	start := at(p.curToken)
+	expr, err := p.parseCastExpr(start)
+	if err != nil {
+		return nil, err
+	}
+	ast.SetPosIfUnknown(expr, start.Position)
+	return expr, nil
+}
+
+func (p *Parser) parseCastExpr(start ast.Base) (ast.Expression, error) {
 	expr, err := p.parseAdditive()
 	if err != nil {
 		return nil, err
@@ -1800,12 +1851,14 @@ func (p *Parser) parseAdditive() (ast.Expression, error) {
 		if p.curToken.Type == token.MINUS {
 			op = "-"
 		}
+		opPos := at(p.curToken)
 		p.nextToken()
 		right, err := p.parseMultiplicative()
 		if err != nil {
 			return nil, err
 		}
 		left = &ast.BinaryExpression{
+			Base:     opPos,
 			Left:     left,
 			Operator: op,
 			Right:    right,
@@ -1826,12 +1879,14 @@ func (p *Parser) parseMultiplicative() (ast.Expression, error) {
 		if p.curToken.Type == token.SLASH {
 			op = "/"
 		}
+		opPos := at(p.curToken)
 		p.nextToken()
 		right, err := p.parsePrimary()
 		if err != nil {
 			return nil, err
 		}
 		left = &ast.BinaryExpression{
+			Base:     opPos,
 			Left:     left,
 			Operator: op,
 			Right:    right,
@@ -1841,7 +1896,24 @@ func (p *Parser) parseMultiplicative() (ast.Expression, error) {
 	return left, nil
 }
 
+// parsePrimary parses a primary expression and records where it started.
+//
+// The stamping happens here, once, rather than at each of the ~40 node
+// constructions inside parsePrimaryExpr.
 func (p *Parser) parsePrimary() (ast.Expression, error) {
+	start := at(p.curToken)
+	expr, err := p.parsePrimaryExpr()
+	if err != nil {
+		return nil, err
+	}
+	ast.SetPosIfUnknown(expr, start.Position)
+	return expr, nil
+}
+
+func (p *Parser) parsePrimaryExpr() (ast.Expression, error) {
+	// Position for nodes synthesised from a token consumed further below.
+	nodeStart := at(p.curToken)
+
 	switch p.curToken.Type {
 	case token.NUMBER:
 		value, _ := strconv.ParseFloat(p.curToken.Value, 64)
@@ -2014,7 +2086,7 @@ func (p *Parser) parsePrimary() (ast.Expression, error) {
 					args = p.parseCallArguments()
 				}
 				return &ast.MethodCall{
-					Object:     &ast.Identifier{Name: objectName},
+					Object:     &ast.Identifier{Base: nodeStart, Name: objectName},
 					MethodName: methodName,
 					Arguments:  args,
 				}, nil
@@ -2329,7 +2401,7 @@ func (p *Parser) parseToggle() (ast.Statement, error) {
 	if err := p.expectToken(token.TOGGLE); err != nil {
 		return nil, err
 	}
-	startLine := p.curToken.Line
+	startPos := at(p.curToken)
 	p.nextToken()
 
 	// Handle "toggle the value of x"
@@ -2360,7 +2432,7 @@ func (p *Parser) parseToggle() (ast.Statement, error) {
 
 	return &ast.ToggleStatement{
 		Name: name,
-		Line: startLine,
+		Base: startPos,
 	}, nil
 }
 
@@ -2596,7 +2668,7 @@ func (p *Parser) parseLookupKeyAccess() (ast.Expression, error) {
 
 // parseLookupKeyAssignment parses "the entry KEY in TABLE to be VALUE."
 // Cursor is on ENTRY when called (parseAssignment has already consumed "Set the").
-func (p *Parser) parseLookupKeyAssignment(setLine int) (ast.Statement, error) {
+func (p *Parser) parseLookupKeyAssignment(setPos ast.Base) (ast.Statement, error) {
 	p.nextToken() // consume ENTRY
 
 	key, err := p.parseExpression()
@@ -2642,7 +2714,7 @@ func (p *Parser) parseLookupKeyAssignment(setLine int) (ast.Statement, error) {
 	}
 	p.nextToken()
 
-	return &ast.LookupKeyAssignment{TableName: tableName, Key: key, Value: value, Line: setLine}, nil
+	return &ast.LookupKeyAssignment{TableName: tableName, Key: key, Value: value, Base: setPos}, nil
 }
 
 // parseSleepStatement parses "Sleep for <duration>." and "Wait for <duration>."
@@ -2667,7 +2739,7 @@ func (p *Parser) parseLookupKeyAssignment(setLine int) (ast.Statement, error) {
 //	Please sleep for 1 minute.
 //	Would you kindly wait for a second.
 func (p *Parser) parseSleepStatement() (ast.Statement, error) {
-	line := p.curToken.Line
+	sleepPos := at(p.curToken)
 	p.nextToken() // consume SLEEP / WAIT
 
 	if p.curToken.Type != token.FOR {
@@ -2773,45 +2845,10 @@ func (p *Parser) parseSleepStatement() (ast.Statement, error) {
 
 	return &ast.CallStatement{
 		FunctionCall: &ast.FunctionCall{
+			Base:      sleepPos,
 			Name:      "sleep",
-			Arguments: []ast.Expression{&ast.NumberLiteral{Value: seconds}},
+			Arguments: []ast.Expression{&ast.NumberLiteral{Base: sleepPos, Value: seconds}},
 		},
-		Line: line,
+		Base: sleepPos,
 	}, nil
-}
-
-// stmtLine extracts the source line number from a statement.  Returns 0 if
-// the statement type does not carry a line field (e.g. CommentStatement).
-func stmtLine(stmt ast.Statement) int {
-	switch s := stmt.(type) {
-	case *ast.FunctionDecl:
-		return s.Line
-	case *ast.VariableDecl:
-		return s.Line
-	case *ast.Assignment:
-		return s.Line
-	case *ast.CallStatement:
-		return s.Line
-	case *ast.IfStatement:
-		return s.Line
-	case *ast.WhileLoop:
-		return s.Line
-	case *ast.ForLoop:
-		return s.Line
-	case *ast.ForEachLoop:
-		return s.Line
-	case *ast.OutputStatement:
-		return s.Line
-	case *ast.ReturnStatement:
-		return s.Line
-	case *ast.RaiseStatement:
-		return s.Line
-	case *ast.TryStatement:
-		return s.Line
-	case *ast.SwapStatement:
-		return s.Line
-	case *ast.ToggleStatement:
-		return s.Line
-	}
-	return 0
 }

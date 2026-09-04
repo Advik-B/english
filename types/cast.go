@@ -6,176 +6,122 @@ import (
 	"strings"
 )
 
-// Cast performs an explicit type conversion requested by a "cast to" expression.
-// It is the ONLY place where type conversion is allowed in the language.
-// Implicit conversions are always a TypeError.
+// Cast performs an explicit conversion requested by a "cast to" expression.
+//
+// It is the only place a conversion happens: nothing is converted implicitly,
+// which is why the expression exists.
+//
+// There are three targets, because there are three convertible types. It used
+// to accept nine, one for each sized numeric kind, and was incomplete in both
+// directions: it had no case for u64 or f32 at all, and every numeric case
+// omitted its own type, so casting an i32 to i32 failed. The error for an
+// unsupported target read "cannot cast number to number", because all nine
+// kinds are called "number".
 func Cast(v interface{}, target TypeKind) (interface{}, error) {
-	// Unwrap TypedValue if present
 	if tv, ok := v.(*TypedValue); ok {
 		v = tv.Value
 	}
 
 	switch target {
-	case TypeI32:
-		switch val := v.(type) {
-		case float64:
-			return int32(val), nil
-		case int64:
-			return int32(val), nil
-		case uint32:
-			return int32(val), nil
-		case uint64:
-			return int32(val), nil
-		case string:
-			var i int32
-			if _, err := fmt.Sscanf(val, "%d", &i); err != nil {
-				return nil, fmt.Errorf("TypeError: cannot cast text %q to number", val)
-			}
-			return i, nil
-		default:
-			return nil, fmt.Errorf("TypeError: cannot cast %s to number", Name(Infer(v)))
-		}
-
-	case TypeI64:
-		switch val := v.(type) {
-		case float64:
-			return int64(val), nil
-		case int32:
-			return int64(val), nil
-		case uint32:
-			return int64(val), nil
-		case uint64:
-			return int64(val), nil
-		case string:
-			var i int64
-			if _, err := fmt.Sscanf(val, "%d", &i); err != nil {
-				return nil, fmt.Errorf("TypeError: cannot cast text %q to number", val)
-			}
-			return i, nil
-		default:
-			return nil, fmt.Errorf("TypeError: cannot cast %s to number", Name(Infer(v)))
-		}
-
-	case TypeU32:
-		switch val := v.(type) {
-		case float64:
-			if val < 0 {
-				return nil, fmt.Errorf("TypeError: cannot cast negative number to unsigned integer")
-			}
-			return uint32(val), nil
-		case int32:
-			if val < 0 {
-				return nil, fmt.Errorf("TypeError: cannot cast negative number to unsigned integer")
-			}
-			return uint32(val), nil
-		case int64:
-			if val < 0 {
-				return nil, fmt.Errorf("TypeError: cannot cast negative number to unsigned integer")
-			}
-			return uint32(val), nil
-		case string:
-			var i uint32
-			if _, err := fmt.Sscanf(val, "%d", &i); err != nil {
-				return nil, fmt.Errorf("TypeError: cannot cast text %q to number", val)
-			}
-			return i, nil
-		default:
-			return nil, fmt.Errorf("TypeError: cannot cast %s to number", Name(Infer(v)))
-		}
-
 	case TypeF64:
-		switch val := v.(type) {
-		case float64:
-			return val, nil
-		case int32:
-			return float64(val), nil
-		case int64:
-			return float64(val), nil
-		case uint32:
-			return float64(val), nil
-		case uint64:
-			return float64(val), nil
-		case float32:
-			return float64(val), nil
-		case bool:
-			if val {
-				return float64(1), nil
-			}
-			return float64(0), nil
-		case string:
-			f, err := strconv.ParseFloat(val, 64)
-			if err != nil {
-				return nil, fmt.Errorf("TypeError: cannot cast text %q to number", val)
-			}
-			return f, nil
-		default:
-			return nil, fmt.Errorf("TypeError: cannot cast %s to number", Name(Infer(v)))
-		}
-
+		return castToNumber(v)
 	case TypeString:
-		return basicString(v), nil
-
+		return castToText(v)
 	case TypeBool:
-		switch val := v.(type) {
-		case bool:
-			return val, nil
-		case float64:
-			return val != 0, nil
-		case int32:
-			return val != 0, nil
-		case int64:
-			return val != 0, nil
-		case string:
-			normalized := strings.ToLower(val)
-			switch normalized {
-			case "true", "1", "yes":
-				return true, nil
-			case "false", "0", "no":
-				return false, nil
-			}
-			return nil, fmt.Errorf("TypeError: cannot cast text %q to boolean", val)
-		case nil:
-			return false, nil
-		default:
-			return nil, fmt.Errorf("TypeError: cannot cast %s to boolean", Name(Infer(v)))
-		}
-
-	default:
-		return nil, fmt.Errorf("TypeError: unsupported cast target type '%s'", Name(target))
+		return castToBoolean(v)
 	}
+	return nil, fmt.Errorf("cannot cast to %s\n  Hint: a cast can produce a number, text or a boolean",
+		Name(target))
 }
 
-// basicString converts a primitive value to its text representation.
-// This is intentionally limited to types known by vm/types/ so that the cast
-// package remains free of vm dependencies.  The vm package's full ToString
-// handles complex types (arrays, lookup tables, struct instances, etc.).
-func basicString(v interface{}) string {
+func castToNumber(v interface{}) (interface{}, error) {
+	if f, ok := numeric(v); ok {
+		return f, nil
+	}
 	switch val := v.(type) {
-	case float64:
-		if val == float64(int64(val)) {
-			return strconv.FormatInt(int64(val), 10)
-		}
-		return strconv.FormatFloat(val, 'f', -1, 64)
-	case int32:
-		return strconv.FormatInt(int64(val), 10)
-	case int64:
-		return strconv.FormatInt(val, 10)
-	case uint32:
-		return strconv.FormatUint(uint64(val), 10)
-	case uint64:
-		return strconv.FormatUint(val, 10)
-	case float32:
-		return strconv.FormatFloat(float64(val), 'f', -1, 32)
-	case string:
-		return val
 	case bool:
 		if val {
-			return "true"
+			return float64(1), nil
 		}
-		return "false"
-	case nil:
-		return "nothing"
-	default:
-		return fmt.Sprintf("%v", v)
+		return float64(0), nil
+	case string:
+		f, err := strconv.ParseFloat(strings.TrimSpace(val), 64)
+		if err != nil {
+			return nil, fmt.Errorf("cannot cast the text %q to a number", val)
+		}
+		return f, nil
 	}
+	return nil, fmt.Errorf("cannot cast %s to a number", NameOf(v))
+}
+
+func castToText(v interface{}) (interface{}, error) {
+	// Rendering a composite value needs the full renderer, which lives in the
+	// runtime package and cannot be imported here without a cycle. The engines
+	// route "cast to text" through that renderer directly; this handles the
+	// primitives for any caller that reaches Cast with one.
+	switch val := v.(type) {
+	case nil:
+		return "nothing", nil
+	case string:
+		return val, nil
+	case bool:
+		if val {
+			return "true", nil
+		}
+		return "false", nil
+	}
+	if f, ok := numeric(v); ok {
+		if f == float64(int64(f)) {
+			return strconv.FormatInt(int64(f), 10), nil
+		}
+		return strconv.FormatFloat(f, 'f', -1, 64), nil
+	}
+	return fmt.Sprintf("%v", v), nil
+}
+
+func castToBoolean(v interface{}) (interface{}, error) {
+	switch val := v.(type) {
+	case bool:
+		return val, nil
+	case nil:
+		return false, nil
+	case string:
+		switch strings.ToLower(strings.TrimSpace(val)) {
+		case "true", "yes", "1":
+			return true, nil
+		case "false", "no", "0":
+			return false, nil
+		}
+		return nil, fmt.Errorf("cannot cast the text %q to a boolean\n  Hint: write true, false, yes or no", val)
+	}
+	if f, ok := numeric(v); ok {
+		return f != 0, nil
+	}
+	return nil, fmt.Errorf("cannot cast %s to a boolean", NameOf(v))
+}
+
+// numeric unwraps any numeric representation to a float64.
+//
+// Only float64 can be produced now, but a value decoded from bytecode or held
+// in a TypedValue may still be one of the others, so this stays total.
+func numeric(v interface{}) (float64, bool) {
+	switch val := v.(type) {
+	case float64:
+		return val, true
+	case float32:
+		return float64(val), true
+	case int:
+		return float64(val), true
+	case int32:
+		return float64(val), true
+	case int64:
+		return float64(val), true
+	case uint32:
+		return float64(val), true
+	case uint64:
+		return float64(val), true
+	case *TypedValue:
+		return numeric(val.Value)
+	}
+	return 0, false
 }

@@ -1088,16 +1088,37 @@ thats it.
 Print a is equal to b.`, "true")
 }
 
-// TestParityCastThenArithmetic covers the asymmetry where Add accepted only
-// float64 while every other arithmetic operation accepted all numeric
-// representations, so after a cast `a - b` worked and `a + b` did not.
-func TestParityCastThenArithmetic(t *testing.T) {
-	src := `Declare a to be 7 cast to integer.
-Declare b to be 2 cast to integer.
+// TestParityRetiredNumericTypes covers the sized numeric types, which are no
+// longer types at all.
+//
+// They were reachable only through a cast, and everything you could do with
+// the result was broken: addition rejected them while subtraction accepted
+// them, two equal values compared unequal, they could not be lookup-table
+// keys, and casting one to its own type failed. There is one number type now,
+// and asking for a narrower one says so.
+func TestParityRetiredNumericTypes(t *testing.T) {
+	for _, src := range []string{
+		`Print 7 cast to integer.`,
+		`Declare x as i32 to be 1.`,
+		`Print 1 cast to f32.`,
+	} {
+		assertParityError(t, src)
+		_, err := runAST(src)
+		if err != nil && !strings.Contains(err.Error(), "is not a type") {
+			t.Errorf("unhelpful message for %q: %v", src, err)
+		}
+	}
+}
+
+// TestParityNumberArithmetic covers the arithmetic and equality that the sized
+// types used to break, now that there is a single number type.
+func TestParityNumberArithmetic(t *testing.T) {
+	src := `Declare a to be 7.
+Declare b to be 2.
 Print a + b.
 Print a - b.
 Print a is equal to b.
-Print a is equal to (7 cast to integer).`
+Print a is equal to 7.`
 	assertParity(t, src)
 	assertOutputContains(t, src, "9")
 }

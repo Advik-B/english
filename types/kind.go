@@ -83,31 +83,41 @@ func Canonical(tk TypeKind) TypeKind {
 // Parse converts a user-supplied type name string into a TypeKind.
 func Parse(s string) TypeKind {
 	switch strings.ToLower(s) {
-	case "i32", "integer":
-		return TypeI32
-	case "i64":
-		return TypeI64
-	case "u32", "unsigned integer":
-		return TypeU32
-	case "u64":
-		return TypeU64
-	case "f32", "float":
-		return TypeF32
-	case "f64", "double", "number", "num":
+	case "number", "num", "f64", "double":
 		return TypeF64
-	case "string", "text", "str":
+	case "text", "string", "str":
 		return TypeString
-	case "bool", "boolean":
+	case "boolean", "bool":
 		return TypeBool
 	case "list":
 		return TypeList
 	case "array":
 		return TypeArray
-	case "lookup", "table", "lookup table":
+	case "lookup table", "lookup", "table":
 		return TypeLookup
 	default:
 		return TypeUnknown
 	}
+}
+
+// retiredNumericNames are the type names that used to select a sized numeric
+// type. They are no longer types, so that a diagnostic can say why rather than
+// only that the name is unknown.
+//
+// There is one number type. The narrower kinds were reachable only through a
+// cast, and everything you could do with the result was broken: addition
+// rejected them while subtraction accepted them, two equal values of one
+// compared unequal, they could not be lookup-table keys, and casting one to
+// its own type failed. Half-support was worse than none.
+var retiredNumericNames = map[string]bool{
+	"i32": true, "i64": true, "u32": true, "u64": true, "f32": true,
+	"integer": true, "unsigned integer": true, "float": true,
+}
+
+// IsRetiredNumericName reports whether a name used to select a sized numeric
+// type.
+func IsRetiredNumericName(s string) bool {
+	return retiredNumericNames[strings.ToLower(s)]
 }
 
 // UserTypeNames returns the canonical user-facing type names that are valid

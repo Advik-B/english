@@ -68,6 +68,9 @@ type Analyzer struct {
 	// checked records the expressions already visited, so that a node cannot
 	// be reported against twice.
 	checked map[ast.Expression]bool
+	// reportedTypes records the annotations already reported as unresolvable,
+	// for the same reason.
+	reportedTypes map[*ast.TypeExpr]bool
 }
 
 // Check analyses a program and returns every problem found, ordered by
@@ -84,13 +87,14 @@ func Check(prog *ast.Program, cfg Config) []*Diagnostic {
 
 func newAnalyzer(cfg Config) *Analyzer {
 	a := &Analyzer{
-		cfg:         cfg,
-		scope:       newScope(nil),
-		funcs:       make(map[string]*funcSig),
-		structs:     make(map[string]*structDef),
-		errorTypes:  make(map[string]bool),
-		seenImports: make(map[string]bool),
-		checked:     make(map[ast.Expression]bool),
+		cfg:           cfg,
+		scope:         newScope(nil),
+		funcs:         make(map[string]*funcSig),
+		structs:       make(map[string]*structDef),
+		errorTypes:    make(map[string]bool),
+		seenImports:   make(map[string]bool),
+		checked:       make(map[ast.Expression]bool),
+		reportedTypes: make(map[*ast.TypeExpr]bool),
 	}
 	for _, name := range cfg.Predefined {
 		// Every stdlib constant is a number today; the table in stdlib is the
@@ -305,6 +309,20 @@ func (a *Analyzer) resolve(te *ast.TypeExpr) *types.TypeInfo {
 	}
 	if _, ok := a.structs[te.Name]; ok {
 		return &types.TypeInfo{Kind: types.TypeStruct, Name: te.Name}
+	}
+
+	// An annotation is reached once per use — collected, checked against a
+	// default, declared in a method body — so report it only the first time.
+	if a.reportedTypes[te] {
+		return nil
+	}
+	a.reportedTypes[te] = true
+
+	if types.IsRetiredNumericName(te.Name) {
+		a.errorWithHint(te.Pos(),
+			"There is one number type, written 'number'. Use is_integer to ask whether a value is whole.",
+			"'%s' is not a type", te.Name)
+		return nil
 	}
 	a.errorWithHint(te.Pos(),
 		fmt.Sprintf("Built-in types are: %s. A struct must be declared before it is used as a type.",

@@ -544,7 +544,7 @@ Define a struct with named fields using `declare … as a structure with the fol
 ```english
 declare Person as a structure with the following fields:
     name is a string.
-    age is an unsigned integer with 0 being the default.
+    age is a number with 0 being the default.
 thats it.
 ```
 

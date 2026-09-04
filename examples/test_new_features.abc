@@ -3,7 +3,7 @@
 # Define a Person struct
 declare Person as a structure with the following fields:
     name is a string.
-    age is an unsigned integer with 18 being the default.
+    age is a number with 18 being the default.
 thats it.
 
 # Create an instance with default values

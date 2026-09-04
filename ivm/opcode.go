@@ -124,6 +124,16 @@ const (
 	// New opcodes are appended so that the numeric value of every existing
 	// one stays put.
 	OP_ITER_GET
+
+	// ── Coercion ──────────────────────────────────────────────────────────
+	// OP_TO_BOOL replaces the top of the stack with its truth value, or
+	// fails if it has none.
+	//
+	// The short-circuit operators pushed the right operand unchanged, so
+	// "true and 5" evaluated to 5 and "false or \"hi\"" to "hi": a logical
+	// operator could yield a non-boolean, in a language whose conditions
+	// accept nothing else.
+	OP_TO_BOOL
 )
 
 // BinOp encodes a binary operator.
@@ -266,6 +276,8 @@ func OpName(op Opcode) string {
 		return "POP"
 	case OP_ITER_GET:
 		return "ITER_GET"
+	case OP_TO_BOOL:
+		return "TO_BOOL"
 	default:
 		return "UNKNOWN"
 	}

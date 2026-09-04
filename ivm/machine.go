@@ -853,6 +853,13 @@ func (m *Machine) step(instr Instruction, chunk *Chunk) (result interface{}, sto
 	case OP_SET_LINE:
 		m.cur.line = int(operand)
 
+	case OP_TO_BOOL:
+		b, err := runtime.ToBool(m.pop())
+		if err != nil {
+			return nil, false, m.runtimeErr(err.Error())
+		}
+		m.push(b)
+
 	case OP_ITER_GET:
 		index := m.pop()
 		collection := m.pop()

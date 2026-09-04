@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/Advik-B/english/ast"
+	"github.com/Advik-B/english/runtime"
 	"github.com/Advik-B/english/types"
 )
 
@@ -105,15 +106,19 @@ func (ev *Evaluator) evalStructInstantiation(node *ast.StructInstantiation) (Val
 
 	// Override with provided field values
 	for _, fieldName := range node.FieldOrder {
-		expr := node.FieldValues[fieldName]
-		val, err := ev.Eval(expr)
+		// Check the field exists before evaluating its value, so that a
+		// misspelled name does not run whatever was written for it first.
+		fieldDef, ok := structDef.Fields[fieldName]
+		if !ok {
+			return nil, ev.runtimeError(fmt.Sprintf("struct '%s' has no field '%s'", node.StructName, fieldName))
+		}
+
+		val, err := ev.Eval(node.FieldValues[fieldName])
 		if err != nil {
 			return nil, err
 		}
-
-		// Check if field exists
-		if _, ok := structDef.Fields[fieldName]; !ok {
-			return nil, ev.runtimeError(fmt.Sprintf("struct '%s' has no field '%s'", node.StructName, fieldName))
+		if err := checkFieldValue(node.StructName, fieldDef, val); err != nil {
+			return nil, ev.runtimeError(err.Error())
 		}
 
 		fields[fieldName] = val
@@ -161,7 +166,7 @@ func (ev *Evaluator) evalFieldAssignment(node *ast.FieldAssignment) (Value, erro
 		return nil, ev.runtimeError(fmt.Sprintf("'%s' is not a struct instance", node.ObjectName))
 	}
 
-	// Check if field exists
+	// Check the field exists
 	if _, ok := structInst.Fields[node.Field]; !ok {
 		return nil, ev.runtimeError(fmt.Sprintf("struct '%s' has no field '%s'", structInst.Definition.Name, node.Field))
 	}
@@ -172,7 +177,17 @@ func (ev *Evaluator) evalFieldAssignment(node *ast.FieldAssignment) (Value, erro
 		return nil, err
 	}
 
-	// Assign to field
+	// A field keeps the type it was declared with. Neither engine checked
+	// this, so a number field could be given text and only fail much later,
+	// somewhere else.
+	if structInst.Definition != nil {
+		if fieldDef, ok := structInst.Definition.Fields[node.Field]; ok {
+			if err := checkFieldValue(structInst.Definition.Name, fieldDef, value); err != nil {
+				return nil, ev.runtimeError(err.Error())
+			}
+		}
+	}
+
 	structInst.Fields[node.Field] = value
 
 	return nil, nil
@@ -278,4 +293,20 @@ func (ev *Evaluator) evalMethodCall(node *ast.MethodCall) (Value, error) {
 	}
 
 	return result, nil
+}
+
+// checkFieldValue verifies a value against a struct field's declared type.
+func checkFieldValue(structName string, field *FieldDefinition, value Value) error {
+	if value == nil || field == nil || field.TypeInfo == nil {
+		return nil
+	}
+	declared := field.TypeInfo.Kind
+	if declared == types.TypeUnknown {
+		return nil // a struct-typed field; only the checker can resolve it
+	}
+	if got := types.Infer(value); types.Canonical(got) != types.Canonical(declared) {
+		return runtime.TypeErrorf("TypeError: field '%s' of %s is %s, but this is %s",
+			field.Name, structName, types.Name(declared), types.Name(got))
+	}
+	return nil
 }

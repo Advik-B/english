@@ -29,9 +29,23 @@ type ReferenceValue struct {
 // ─── Environment ──────────────────────────────────────────────────────────────
 
 type envEntry struct {
-	value    interface{}
-	typeName string // declared type name ("" = inferred)
+	value interface{}
+	// declared is the type the name is locked to, or TypeUnknown when it is
+	// not locked at all. It is set for every declaration, whether the type was
+	// written or inferred from the initial value.
+	declared types.TypeKind
+	// typeName is the annotation as written, for diagnostics. It is empty when
+	// the type was inferred.
+	typeName string
 	isConst  bool
+}
+
+// declaredName renders an entry's type for a diagnostic.
+func (e *envEntry) declaredName() string {
+	if e.typeName != "" {
+		return e.typeName
+	}
+	return types.Name(e.declared)
 }
 
 type ivmEnv struct {
@@ -76,23 +90,31 @@ func (e *ivmEnv) setVar(name string, value interface{}) error {
 		if en.isConst {
 			return fmt.Errorf("TypeError: cannot reassign constant '%s'", name)
 		}
-		if value != nil && en.typeName != "" {
-			actual := inferKindName(value)
-			declared := types.Parse(en.typeName)
-			actualKind := types.Infer(value)
-			if declared != types.TypeNull && declared != types.TypeUnknown &&
-				types.Canonical(actualKind) != types.Canonical(declared) {
-				return fmt.Errorf("TypeError: cannot assign %s to variable '%s' (declared as %s)\n  Hint: use 'cast to' for explicit conversion", actual, name, en.typeName)
+		// Enforce the type the name was declared with, whether it was written
+		// or inferred. Only explicitly annotated names used to be checked, so
+		// "Declare x to be 5." left x unlocked and "Set x to be \"hello\"."
+		// was accepted here while the other engine rejected it — the guarantee
+		// the language leads with, absent from the engine that runs by default.
+		if value != nil && en.declared != types.TypeNull && en.declared != types.TypeUnknown {
+			if got := types.Infer(value); types.Canonical(got) != types.Canonical(en.declared) {
+				return fmt.Errorf(
+					"TypeError: cannot assign %s to variable '%s' (declared as %s)\n  Hint: use 'cast to' for explicit conversion",
+					types.Name(got), name, en.declaredName())
 			}
 		}
 		en.value = value
 		return nil
 	}
+
 	if e.parent != nil {
 		return e.parent.setVar(name, value)
 	}
-	// Auto-create (needed for internal variables)
-	e.vars[name] = &envEntry{value: value}
+	// A name that was never declared used to be created here, silently, so a
+	// typo in a Set statement introduced a variable instead of reporting a
+	// mistake. Analysis rejects that before either engine runs; reaching it
+	// here means the program was not analysed, so create the name rather than
+	// failing, but lock it to the value's type as a declaration would.
+	e.vars[name] = &envEntry{value: value, declared: types.Canonical(types.Infer(value))}
 	return nil
 }
 
@@ -100,7 +122,12 @@ func (e *ivmEnv) defineVar(name string, value interface{}, isConst bool) error {
 	if _, ok := e.vars[name]; ok {
 		return fmt.Errorf("variable '%s' is already defined in this scope", name)
 	}
-	e.vars[name] = &envEntry{value: value, isConst: isConst}
+	// Record the inferred type, so the name is locked to it from here on.
+	e.vars[name] = &envEntry{
+		value:    value,
+		declared: types.Canonical(types.Infer(value)),
+		isConst:  isConst,
+	}
 	return nil
 }
 
@@ -118,7 +145,12 @@ func (e *ivmEnv) defineTypedVar(name string, typeName string, value interface{},
 			return fmt.Errorf("TypeError: cannot initialize %s variable '%s' with %s value\n  Hint: use 'cast to' for explicit conversion", typeName, name, types.Name(actual))
 		}
 	}
-	e.vars[name] = &envEntry{value: value, typeName: typeName, isConst: isConst}
+	e.vars[name] = &envEntry{
+		value:    value,
+		declared: types.Canonical(target),
+		typeName: typeName,
+		isConst:  isConst,
+	}
 	return nil
 }
 

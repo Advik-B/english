@@ -528,6 +528,9 @@ func (c *Compiler) compileBinaryExpr(e *ast.BinaryExpression) error {
 		if err := c.compileExpression(e.Right); err != nil {
 			return err
 		}
+		// The right operand is the value of the whole expression when the
+		// left did not short-circuit, so it must be a boolean too.
+		c.chunk.Emit(OP_TO_BOOL, 0)
 		endJump := c.chunk.CurrentPos()
 		c.chunk.Emit(OP_JUMP, 0)
 		// false_label:
@@ -548,6 +551,9 @@ func (c *Compiler) compileBinaryExpr(e *ast.BinaryExpression) error {
 		if err := c.compileExpression(e.Right); err != nil {
 			return err
 		}
+		// The right operand is the value of the whole expression when the
+		// left did not short-circuit, so it must be a boolean too.
+		c.chunk.Emit(OP_TO_BOOL, 0)
 		endJump := c.chunk.CurrentPos()
 		c.chunk.Emit(OP_JUMP, 0)
 		// true_label:

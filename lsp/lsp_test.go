@@ -3,6 +3,8 @@ package lsp
 import (
 	"strings"
 	"testing"
+
+	"github.com/Advik-B/english/stdlib"
 )
 
 func TestDocument(t *testing.T) {
@@ -460,5 +462,83 @@ Print total.
 		for _, d := range result.Diagnostics {
 			t.Errorf("unexpected diagnostic: %s", d.Message)
 		}
+	}
+}
+
+// TestCompletionsCoverTheLanguage covers the editor's knowledge of the
+// language, which used to be two hand-written lists: 23 keyword completions
+// and 14 hover entries, disagreeing with each other and missing everything
+// added since they were written — including all 84 standard-library functions.
+func TestCompletionsCoverTheLanguage(t *testing.T) {
+	a := NewAnalyzer()
+	doc := NewDocument("file:///t.abc", "english", 1, "")
+	items := a.GetCompletions(doc, Position{}, a.Analyze(doc))
+
+	labels := make(map[string]bool, len(items))
+	for _, item := range items {
+		labels[item.Label] = true
+	}
+
+	// Constructs that postdate the old hand-written list.
+	for _, want := range []string{
+		"Try", "Raise", "Import", "cast to", "a new instance of",
+		"array", "range", "continue", "sleep", "please", "finally",
+	} {
+		if !labels[want] {
+			t.Errorf("no completion offered for %q", want)
+		}
+	}
+
+	// Every standard-library function must be offered.
+	missing := 0
+	for _, name := range stdlib.Names() {
+		if !labels[name] {
+			missing++
+			if missing <= 5 {
+				t.Errorf("no completion offered for the built-in %q", name)
+			}
+		}
+	}
+	if missing > 5 {
+		t.Errorf("and %d more built-ins have no completion", missing-5)
+	}
+}
+
+// TestCompletionsCarryUsage checks a built-in's completion says how to call
+// it, which is the thing a reader actually needs.
+func TestCompletionsCarryUsage(t *testing.T) {
+	a := NewAnalyzer()
+	doc := NewDocument("file:///t.abc", "english", 1, "")
+	for _, item := range a.GetCompletions(doc, Position{}, a.Analyze(doc)) {
+		if item.Label != "pad_left" {
+			continue
+		}
+		if item.Detail != "pad_left(text, width[, char])" {
+			t.Errorf("detail is %q, want the call template", item.Detail)
+		}
+		documentation, _ := item.Documentation.(string)
+		if !strings.Contains(documentation, "pad_left") {
+			t.Errorf("documentation does not describe the function: %q", documentation)
+		}
+		return
+	}
+	t.Error("pad_left was not offered at all")
+}
+
+// TestHoverCoversBuiltins covers hovering a standard-library function, which
+// previously showed nothing because the analyser's own map held 14 keywords
+// and no functions.
+func TestHoverCoversBuiltins(t *testing.T) {
+	a := NewAnalyzer()
+	doc := NewDocument("file:///t.abc", "english", 1, "Print uppercase of \"x\".\n")
+	result := a.Analyze(doc)
+
+	// "uppercase" starts at column 6 on the first line.
+	hover := a.GetHover(doc, Position{Line: 0, Character: 8}, result)
+	if hover == nil {
+		t.Fatal("no hover for a standard-library function")
+	}
+	if !strings.Contains(hover.Contents.Value, "uppercase") {
+		t.Errorf("hover does not describe uppercase: %q", hover.Contents.Value)
 	}
 }

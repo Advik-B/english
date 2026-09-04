@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/Advik-B/english/ast"
+	"github.com/Advik-B/english/help"
 	"github.com/Advik-B/english/parser"
 	"github.com/Advik-B/english/sema"
 	"github.com/Advik-B/english/stdlib"
@@ -71,11 +72,16 @@ type VariableInfo struct {
 }
 
 // Analyzer analyzes English language documents
-type Analyzer struct{}
+type Analyzer struct {
+	// knowledge is the same help registry that backs "english help-topic",
+	// so the editor and the command line describe the language identically
+	// rather than from two hand-written lists.
+	knowledge *help.Registry
+}
 
 // NewAnalyzer creates a new analyzer
 func NewAnalyzer() *Analyzer {
-	return &Analyzer{}
+	return &Analyzer{knowledge: help.NewRegistry()}
 }
 
 // Analyze analyzes a document and returns the analysis result
@@ -548,6 +554,9 @@ func (a *Analyzer) GetCompletions(doc *Document, pos Position, result *AnalysisR
 	// Add keyword completions
 	items = append(items, a.getKeywordCompletions(prefix)...)
 
+	// Add the standard library, which the editor previously knew nothing about.
+	items = append(items, a.getBuiltinCompletions(prefix)...)
+
 	// Add variable completions
 	for name, info := range result.Variables {
 		if prefix == "" || strings.HasPrefix(strings.ToLower(name), prefix) {
@@ -630,53 +639,6 @@ func normalizeCompletionItems(items []CompletionItem) []CompletionItem {
 }
 
 // getKeywordCompletions returns keyword completions
-func (a *Analyzer) getKeywordCompletions(prefix string) []CompletionItem {
-	keywords := []struct {
-		label   string
-		detail  string
-		snippet string
-	}{
-		{"Declare", "Declare a variable", "Declare ${1:name} to be ${2:value}."},
-		{"Set", "Assign a value", "Set ${1:name} to be ${2:value}."},
-		{"Print", "Print a value", "Print ${1:value}."},
-		{"If", "Conditional statement", "If ${1:condition}, then\n\t${2:statements}\nThats it."},
-		{"Otherwise", "Else clause", "Otherwise\n\t${1:statements}"},
-		{"Repeat", "Loop statement", "Repeat the following ${1:count} times:\n\t${2:statements}\nThats it."},
-		{"For", "For-each loop", "For each ${1:item} in ${2:list}, do the following:\n\t${3:statements}\nThats it."},
-		{"Call", "Call a function", "Call ${1:function}."},
-		{"Return", "Return from function", "Return ${1:value}."},
-		{"Break", "Break out of loop", "Break out of the loop."},
-		{"Toggle", "Toggle boolean", "Toggle ${1:variable}."},
-		{"Declare function", "Declare a function", "Declare function ${1:name} that does the following:\n\t${2:statements}\nThats it."},
-		{"true", "Boolean true", "true"},
-		{"false", "Boolean false", "false"},
-		{"the item at position", "Access list element", "the item at position ${1:index} in ${2:list}"},
-		{"the length of", "Get length", "the length of ${1:list}"},
-		{"the remainder of", "Modulo operation", "the remainder of ${1:a} divided by ${2:b}"},
-		{"is equal to", "Equality comparison", "is equal to"},
-		{"is not equal to", "Inequality comparison", "is not equal to"},
-		{"is less than", "Less than comparison", "is less than"},
-		{"is greater than", "Greater than comparison", "is greater than"},
-		{"is less than or equal to", "Less than or equal comparison", "is less than or equal to"},
-		{"is greater than or equal to", "Greater than or equal comparison", "is greater than or equal to"},
-	}
-
-	items := make([]CompletionItem, 0)
-	for _, kw := range keywords {
-		if prefix == "" || strings.HasPrefix(strings.ToLower(kw.label), prefix) {
-			item := CompletionItem{
-				Label:            kw.label,
-				Kind:             CompletionItemKindKeyword,
-				Detail:           kw.detail,
-				InsertText:       kw.snippet,
-				InsertTextFormat: InsertTextFormatSnippet,
-			}
-			items = append(items, item)
-		}
-	}
-
-	return items
-}
 
 // GetHover returns hover information at the given position
 func (a *Analyzer) GetHover(doc *Document, pos Position, result *AnalysisResult) *Hover {
@@ -726,30 +688,6 @@ func (a *Analyzer) GetHover(doc *Document, pos Position, result *AnalysisResult)
 }
 
 // getKeywordDocumentation returns documentation for a keyword
-func (a *Analyzer) getKeywordDocumentation(word string) string {
-	wordLower := strings.ToLower(word)
-	docs := map[string]string{
-		"declare":   "**Declare**\n\nDeclares a new variable or function.\n\nExample:\n```\nDeclare x to be 5.\nDeclare function greet does the following:\n    Print \"Hello\".\nThats it.\n```",
-		"set":       "**Set**\n\nAssigns a value to an existing variable.\n\nExample:\n```\nSet x to be 10.\n```",
-		"print":     "**Print**\n\nOutputs a value to the console.\n\nExample:\n```\nPrint \"Hello, World!\".\nPrint x.\n```",
-		"if":        "**If**\n\nConditional statement.\n\nExample:\n```\nIf x is equal to 5, then\n    Print \"x is five\".\nOtherwise\n    Print \"x is not five\".\nThats it.\n```",
-		"otherwise": "**Otherwise**\n\nElse clause for if statements.\n\nExample:\n```\nIf condition, then\n    statements\nOtherwise\n    other statements\nThats it.\n```",
-		"repeat":    "**Repeat**\n\nLoop statement.\n\nExample:\n```\nRepeat the following 5 times:\n    Print \"Hello\".\nThats it.\n\nRepeat the following while x is less than 10:\n    Set x to be x + 1.\nThats it.\n```",
-		"for":       "**For**\n\nFor-each loop.\n\nExample:\n```\nFor each item in list, do the following:\n    Print item.\nThats it.\n```",
-		"call":      "**Call**\n\nCalls a function.\n\nExample:\n```\nCall greet.\n```",
-		"return":    "**Return**\n\nReturns a value from a function.\n\nExample:\n```\nReturn x + y.\n```",
-		"break":     "**Break**\n\nExits the current loop.\n\nExample:\n```\nBreak out of the loop.\n```",
-		"toggle":    "**Toggle**\n\nToggles a boolean variable.\n\nExample:\n```\nToggle isActive.\n```",
-		"true":      "**true**\n\nBoolean literal representing true.",
-		"false":     "**false**\n\nBoolean literal representing false.",
-		"always":    "**always**\n\nMakes a variable constant (immutable).\n\nExample:\n```\nDeclare PI to always be 3.14159.\n```",
-	}
-
-	if doc, ok := docs[wordLower]; ok {
-		return doc
-	}
-	return ""
-}
 
 // GetDefinition returns the definition location for a symbol at the given position
 func (a *Analyzer) GetDefinition(doc *Document, pos Position, result *AnalysisResult) *Location {

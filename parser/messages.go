@@ -47,6 +47,7 @@ const (
 	hintSetTableFull     = "The full form is: 'Set tableName at key to be value.'"
 	hintSetField         = "For example: 'Set person's name to be \"Alice\".'"
 	hintNumberOutOfRange = "A number must fit in a 64-bit float, so it can be at most about 1.8e308."
+	hintArraySeparator   = "Separate array elements with commas: 'an array of number [1, 2, 3]'."
 
 	// Call statements.
 	hintCallName = "For example: 'Call greet.' or 'Call add with 3 and 5.'"
@@ -122,6 +123,7 @@ const (
 	msgSetListName          = "I expected the name of the list here."
 	msgSetFieldName         = "I expected the name of a field after the apostrophe-s."
 	msgFmtNumberOutOfRange  = "The number %s is too large to represent."
+	msgFmtArraySeparator    = "I expected a comma between array elements, but found %s."
 	msgCallName             = "I expected a function or method name after 'Call'."
 	msgForEachVar           = "I expected a loop variable name here."
 	msgPrintOrWrite         = "I expected 'Print' or 'Write' here."

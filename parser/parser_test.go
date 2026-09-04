@@ -1611,3 +1611,39 @@ func TestNumberOutOfRangeIsReported(t *testing.T) {
 		}
 	}
 }
+
+// TestCallArgumentErrorIsReported covers the argument list, which discarded
+// its error and returned whatever it had parsed so far: "Call f with ."
+// became "Call f." and the mistake disappeared.
+func TestCallArgumentErrorIsReported(t *testing.T) {
+	if _, err := parse(`Call f with .`); err == nil {
+		t.Error("Call f with . was accepted as a call with no arguments")
+	}
+
+	// One separator rule for the English form, whichever way it is written.
+	for _, src := range []string{
+		`Call f with 1 and 2.`,
+		`Call f with 1, 2.`,
+		`Declare r to be the result of calling f with 1 and 2.`,
+		`Declare r to be the result of calling f with 1, 2.`,
+	} {
+		if _, err := parse(src); err != nil {
+			t.Errorf("%s: %v", src, err)
+		}
+	}
+}
+
+// TestArrayElementsNeedSeparators covers the array literal, whose comma was
+// optional: "an array of number [1 2 3]" was a three-element array, while the
+// same text in a list is a syntax error.
+func TestArrayElementsNeedSeparators(t *testing.T) {
+	if _, err := parse(`Declare xs to be an array of number [1 2 3].`); err == nil {
+		t.Error("an array literal without separators was accepted")
+	}
+	if _, err := parse(`Declare xs to be an array of number [1, 2, 3].`); err != nil {
+		t.Errorf("a properly separated array literal was rejected: %v", err)
+	}
+	if _, err := parse(`Declare xs to be an array of number [].`); err != nil {
+		t.Errorf("an empty array literal was rejected: %v", err)
+	}
+}

@@ -988,11 +988,9 @@ func (p *Parser) parseCall() (ast.Statement, error) {
 		objectName := p.curToken.Value
 		p.nextToken()
 
-		// Parse optional arguments
-		var args []ast.Expression
-		if p.curToken.Type == token.WITH {
-			p.nextToken()
-			args = p.parseCallArguments()
+		args, err := p.parseWithArguments()
+		if err != nil {
+			return nil, err
 		}
 
 		if err := p.expectToken(token.PERIOD); err != nil {
@@ -1013,11 +1011,9 @@ func (p *Parser) parseCall() (ast.Statement, error) {
 
 	// Regular function call: "call greet with args."
 	funcName := firstIdent
-	var args []ast.Expression
-
-	if p.curToken.Type == token.WITH {
-		p.nextToken()
-		args = p.parseCallArguments()
+	args, err := p.parseWithArguments()
+	if err != nil {
+		return nil, err
 	}
 
 	if err := p.expectToken(token.PERIOD); err != nil {
@@ -1035,24 +1031,39 @@ func (p *Parser) parseCall() (ast.Statement, error) {
 	}, nil
 }
 
-// parseCallArguments parses comma-separated call arguments
-func (p *Parser) parseCallArguments() []ast.Expression {
+// parseArgumentList reads the arguments of a call written in English, after
+// the "with": "with a and b", or "with a, b".
+//
+// There were two of these for the same construct, with different separator
+// rules — one accepted a comma and the other only "and" — and different error
+// handling. This one discarded the error and returned whatever it had parsed
+// so far, so "Call f with ." became "Call f." and the mistake disappeared.
+// The parenthesised form f(a, b) stays separate, because inside parentheses
+// "and" is an operator rather than a separator.
+func (p *Parser) parseArgumentList() ([]ast.Expression, error) {
 	var args []ast.Expression
 
 	for {
 		arg, err := p.parseArgument()
 		if err != nil {
-			break
+			return nil, err
 		}
 		args = append(args, arg)
 
 		if p.curToken.Type != token.AND && p.curToken.Type != token.COMMA {
-			break
+			return args, nil
 		}
 		p.nextToken()
 	}
+}
 
-	return args
+// parseWithArguments reads an optional "with …" argument list.
+func (p *Parser) parseWithArguments() ([]ast.Expression, error) {
+	if p.curToken.Type != token.WITH {
+		return nil, nil
+	}
+	p.nextToken()
+	return p.parseArgumentList()
 }
 
 func (p *Parser) parseIfStatement() (ast.Statement, error) {
@@ -1823,10 +1834,9 @@ func (p *Parser) parseMethodAfterPossessive(object ast.Expression) (*ast.MethodC
 	methodName := p.curToken.Value
 	p.nextToken()
 
-	var args []ast.Expression
-	if p.curToken.Type == token.WITH {
-		p.nextToken()
-		args = p.parseCallArguments()
+	args, err := p.parseWithArguments()
+	if err != nil {
+		return nil, err
 	}
 	return &ast.MethodCall{Object: object, MethodName: methodName, Arguments: args}, nil
 }
@@ -2639,27 +2649,14 @@ func (p *Parser) parseRangeExpression() (ast.Expression, error) {
 }
 
 func (p *Parser) parseFunctionArguments() ([]ast.Expression, error) {
-	var args []ast.Expression
-
-	if p.curToken.Type == token.WITH {
-		p.nextToken()
-		for {
-			arg, err := p.parseArgument()
-			if err != nil {
-				return nil, err
-			}
-			args = append(args, arg)
-
-			if p.curToken.Type != token.AND {
-				break
-			}
-			p.nextToken()
-		}
-	}
-
-	return args, nil
+	return p.parseWithArguments()
 }
 
+// parseFunctionCallArgs reads the arguments of the parenthesised form, f(a, b).
+//
+// Separate from parseArgumentList on purpose: inside parentheses "and" is the
+// boolean operator, so only a comma separates arguments and each one is a full
+// expression rather than one that stops at "and".
 func (p *Parser) parseFunctionCallArgs() ([]ast.Expression, error) {
 	var args []ast.Expression
 
@@ -2716,16 +2713,25 @@ func (p *Parser) parseArrayLiteral() (ast.Expression, error) {
 	}
 	p.nextToken() // consume [
 
+	// Elements are separated by commas, as they are in a list. The comma used
+	// to be optional here, so "an array of number [1 2 3]" was a three-element
+	// array — the same text that is a syntax error one line up in a list.
 	var elements []ast.Expression
 	for p.curToken.Type != token.RBRACKET && p.curToken.Type != token.EOF {
+		if len(elements) > 0 {
+			if p.curToken.Type != token.COMMA {
+				return nil, p.syntaxErr(
+					fmt.Sprintf(msgFmtArraySeparator, p.curToken.Value),
+					hintArraySeparator,
+				)
+			}
+			p.nextToken()
+		}
 		elem, err := p.parseExpression()
 		if err != nil {
 			return nil, err
 		}
 		elements = append(elements, elem)
-		if p.curToken.Type == token.COMMA {
-			p.nextToken()
-		}
 	}
 	if p.curToken.Type != token.RBRACKET {
 		return nil, p.syntaxErr(

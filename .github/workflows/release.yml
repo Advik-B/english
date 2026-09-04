@@ -1,0 +1,122 @@
+name: Release
+
+# Publishing is driven by the tag: pushing "v3.0.0" builds that commit for
+# every supported platform and attaches the archives to a GitHub release.
+#
+# The interpreter is pure Go, so one runner cross-compiles all of it. There is
+# no cgo anywhere in the tree, which is what makes that safe; if that ever
+# changes, this needs to become a matrix of native runners instead.
+on:
+  push:
+    tags: ["v*"]
+  # Buildable by hand against a tag, for re-running a failed publish.
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Existing tag to build and publish"
+        required: true
+
+permissions:
+  contents: write # to create the release and upload to it
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      # The version a binary reports comes from version/version.go, not from
+      # the tag, so the two have to agree. Catching a mismatch here beats
+      # shipping a v3.0.0 archive whose "english version" says something else.
+      - name: Check the tag matches version/version.go
+        run: |
+          tag="${{ inputs.tag || github.ref_name }}"
+          # Read the constant rather than running "english version", which
+          # would also call home to the update checker.
+          declared="v$(sed -n 's/^const Version = "\(.*\)"$/\1/p' version/version.go)"
+          if [ "$tag" != "$declared" ]; then
+            echo "The tag is $tag but version/version.go declares $declared."
+            echo "Update the constant, or tag the commit that has it."
+            exit 1
+          fi
+          echo "$tag matches version/version.go"
+
+      # A tag should not ship binaries that do not work. This is the same gate
+      # CI applies to master, applied once more to the exact commit released.
+      - name: go test
+        run: go test ./...
+
+      - name: Build every platform
+        env:
+          CGO_ENABLED: "0"
+        run: |
+          set -euo pipefail
+          version="${{ inputs.tag || github.ref_name }}"
+          mkdir -p dist
+
+          # GOOS/GOARCH pairs to publish. Both architectures are worth having
+          # for each: Apple silicon and ARM servers are not niche any more.
+          targets="
+            linux/amd64
+            linux/arm64
+            darwin/amd64
+            darwin/arm64
+            windows/amd64
+            windows/arm64
+          "
+
+          for target in $targets; do
+            goos="${target%/*}"
+            goarch="${target#*/}"
+            name="english_${version}_${goos}_${goarch}"
+            binary="english"
+            if [ "$goos" = "windows" ]; then
+              binary="english.exe"
+            fi
+
+            echo "building $name"
+            mkdir -p "build/$name"
+            GOOS="$goos" GOARCH="$goarch" go build \
+              -trimpath -ldflags="-s -w" \
+              -o "build/$name/$binary" .
+
+            cp README.md LICENSE.txt "build/$name/"
+
+            # zip is what a Windows user can open without installing anything;
+            # tar.gz preserves the executable bit everywhere else.
+            if [ "$goos" = "windows" ]; then
+              (cd build && zip -qr "../dist/$name.zip" "$name")
+            else
+              tar -czf "dist/$name.tar.gz" -C build "$name"
+            fi
+          done
+
+          (cd dist && sha256sum * > checksums.txt)
+          ls -la dist
+
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          version="${{ inputs.tag || github.ref_name }}"
+
+          # --generate-notes writes the commit summary and the contributor
+          # list; anything more belongs in a hand-written release description,
+          # which this will not overwrite if one already exists.
+          if gh release view "$version" >/dev/null 2>&1; then
+            echo "release $version exists; uploading the archives to it"
+            gh release upload "$version" dist/* --clobber
+          else
+            gh release create "$version" dist/* \
+              --title "$version" \
+              --generate-notes \
+              --verify-tag
+          fi

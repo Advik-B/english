@@ -32,6 +32,16 @@ func (ev *Evaluator) evalTryStatement(node *ast.TryStatement) (Value, error) {
 	}
 
 	// Execute error handler if there was an error
+	// A TypeError is a compile error that escaped analysis, not a runtime
+	// condition, so a handler must not swallow it: catching one would let a
+	// program carry on with a type violation it never fixed.
+	if te, ok := tryError.(*TypeError); ok {
+		if len(node.FinallyBody) > 0 {
+			ev.executeFinallyBlock(node.FinallyBody)
+		}
+		return nil, te
+	}
+
 	if tryError != nil && len(node.ErrorBody) > 0 {
 		// Convert error to ErrorValue
 		var errorVal *types.ErrorValue

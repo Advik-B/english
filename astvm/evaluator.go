@@ -175,7 +175,7 @@ func (ev *Evaluator) Eval(node interface{}) (Value, error) {
 	case *ast.CopyExpression:
 		return ev.evalCopyExpression(node)
 	default:
-		return nil, fmt.Errorf("unknown node type: %T", node)
+		return nil, ev.runtimeError(fmt.Sprintf("unknown node type: %T", node))
 	}
 }
 
@@ -206,7 +206,7 @@ func (ev *Evaluator) evalImport(is *ast.ImportStatement) (Value, error) {
 	parseFunc := func(path string) (*ast.Program, error) {
 		content, err := os.ReadFile(path)
 		if err != nil {
-			return nil, fmt.Errorf("failed to read file: %w", err)
+			return nil, ev.runtimeError(fmt.Sprintf("failed to read '%s': %v", path, err))
 		}
 
 		lexer := parser.NewLexer(string(content))
@@ -691,8 +691,9 @@ func (ev *Evaluator) evalForEachLoop(fel *ast.ForEachLoop) (Value, error) {
 			result = val
 		}
 	default:
-		return nil, fmt.Errorf("TypeError: 'for each' requires list, array, or lookup table; got %s",
-			typeKindName(inferTypeKind(list)))
+		return nil, ev.runtimeError(fmt.Sprintf(
+			"TypeError: 'for each' requires a list, an array or a lookup table; got %s",
+			typeKindName(inferTypeKind(list))))
 	}
 
 	return result, nil
@@ -879,7 +880,7 @@ func (ev *Evaluator) evalBinaryExpression(be *ast.BinaryExpression) (Value, erro
 		result, err := Compare(be.Operator, left, right)
 		return result, err
 	default:
-		return nil, fmt.Errorf("unknown operator: %s", be.Operator)
+		return nil, ev.runtimeError(fmt.Sprintf("unknown operator: %s", be.Operator))
 	}
 }
 
@@ -903,7 +904,7 @@ func (ev *Evaluator) evalUnaryExpression(ue *ast.UnaryExpression) (Value, error)
 		}
 		return !rightBool, nil
 	default:
-		return nil, fmt.Errorf("unknown unary operator: %s", ue.Operator)
+		return nil, ev.runtimeError(fmt.Sprintf("unknown unary operator: %s", ue.Operator))
 	}
 }
 
@@ -1122,7 +1123,7 @@ func (ev *Evaluator) evalLookupKeyAccess(la *ast.LookupKeyAccess) (Value, error)
 func (ev *Evaluator) evalLookupKeyAssignment(la *ast.LookupKeyAssignment) (Value, error) {
 	tableVal, ok := ev.env.Get(la.TableName)
 	if !ok {
-		return nil, fmt.Errorf("undefined variable '%s'", la.TableName)
+		return nil, ev.runtimeError(fmt.Sprintf("undefined variable '%s'", la.TableName))
 	}
 	keyVal, err := ev.Eval(la.Key)
 	if err != nil {

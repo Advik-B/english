@@ -2863,3 +2863,42 @@ func TestEvaluator_TypedRedefinitionIsTypeError(t *testing.T) {
 		t.Errorf("expected *vm.TypeError (Compile Error), got %T: %v", err, err)
 	}
 }
+
+// TestCompileErrorIsNotCatchable covers a type error escaping analysis and
+// reaching the evaluator: a handler must not swallow it. Catching one would
+// let a program carry on past a type violation it never fixed.
+func TestCompileErrorIsNotCatchable(t *testing.T) {
+	// Redeclaring a stdlib constant is reported by the evaluator as a
+	// TypeError, which is a compile error discovered late.
+	_, err := evaluate(`Try doing the following:
+    Declare pi to be 3.
+on error:
+    Print "caught".
+thats it.`)
+
+	if err == nil {
+		t.Fatal("the handler swallowed a compile error")
+	}
+	if _, ok := err.(*vm.TypeError); !ok {
+		t.Errorf("expected the TypeError to propagate, got %T: %v", err, err)
+	}
+}
+
+// TestRuntimeErrorsStillCatchable guards the change above: an ordinary runtime
+// failure must still be catchable.
+func TestRuntimeErrorsStillCatchable(t *testing.T) {
+	out := captureOutput(func() {
+		_, err := evaluate(`Declare scores to be a lookup table.
+Try doing the following:
+    Print scores at "missing".
+on error:
+    Print "caught".
+thats it.`)
+		if err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+	})
+	if !strings.Contains(out, "caught") {
+		t.Errorf("a runtime failure should still be catchable, got %q", out)
+	}
+}

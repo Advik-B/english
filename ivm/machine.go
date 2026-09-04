@@ -843,12 +843,16 @@ func (m *Machine) step(instr Instruction, chunk *Chunk) (result interface{}, sto
 			return nil, false, m.runtimeErr("IMPORT: expected path string on stack")
 		}
 
-		if m.importHandler != nil {
-			if err := m.importHandler(path, items, importAll, isSafe, m.env()); err != nil {
-				return nil, false, m.runtimeErr(err.Error())
-			}
+		if m.importHandler == nil {
+			// An import with no handler installed used to be dropped without a
+			// word, so a program that depended on one ran on regardless and
+			// failed later on a name that should have been there.
+			return nil, false, m.runtimeErr(fmt.Sprintf(
+				"cannot import '%s': this engine was started without import support", path))
 		}
-	// If no handler, silently skip import
+		if err := m.importHandler(path, items, importAll, isSafe, m.env()); err != nil {
+			return nil, false, m.runtimeErr(err.Error())
+		}
 
 	case OP_SET_LINE:
 		m.cur.line = int(operand)

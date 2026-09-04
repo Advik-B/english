@@ -1,15 +1,16 @@
 package stdlib
 
 import (
-	"github.com/Advik-B/english/astvm"
-	"github.com/Advik-B/english/astvm/types"
 	"fmt"
+
+	vm "github.com/Advik-B/english/astvm"
+	"github.com/Advik-B/english/astvm/types"
 )
 
 func requireText(fn string, arg vm.Value) (string, error) {
 	s, ok := arg.(string)
 	if !ok {
-		return "", fmt.Errorf("TypeError: %s expects text, got %s", fn, kindName(arg))
+		return "", fmt.Errorf("TypeError: %s expects text, got %s", fn, types.NameOf(arg))
 	}
 	return s, nil
 }
@@ -17,7 +18,7 @@ func requireText(fn string, arg vm.Value) (string, error) {
 func requireNumber(fn string, arg vm.Value) (float64, error) {
 	n, err := vm.ToNumber(arg)
 	if err != nil {
-		return 0, fmt.Errorf("TypeError: %s expects number, got %s", fn, kindName(arg))
+		return 0, fmt.Errorf("TypeError: %s expects number, got %s", fn, types.NameOf(arg))
 	}
 	return n, nil
 }
@@ -25,7 +26,7 @@ func requireNumber(fn string, arg vm.Value) (float64, error) {
 func requireList(fn string, arg vm.Value) ([]interface{}, error) {
 	lst, ok := arg.([]interface{})
 	if !ok {
-		return nil, fmt.Errorf("TypeError: %s expects list, got %s", fn, kindName(arg))
+		return nil, fmt.Errorf("TypeError: %s expects list, got %s", fn, types.NameOf(arg))
 	}
 	return lst, nil
 }
@@ -33,22 +34,7 @@ func requireList(fn string, arg vm.Value) ([]interface{}, error) {
 func requireLookupTable(fn string, arg vm.Value) (*types.LookupTableValue, error) {
 	lt, ok := arg.(*types.LookupTableValue)
 	if !ok {
-		return nil, fmt.Errorf("TypeError: %s expects lookup table, got %s", fn, kindName(arg))
+		return nil, fmt.Errorf("TypeError: %s expects lookup table, got %s", fn, types.NameOf(arg))
 	}
 	return lt, nil
-}
-
-func kindName(v vm.Value) string {
-	switch v.(type) {
-	case *vm.FunctionValue:
-		return "function"
-	case *vm.StructInstance:
-		return "struct"
-	case *vm.ReferenceValue:
-		return "reference"
-	case nil:
-		return "nothing"
-	default:
-		return types.Name(types.Infer(v))
-	}
 }

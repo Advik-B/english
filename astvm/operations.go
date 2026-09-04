@@ -1,9 +1,10 @@
 package vm
 
 import (
-	"github.com/Advik-B/english/astvm/types"
 	"errors"
 	"fmt"
+
+	"github.com/Advik-B/english/astvm/types"
 )
 
 // errDivisionByZero and errRemainderByZero are sentinel errors returned by
@@ -221,12 +222,4 @@ func requireNumber(v Value, op string) (float64, error) {
 			op, typeKindName(inferTypeKind(v)),
 		)
 	}
-}
-
-// typeMismatchError builds a type mismatch error (kept for compatibility).
-func typeMismatchError(left, right Value, op string) error {
-	return fmt.Errorf(
-		"TypeError: '%s' requires matching types, got %s and %s",
-		op, typeKindName(inferTypeKind(left)), typeKindName(inferTypeKind(right)),
-	)
 }

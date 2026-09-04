@@ -62,13 +62,13 @@ func TestRegistrySearch(t *testing.T) {
 	r := NewRegistry()
 
 	tests := []struct {
-		query          string
-		expectResults  bool
+		query           string
+		expectResults   bool
 		expectFirstName string
 	}{
 		{"print", true, "print"},
 		{"PRINT", true, "print"},
-		{"loop", true, ""},  // Should find multiple loop-related topics
+		{"loop", true, ""}, // Should find multiple loop-related topics
 		{"if", true, "if"},
 		{"prnt", true, "print"}, // Fuzzy match
 		{"nonexistent123", false, ""},

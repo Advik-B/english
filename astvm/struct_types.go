@@ -23,3 +23,13 @@ type StructInstance struct {
 	Definition *StructDefinition
 	Fields     map[string]Value
 }
+
+// EnglishType implements types.TypeNamer, reporting the struct's declared name
+// so error messages and "the type of" name the actual struct.
+func (s *StructInstance) EnglishType() *types.TypeInfo {
+	name := "struct"
+	if s.Definition != nil {
+		name = s.Definition.Name
+	}
+	return &types.TypeInfo{Kind: types.TypeStruct, Name: name}
+}

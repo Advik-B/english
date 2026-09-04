@@ -1,11 +1,12 @@
 package ivm
 
 import (
-	"github.com/Advik-B/english/astvm/types"
 	"fmt"
 	"math"
 	"strconv"
 	"strings"
+
+	"github.com/Advik-B/english/astvm/types"
 )
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -109,7 +110,7 @@ func ivmAdd(left, right interface{}) (interface{}, error) {
 		copy(combined[len(l.Elements):], r.Elements)
 		return &types.ArrayValue{ElementType: l.ElementType, Elements: combined}, nil
 	default:
-		return nil, fmt.Errorf("TypeError: '+' is not defined for %s", ivmGetTypeName(left))
+		return nil, fmt.Errorf("TypeError: '+' is not defined for %s", types.NameOf(left))
 	}
 }
 
@@ -140,7 +141,7 @@ func ivmToFloat(v interface{}, op string) (float64, error) {
 	case float32:
 		return float64(val), nil
 	default:
-		return 0, fmt.Errorf("TypeError: '%s' requires number, got %s", op, ivmGetTypeName(v))
+		return 0, fmt.Errorf("TypeError: '%s' requires number, got %s", op, types.NameOf(v))
 	}
 }
 
@@ -151,7 +152,7 @@ func ivmToBool(v interface{}) (bool, error) {
 	case nil:
 		return false, nil
 	default:
-		return false, fmt.Errorf("TypeError: conditions must be boolean, got %s", ivmGetTypeName(val))
+		return false, fmt.Errorf("TypeError: conditions must be boolean, got %s", types.NameOf(val))
 	}
 }
 
@@ -249,7 +250,7 @@ func doIndexGet(container, index interface{}) (interface{}, error) {
 		}
 		return lookupTableGetByIndex(c, int(idx))
 	default:
-		return nil, fmt.Errorf("cannot index into %s", ivmGetTypeName(container))
+		return nil, fmt.Errorf("cannot index into %s", types.NameOf(container))
 	}
 }
 
@@ -294,7 +295,7 @@ func doIndexSet(container, index, value interface{}) error {
 	case *types.RangeValue:
 		return fmt.Errorf("cannot modify a range")
 	default:
-		return fmt.Errorf("cannot assign to index of %s", ivmGetTypeName(container))
+		return fmt.Errorf("cannot assign to index of %s", types.NameOf(container))
 	}
 }
 
@@ -311,7 +312,7 @@ func doLength(val interface{}) (float64, error) {
 	case *types.LookupTableValue:
 		return float64(len(v.KeyOrder)), nil
 	default:
-		return 0, fmt.Errorf("cannot get length of %s", ivmGetTypeName(val))
+		return 0, fmt.Errorf("cannot get length of %s", types.NameOf(val))
 	}
 }
 
@@ -329,48 +330,6 @@ func doLookupGet(table, key interface{}) (interface{}, error) {
 		return nil, nil
 	}
 	return val, nil
-}
-
-func ivmGetTypeName(v interface{}) string {
-	switch val := v.(type) {
-	case float64:
-		return "f64"
-	case int32:
-		return "i32"
-	case int64:
-		return "i64"
-	case uint32:
-		return "u32"
-	case uint64:
-		return "u64"
-	case float32:
-		return "f32"
-	case string:
-		return "text"
-	case bool:
-		return "boolean"
-	case []interface{}:
-		return "list"
-	case *types.ArrayValue:
-		elemTypeInfo := &types.TypeInfo{Kind: val.ElementType}
-		return fmt.Sprintf("array of %s", elemTypeInfo.String())
-	case *types.RangeValue:
-		return "range"
-	case *types.LookupTableValue:
-		return "lookup table"
-	case *types.ErrorValue:
-		return "error"
-	case *StructInstance:
-		return val.DefName
-	case *ReferenceValue:
-		return "reference"
-	case *FuncChunk:
-		return "function"
-	case nil:
-		return "nothing"
-	default:
-		return fmt.Sprintf("%T", v)
-	}
 }
 
 func inferKindName(v interface{}) string {

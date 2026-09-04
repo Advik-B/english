@@ -18,9 +18,10 @@
 package ivm
 
 import (
+	"os"
+
 	"github.com/Advik-B/english/ast"
 	"github.com/Advik-B/english/parser"
-	"os"
 )
 
 // Execute runs a compiled Chunk and returns the last value (or nil).

@@ -23,8 +23,8 @@ func TestTokenizeForHighlight_ReconstructsSource(t *testing.T) {
 		"line one\nline two\n",
 		`Declare x to be 5.` + "\n@@invalid@@\n",
 		`"hello"'s length`,
-		`Is  equal  to`,                  // extra spacing preserved
-		"If x isn't true then\n",        // contraction preserved
+		`Is  equal  to`,          // extra spacing preserved
+		"If x isn't true then\n", // contraction preserved
 		`If x is greater than or equal to 10 then`,
 	}
 
@@ -160,13 +160,13 @@ func TestNewLexer_TokenizeAll_BasicDeclaration(t *testing.T) {
 // exceed the source string length.
 func TestTokenizeForHighlight_UnterminatedString(t *testing.T) {
 	cases := []string{
-		`print rt's casefold'.`,  // From bug report
-		`'`,                        // Single quote at end
-		`"`,                        // Double quote at end
-		`'hello`,                   // Unterminated single-quoted string
-		`"hello`,                   // Unterminated double-quoted string
-		`x'`,                       // Single char followed by quote
-		`''`,                       // Two quotes
+		`print rt's casefold'.`, // From bug report
+		`'`,                     // Single quote at end
+		`"`,                     // Double quote at end
+		`'hello`,                // Unterminated single-quoted string
+		`"hello`,                // Unterminated double-quoted string
+		`x'`,                    // Single char followed by quote
+		`''`,                    // Two quotes
 	}
 
 	for _, src := range cases {

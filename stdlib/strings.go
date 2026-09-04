@@ -1,9 +1,11 @@
 package stdlib
 
 import (
-	"github.com/Advik-B/english/astvm"
 	"fmt"
 	"strings"
+
+	vm "github.com/Advik-B/english/astvm"
+	"github.com/Advik-B/english/astvm/types"
 )
 
 func evalString(name string, args []vm.Value) (vm.Value, error) {
@@ -41,7 +43,7 @@ func evalString(name string, args []vm.Value) (vm.Value, error) {
 	case "join":
 		list, ok := args[0].([]interface{})
 		if !ok {
-			return nil, fmt.Errorf("TypeError: join expects list, got %s", kindName(args[0]))
+			return nil, fmt.Errorf("TypeError: join expects list, got %s", types.NameOf(args[0]))
 		}
 		sep := vm.ToString(args[1])
 		strs := make([]string, len(list))
@@ -391,30 +393,4 @@ func evalString(name string, args []vm.Value) (vm.Value, error) {
 		return prefix + strings.Repeat("0", w-len(prefix)-len(body)) + body, nil
 	}
 	return nil, vm.NewRuntimeError("unknown string function: " + name)
-}
-
-func registerStringFunctions(env *vm.Environment) {
-	single := []string{
-		"uppercase", "lowercase", "casefold", "trim", "to_number", "to_string", "is_empty",
-		"title", "capitalize", "swapcase", "trim_left", "trim_right",
-		"is_digit", "is_alpha", "is_alnum", "is_space", "is_upper", "is_lower",
-	}
-	for _, name := range single {
-		n := name
-		env.DefineFunction(n, &vm.FunctionValue{Name: n, Parameters: []string{"text"}, Body: nil, Closure: env})
-	}
-	env.DefineFunction("split", &vm.FunctionValue{Name: "split", Parameters: []string{"text", "separator"}, Body: nil, Closure: env})
-	env.DefineFunction("join", &vm.FunctionValue{Name: "join", Parameters: []string{"list", "separator"}, Body: nil, Closure: env})
-	env.DefineFunction("replace", &vm.FunctionValue{Name: "replace", Parameters: []string{"text", "old", "new"}, Body: nil, Closure: env})
-	env.DefineFunction("contains", &vm.FunctionValue{Name: "contains", Parameters: []string{"text", "substring"}, Body: nil, Closure: env})
-	env.DefineFunction("starts_with", &vm.FunctionValue{Name: "starts_with", Parameters: []string{"text", "prefix"}, Body: nil, Closure: env})
-	env.DefineFunction("ends_with", &vm.FunctionValue{Name: "ends_with", Parameters: []string{"text", "suffix"}, Body: nil, Closure: env})
-	env.DefineFunction("index_of", &vm.FunctionValue{Name: "index_of", Parameters: []string{"text", "search"}, Body: nil, Closure: env})
-	env.DefineFunction("substring", &vm.FunctionValue{Name: "substring", Parameters: []string{"text", "start", "length"}, Body: nil, Closure: env})
-	env.DefineFunction("str_repeat", &vm.FunctionValue{Name: "str_repeat", Parameters: []string{"text", "n"}, Body: nil, Closure: env})
-	env.DefineFunction("count_occurrences", &vm.FunctionValue{Name: "count_occurrences", Parameters: []string{"text", "substring"}, Body: nil, Closure: env})
-	env.DefineFunction("pad_left", &vm.FunctionValue{Name: "pad_left", Parameters: []string{"text", "width", "char"}, Body: nil, Closure: env})
-	env.DefineFunction("pad_right", &vm.FunctionValue{Name: "pad_right", Parameters: []string{"text", "width", "char"}, Body: nil, Closure: env})
-	env.DefineFunction("center", &vm.FunctionValue{Name: "center", Parameters: []string{"text", "width", "char"}, Body: nil, Closure: env})
-	env.DefineFunction("zfill", &vm.FunctionValue{Name: "zfill", Parameters: []string{"text", "width"}, Body: nil, Closure: env})
 }

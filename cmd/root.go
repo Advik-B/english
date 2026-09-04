@@ -1,22 +1,22 @@
 package cmd
 
 import (
+	"fmt"
+	"os"
+	"path/filepath"
+	"strings"
+
 	"github.com/Advik-B/english/ast"
+	vm "github.com/Advik-B/english/astvm"
 	"github.com/Advik-B/english/bytecode"
 	"github.com/Advik-B/english/help"
 	"github.com/Advik-B/english/highlight"
 	"github.com/Advik-B/english/ivm"
 	"github.com/Advik-B/english/parser"
 	"github.com/Advik-B/english/stacktraces"
-	"github.com/Advik-B/english/transpiler"
-	"github.com/Advik-B/english/astvm"
 	"github.com/Advik-B/english/stdlib"
+	"github.com/Advik-B/english/transpiler"
 	"github.com/Advik-B/english/version"
-	"fmt"
-	"os"
-	"path/filepath"
-	"strings"
-
 	"github.com/spf13/cobra"
 )
 
@@ -624,22 +624,22 @@ func RunBytecode(filename string) {
 // This check only applies to .abc source files – bytecode execution paths
 // never call this function.
 func checkPoliteness(program *ast.Program, minPercent float64) []error {
-if program.TotalCount == 0 {
-return nil
-}
+	if program.TotalCount == 0 {
+		return nil
+	}
 
-actual := float64(program.PoliteCount) / float64(program.TotalCount) * 100
-if actual >= minPercent {
-return nil
-}
+	actual := float64(program.PoliteCount) / float64(program.TotalCount) * 100
+	if actual >= minPercent {
+		return nil
+	}
 
-var errs []error
-for _, line := range program.ImpoliteLines {
-errs = append(errs, &parser.SyntaxError{
-Msg:  "Statement is not polite.",
-Line: line,
-Hint: "Prefix the statement with 'Please', 'Kindly', 'Could you', or 'Would you kindly'.",
-})
-}
-return errs
+	var errs []error
+	for _, line := range program.ImpoliteLines {
+		errs = append(errs, &parser.SyntaxError{
+			Msg:  "Statement is not polite.",
+			Line: line,
+			Hint: "Prefix the statement with 'Please', 'Kindly', 'Could you', or 'Would you kindly'.",
+		})
+	}
+	return errs
 }

@@ -1,9 +1,10 @@
 package vm
 
 import (
+	"fmt"
+
 	"github.com/Advik-B/english/ast"
 	"github.com/Advik-B/english/astvm/types"
-	"fmt"
 )
 
 // evalStructDecl evaluates a struct declaration
@@ -221,6 +222,10 @@ func (ev *Evaluator) evalMethodCall(node *ast.MethodCall) (Value, error) {
 	// Check parameter count
 	if len(args) != len(method.Parameters) {
 		return nil, ev.runtimeError(fmt.Sprintf("method '%s' expects %d arguments, got %d", node.MethodName, len(method.Parameters), len(args)))
+	}
+
+	if err := ev.checkCallDepth(node.MethodName); err != nil {
+		return nil, err
 	}
 
 	// Create new environment for method execution

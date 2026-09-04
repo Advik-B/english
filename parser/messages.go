@@ -16,18 +16,20 @@ package parser
 
 const (
 	// General structural hints.
-	hintEndWithPeriod  = "Every statement must end with a period (.). Try adding a period at the end of the line."
-	hintCloseThatsWith = "Every block must end with 'thats it.' — did you forget to close the block?"
-	hintMissingIt      = "The word 'it' is missing before the period. Write 'thats it.' to close the block."
-	hintExpectedToBe   = "The word 'to' is missing here. For example: 'Declare x to be 5.' or 'Set x to be 10.'"
-	hintExpectedBe     = "The word 'be' is expected here. For example: 'Declare x to be 5.'"
+	hintEndWithPeriod    = "Every statement must end with a period (.). Try adding a period at the end of the line."
+	hintCloseThatsWith   = "Every block must end with 'thats it.' — did you forget to close the block?"
+	hintMissingIt        = "The word 'it' is missing before the period. Write 'thats it.' to close the block."
+	hintExpectedToBe     = "The word 'to' is missing here. For example: 'Declare x to be 5.' or 'Set x to be 10.'"
+	hintExpectedBe       = "The word 'be' is expected here. For example: 'Declare x to be 5.'"
 	hintMissingBeAfterTo = "The word 'be' is missing after 'to'. For example: 'Declare x to be 5.'"
-	hintNameNotLiteral = "A name (like a variable name or function name) is expected here, not a number or text value."
+	hintNameNotLiteral   = "A name (like a variable name or function name) is expected here, not a number or text value."
 
 	// Statement-level hints.
 	hintNumberAsStatement = "Numbers must be part of a statement. For example: 'Declare x to be 5.' or 'Print 42.'"
 	hintStringAsStatement = `Text must be part of a statement. For example: 'Print "Hello, world!".' or 'Declare greeting to be "Hello".'`
 	hintUnexpectedEOF     = "Check that every block (like an 'If' or 'Repeat') is closed with 'thats it.'"
+	hintUnterminatedText  = "Add a closing quote to the end of the text, for example: \"hello\"."
+	hintIllegalChar       = "Remove the character, or put it inside a text literal."
 	hintUnknownKeyword    = "Check the spelling of the keyword. Every statement must start with a word like 'Declare', 'Set', 'Print', 'If', 'Repeat', or 'Call'."
 
 	// Variable / constant declarations.
@@ -60,46 +62,46 @@ const (
 	hintAskFull = "For example: 'Ask \"What is your name?\" as myName.' or 'Ask \"Enter a number:\" and store it in num.'"
 
 	// Type cast / possessive / error-type check.
-	hintCastType       = "Valid type names are: number, text, boolean, integer. For example: 'x cast to number'."
-	hintPossessive     = "For example: 'myText's length' or 'myText's upper'."
-	hintErrorTypeCheck = "For example: 'error is NetworkError' or 'error is RuntimeError'."
+	hintFmtTypeName     = "Built-in types are: %s. A struct name also works where a struct is expected."
+	hintUnsignedInteger = "Write 'unsigned integer', for example: 'age is an unsigned integer.'"
+	hintPossessive      = "For example: 'myText's length' or 'myText's upper'."
+	hintErrorTypeCheck  = "For example: 'error is NetworkError' or 'error is RuntimeError'."
 
 	// Expressions.
-	hintTheExpression     = "After 'the' you can use: 'the value of x', 'the length of myList', 'the remainder of a divided by b', 'the result of calling myFunction', or a field name like 'the age of person'."
-	hintExpressionValue   = "Values can be numbers (like 42), text (like \"hello\"), variables (like myScore), function calls, or expressions in parentheses."
-	hintIndexInOrOf       = "For example: 'the item at position 1 in myList' or 'the item at position 1 of myList'."
+	hintTheExpression      = "After 'the' you can use: 'the value of x', 'the length of myList', 'the remainder of a divided by b', 'the result of calling myFunction', or a field name like 'the age of person'."
+	hintExpressionValue    = "Values can be numbers (like 42), text (like \"hello\"), variables (like myScore), function calls, or expressions in parentheses."
+	hintIndexInOrOf        = "For example: 'the item at position 1 in myList' or 'the item at position 1 of myList'."
 	hintRemainderDividedBy = "For example: 'the remainder of 10 divided by 3' or 'the remainder of a divided by b'."
-	hintLocationOf        = "For example: 'the location of myVariable'."
-	hintReferenceTo       = "For example: 'a reference to myVariable'."
-	hintToggle            = "For example: 'Toggle isRunning.' or 'Toggle the value of isActive.'"
+	hintLocationOf         = "For example: 'the location of myVariable'."
+	hintReferenceTo        = "For example: 'a reference to myVariable'."
+	hintToggle             = "For example: 'Toggle isRunning.' or 'Toggle the value of isActive.'"
 
 	// Arrays and lookup tables.
-	hintArrayLiteral         = "For example: 'an array of [1, 2, 3]' or 'an array of number [1, 2, 3]'."
-	hintArrayCloseBracket    = "Make sure every '[' is matched by a closing ']'. For example: 'an array of [1, 2, 3]'."
-	hintLookupEntryIn        = "For example: 'the entry \"name\" in myTable'."
-	hintLookupSetEntry       = "For example: 'Set the entry \"name\" in myTable to be \"Alice\".'"
-	hintLookupTableName      = "For example: 'Set the entry \"name\" in myTable to be \"Alice\".'"
+	hintArrayLiteral      = "For example: 'an array of [1, 2, 3]' or 'an array of number [1, 2, 3]'."
+	hintArrayCloseBracket = "Make sure every '[' is matched by a closing ']'. For example: 'an array of [1, 2, 3]'."
+	hintLookupEntryIn     = "For example: 'the entry \"name\" in myTable'."
+	hintLookupSetEntry    = "For example: 'Set the entry \"name\" in myTable to be \"Alice\".'"
 
 	// Error handling.
-	hintOnError      = "For example: 'on error:' to catch all errors, or 'on NetworkError:' to catch a specific type."
-	hintRaiseAs      = "For example: 'raise \"Something went wrong\" as NetworkError.'"
-	hintSwapVars     = "For example: 'swap a and b.' swaps the values of a and b."
+	hintOnError  = "For example: 'on error:' to catch all errors, or 'on NetworkError:' to catch a specific type."
+	hintRaiseAs  = "For example: 'raise \"Something went wrong\" as NetworkError.'"
+	hintSwapVars = "For example: 'swap a and b.' swaps the values of a and b."
 
 	// Custom error type declarations.
 	hintErrorTypeDecl    = "For example: 'Declare NetworkError as an error type.'"
 	hintErrorSubtypeDecl = "For example: 'Declare TimeoutError as a type of NetworkError.'"
 
 	// Structure declarations.
-	hintStructName         = "For example: 'Declare Person as a structure with the following fields:'"
-	hintFieldName          = "Field names must start with a letter. For example: 'name is a text.'"
-	hintFieldType          = "Valid types are: text, number, boolean, integer. For example: 'name is a text.' or 'age is an integer.'"
-	hintMethodName         = "Method names must start with a letter. For example: 'let greet be a function that does the following:'"
-	hintMethodParam        = "Parameter names must start with a letter. For example: 'let add be a function that takes x and y and does the following:'"
-	hintNewInstanceOf      = "For example: 'a new instance of Person' or 'new instance of Car'."
-	hintNewInstanceFields  = "For example: 'a new instance of Person with the following fields:'"
-	hintFieldAssignment    = "Each field must be set like: 'name is \"Alice\".' or 'age is 30.'"
-	hintTypedVarName       = "For example: 'Declare score as number to be 0.' or 'Declare name as text.'"
-	hintTypedVarType       = "Valid types are: number, text, boolean, integer. For example: 'Declare score as number to be 0.'"
+	hintStructName        = "For example: 'Declare Person as a structure with the following fields:'"
+	hintFieldName         = "Field names must start with a letter. For example: 'name is a text.'"
+	hintFieldType         = "Valid types are: text, number, boolean, integer. For example: 'name is a text.' or 'age is an integer.'"
+	hintMethodName        = "Method names must start with a letter. For example: 'let greet be a function that does the following:'"
+	hintMethodParam       = "Parameter names must start with a letter. For example: 'let add be a function that takes x and y and does the following:'"
+	hintNewInstanceOf     = "For example: 'a new instance of Person' or 'new instance of Car'."
+	hintNewInstanceFields = "For example: 'a new instance of Person with the following fields:'"
+	hintFieldAssignment   = "Each field must be set like: 'name is \"Alice\".' or 'age is 30.'"
+	hintTypedVarName      = "For example: 'Declare score as number to be 0.' or 'Declare name as text.'"
+	hintTypedVarType      = "Valid types are: number, text, boolean, integer. For example: 'Declare score as number to be 0.'"
 )
 
 // ─── Static messages ─────────────────────────────────────────────────────────
@@ -130,7 +132,6 @@ const (
 	msgStructName           = "I expected the name of the structure after 'Declare'."
 	msgFieldName            = "I expected the name of the field."
 	msgMethodName           = "I expected the method name."
-	msgMethodParam          = "I expected a parameter name."
 	msgNewInstanceName      = "I expected the structure name after 'of'."
 	msgNewInstanceField     = "I expected a field name here."
 	msgTypedVarName         = "I expected a variable name after 'Declare'."
@@ -171,7 +172,6 @@ const (
 	msgFmtAskAfter = "I expected 'as' or 'and' after the question text, but found '%s'."
 
 	// "I expected a type name after 'cast to', but found '<tok>'."
-	msgFmtCastTypeName = "I expected a type name after 'cast to', but found '%s'."
 
 	// "I do not understand 'the <tok>' here."
 	msgFmtTheUnknown = "I do not understand 'the %s' here."
@@ -223,7 +223,11 @@ const (
 	msgFmtStringStatement = "The text %q cannot appear here on its own."
 
 	// "I do not know what to do with '<tok>' here."
-	msgFmtUnknownToken = "I do not know what to do with '%s' here."
+	msgUnterminatedText     = "I found a text literal that is never closed."
+	msgFmtTypeNameExpected  = "I expected a type name here, but found %s."
+	msgUnsignedNeedsInteger = "I expected the word 'integer' after 'unsigned'."
+	msgFmtIllegalChar       = "I do not recognise the character '%s'."
+	msgFmtUnknownToken      = "I do not know what to do with '%s' here."
 )
 
 // ─── Format-string hints ─────────────────────────────────────────────────────

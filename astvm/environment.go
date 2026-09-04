@@ -1,9 +1,10 @@
 package vm
 
 import (
-	"github.com/Advik-B/english/astvm/types"
 	"fmt"
 	"strings"
+
+	"github.com/Advik-B/english/astvm/types"
 )
 
 // Environment represents a lexical scope: variables, constants, functions, and structs.
@@ -51,17 +52,6 @@ func (e *Environment) Get(name string) (Value, bool) {
 		return e.parent.Get(name)
 	}
 	return nil, false
-}
-
-// GetVarType returns the declared TypeKind of a variable in the scope chain.
-func (e *Environment) GetVarType(name string) (types.TypeKind, bool) {
-	if tk, ok := e.variableTypes[name]; ok {
-		return tk, true
-	}
-	if e.parent != nil {
-		return e.parent.GetVarType(name)
-	}
-	return types.TypeUnknown, false
 }
 
 // Set assigns a new value to an existing variable, enforcing the declared type.
@@ -144,16 +134,6 @@ func (e *Environment) DefineErrorType(name, parent string) {
 		root = root.parent
 	}
 	root.customErrorTypes[name] = parent
-}
-
-// IsKnownErrorType reports whether name is a registered custom error type.
-func (e *Environment) IsKnownErrorType(name string) bool {
-	root := e
-	for root.parent != nil {
-		root = root.parent
-	}
-	_, ok := root.customErrorTypes[name]
-	return ok
 }
 
 // IsSubtypeOf reports whether childType is the same as parentType or inherits from it.

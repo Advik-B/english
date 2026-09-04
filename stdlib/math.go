@@ -1,9 +1,10 @@
 package stdlib
 
 import (
-	"github.com/Advik-B/english/astvm"
 	"math"
 	"math/rand"
+
+	vm "github.com/Advik-B/english/astvm"
 )
 
 func evalMath(name string, args []vm.Value) (vm.Value, error) {
@@ -139,22 +140,4 @@ func evalMath(name string, args []vm.Value) (vm.Value, error) {
 		return math.IsInf(x, 0), nil
 	}
 	return nil, vm.NewRuntimeError("unknown math function: " + name)
-}
-
-func registerMathConstants(env *vm.Environment) {
-	env.Define("pi", math.Pi, true)
-	env.Define("e", math.E, true)
-	env.Define("infinity", math.Inf(1), true)
-}
-
-func registerMathFunctions(env *vm.Environment) {
-	for _, name := range []string{"sqrt", "abs", "floor", "ceil", "round", "sin", "cos", "tan", "log", "log10", "log2", "exp", "is_nan", "is_infinite"} {
-		n := name
-		env.DefineFunction(n, &vm.FunctionValue{Name: n, Parameters: []string{"x"}, Body: nil, Closure: env})
-	}
-	env.DefineFunction("random", &vm.FunctionValue{Name: "random", Parameters: []string{}, Body: nil, Closure: env})
-	env.DefineFunction("pow", &vm.FunctionValue{Name: "pow", Parameters: []string{"base", "exponent"}, Body: nil, Closure: env})
-	env.DefineFunction("min", &vm.FunctionValue{Name: "min", Parameters: []string{"a", "b"}, Body: nil, Closure: env})
-	env.DefineFunction("max", &vm.FunctionValue{Name: "max", Parameters: []string{"a", "b"}, Body: nil, Closure: env})
-	env.DefineFunction("random_between", &vm.FunctionValue{Name: "random_between", Parameters: []string{"min", "max"}, Body: nil, Closure: env})
 }

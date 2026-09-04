@@ -145,48 +145,6 @@ func Cast(v interface{}, target TypeKind) (interface{}, error) {
 	}
 }
 
-// Infer determines the TypeKind of a runtime value without importing the vm package.
-// It handles all primitive and composite types known to vm/types/.
-// Types defined only in vm/ (FunctionValue, StructInstance, ReferenceValue) are
-// detected by vm.inferTypeKind which calls this and then checks the extra kinds.
-func Infer(v interface{}) TypeKind {
-	switch v.(type) {
-	case float64:
-		return TypeF64
-	case int32:
-		return TypeI32
-	case int64:
-		return TypeI64
-	case uint32:
-		return TypeU32
-	case uint64:
-		return TypeU64
-	case float32:
-		return TypeF32
-	case string:
-		return TypeString
-	case bool:
-		return TypeBool
-	case []interface{}:
-		return TypeList
-	case *ArrayValue:
-		return TypeArray
-	case *LookupTableValue:
-		return TypeLookup
-	case *ErrorValue:
-		return TypeError
-	case *TypedValue:
-		if tv, ok := v.(*TypedValue); ok {
-			return Infer(tv.Value)
-		}
-		return TypeUnknown
-	case nil:
-		return TypeNull
-	default:
-		return TypeUnknown
-	}
-}
-
 // basicString converts a primitive value to its text representation.
 // This is intentionally limited to types known by vm/types/ so that the cast
 // package remains free of vm dependencies.  The vm package's full ToString

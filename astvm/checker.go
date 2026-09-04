@@ -1,13 +1,14 @@
 package vm
 
 import (
-	"github.com/Advik-B/english/ast"
-	"github.com/Advik-B/english/parser"
-	"github.com/Advik-B/english/astvm/types"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/Advik-B/english/ast"
+	"github.com/Advik-B/english/astvm/types"
+	"github.com/Advik-B/english/parser"
 )
 
 // builtinArgTypes maps function name to the expected TypeKind of each positional argument.

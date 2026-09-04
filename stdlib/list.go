@@ -1,10 +1,11 @@
 package stdlib
 
 import (
-	"github.com/Advik-B/english/astvm"
-	"github.com/Advik-B/english/astvm/types"
 	"fmt"
 	"sort"
+
+	vm "github.com/Advik-B/english/astvm"
+	"github.com/Advik-B/english/astvm/types"
 )
 
 func evalList(name string, args []vm.Value) (vm.Value, error) {
@@ -34,7 +35,7 @@ func evalList(name string, args []vm.Value) (vm.Value, error) {
 			}
 			return &types.ArrayValue{ElementType: et, Elements: newElems}, nil
 		default:
-			return nil, fmt.Errorf("TypeError: append expects list or array, got %s", kindName(args[0]))
+			return nil, fmt.Errorf("TypeError: append expects list or array, got %s", types.NameOf(args[0]))
 		}
 	case "remove":
 		list, ok := args[0].([]interface{})
@@ -104,7 +105,7 @@ func evalList(name string, args []vm.Value) (vm.Value, error) {
 			for _, item := range col {
 				n, err := vm.ToNumber(item)
 				if err != nil {
-					return nil, fmt.Errorf("TypeError: sum requires a list or array of numbers, got %s element", kindName(item))
+					return nil, fmt.Errorf("TypeError: sum requires a list or array of numbers, got %s element", types.NameOf(item))
 				}
 				total += n
 			}
@@ -123,7 +124,7 @@ func evalList(name string, args []vm.Value) (vm.Value, error) {
 			}
 			return total, nil
 		default:
-			return nil, fmt.Errorf("TypeError: sum expects list or array, got %s", kindName(args[0]))
+			return nil, fmt.Errorf("TypeError: sum expects list or array, got %s", types.NameOf(args[0]))
 		}
 	case "unique":
 		list, ok := args[0].([]interface{})
@@ -156,7 +157,7 @@ func evalList(name string, args []vm.Value) (vm.Value, error) {
 			}
 			return col.Elements[0], nil
 		default:
-			return nil, fmt.Errorf("TypeError: first expects list or array, got %s", kindName(args[0]))
+			return nil, fmt.Errorf("TypeError: first expects list or array, got %s", types.NameOf(args[0]))
 		}
 	case "last":
 		switch col := args[0].(type) {
@@ -171,7 +172,7 @@ func evalList(name string, args []vm.Value) (vm.Value, error) {
 			}
 			return col.Elements[len(col.Elements)-1], nil
 		default:
-			return nil, fmt.Errorf("TypeError: last expects list or array, got %s", kindName(args[0]))
+			return nil, fmt.Errorf("TypeError: last expects list or array, got %s", types.NameOf(args[0]))
 		}
 	case "flatten":
 		list, ok := args[0].([]interface{})
@@ -201,7 +202,7 @@ func evalList(name string, args []vm.Value) (vm.Value, error) {
 		case string:
 			return float64(len(col)), nil
 		default:
-			return nil, fmt.Errorf("TypeError: count expects list, array, lookup table, or text; got %s", kindName(args[0]))
+			return nil, fmt.Errorf("TypeError: count expects list, array, lookup table, or text; got %s", types.NameOf(args[0]))
 		}
 	case "slice":
 		list, ok := args[0].([]interface{})
@@ -371,27 +372,4 @@ func evalList(name string, args []vm.Value) (vm.Value, error) {
 		return result, nil
 	}
 	return nil, vm.NewRuntimeError("unknown list function: " + name)
-}
-
-func registerListFunctions(env *vm.Environment) {
-	env.DefineFunction("append", &vm.FunctionValue{Name: "append", Parameters: []string{"list", "item"}, Body: nil, Closure: env})
-	env.DefineFunction("remove", &vm.FunctionValue{Name: "remove", Parameters: []string{"list", "index"}, Body: nil, Closure: env})
-	env.DefineFunction("insert", &vm.FunctionValue{Name: "insert", Parameters: []string{"list", "index", "item"}, Body: nil, Closure: env})
-	env.DefineFunction("sort", &vm.FunctionValue{Name: "sort", Parameters: []string{"list"}, Body: nil, Closure: env})
-	env.DefineFunction("reverse", &vm.FunctionValue{Name: "reverse", Parameters: []string{"list"}, Body: nil, Closure: env})
-	env.DefineFunction("sum", &vm.FunctionValue{Name: "sum", Parameters: []string{"list"}, Body: nil, Closure: env})
-	env.DefineFunction("unique", &vm.FunctionValue{Name: "unique", Parameters: []string{"list"}, Body: nil, Closure: env})
-	env.DefineFunction("first", &vm.FunctionValue{Name: "first", Parameters: []string{"list"}, Body: nil, Closure: env})
-	env.DefineFunction("last", &vm.FunctionValue{Name: "last", Parameters: []string{"list"}, Body: nil, Closure: env})
-	env.DefineFunction("flatten", &vm.FunctionValue{Name: "flatten", Parameters: []string{"list"}, Body: nil, Closure: env})
-	env.DefineFunction("count", &vm.FunctionValue{Name: "count", Parameters: []string{"list"}, Body: nil, Closure: env})
-	env.DefineFunction("slice", &vm.FunctionValue{Name: "slice", Parameters: []string{"list", "start", "end"}, Body: nil, Closure: env})
-	env.DefineFunction("average", &vm.FunctionValue{Name: "average", Parameters: []string{"list"}, Body: nil, Closure: env})
-	env.DefineFunction("min_value", &vm.FunctionValue{Name: "min_value", Parameters: []string{"list"}, Body: nil, Closure: env})
-	env.DefineFunction("max_value", &vm.FunctionValue{Name: "max_value", Parameters: []string{"list"}, Body: nil, Closure: env})
-	env.DefineFunction("any_true", &vm.FunctionValue{Name: "any_true", Parameters: []string{"list"}, Body: nil, Closure: env})
-	env.DefineFunction("all_true", &vm.FunctionValue{Name: "all_true", Parameters: []string{"list"}, Body: nil, Closure: env})
-	env.DefineFunction("product", &vm.FunctionValue{Name: "product", Parameters: []string{"list"}, Body: nil, Closure: env})
-	env.DefineFunction("sorted_desc", &vm.FunctionValue{Name: "sorted_desc", Parameters: []string{"list"}, Body: nil, Closure: env})
-	env.DefineFunction("zip_with", &vm.FunctionValue{Name: "zip_with", Parameters: []string{"list", "other"}, Body: nil, Closure: env})
 }

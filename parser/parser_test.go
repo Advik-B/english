@@ -1,9 +1,11 @@
 package parser
 
 import (
+	"strings"
+	"testing"
+
 	"github.com/Advik-B/english/ast"
 	"github.com/Advik-B/english/token"
-	"testing"
 )
 
 // Helper function to parse input
@@ -1147,40 +1149,248 @@ func TestParserFunctionCallWithParens(t *testing.T) {
 }
 
 func TestParserAskStatement(t *testing.T) {
-tests := []struct {
-input   string
-varName string
-}{
-{`Ask "What is your age?" and store it in userAge.`, "userAge"},
-{`Ask "What is your age?" and store the answer in userAge.`, "userAge"},
-{`Ask "What is your age?" and store the result in userAge.`, "userAge"},
-{`Ask "What is your age?" as userAge.`, "userAge"},
+	tests := []struct {
+		input   string
+		varName string
+	}{
+		{`Ask "What is your age?" and store it in userAge.`, "userAge"},
+		{`Ask "What is your age?" and store the answer in userAge.`, "userAge"},
+		{`Ask "What is your age?" and store the result in userAge.`, "userAge"},
+		{`Ask "What is your age?" as userAge.`, "userAge"},
+	}
+
+	for _, test := range tests {
+		program, err := parse(test.input)
+		if err != nil {
+			t.Errorf("Input %q: parse error: %v", test.input, err)
+			continue
+		}
+
+		if len(program.Statements) != 1 {
+			t.Errorf("Input %q: expected 1 statement, got %d", test.input, len(program.Statements))
+			continue
+		}
+
+		assign, ok := program.Statements[0].(*ast.Assignment)
+		if !ok {
+			t.Errorf("Input %q: expected *ast.Assignment, got %T", test.input, program.Statements[0])
+			continue
+		}
+
+		if assign.Name != test.varName {
+			t.Errorf("Input %q: expected variable name %q, got %q", test.input, test.varName, assign.Name)
+		}
+
+		if _, ok := assign.Value.(*ast.AskExpression); !ok {
+			t.Errorf("Input %q: expected *ast.AskExpression as value, got %T", test.input, assign.Value)
+		}
+	}
 }
 
-for _, test := range tests {
-program, err := parse(test.input)
-if err != nil {
-t.Errorf("Input %q: parse error: %v", test.input, err)
-continue
+// TestUnterminatedStringLiteral covers the lexer bug where a string with no
+// closing quote was accepted silently: readString fell out of its loop at end
+// of input and then advanced past the "closing" quote regardless, swallowing
+// the rest of the file into the literal instead of reporting an error.
+func TestUnterminatedStringLiteral(t *testing.T) {
+	tests := []struct {
+		name  string
+		input string
+	}{
+		{"statement position", `Print "hello.`},
+		{"expression position", `Declare x to be "unclosed.`},
+		{"single quotes", `Print 'hello.`},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			_, err := parse(test.input)
+			if err == nil {
+				t.Fatalf("expected an error for %q, got none", test.input)
+			}
+			if !strings.Contains(err.Error(), "never closed") {
+				t.Errorf("error does not describe an unterminated literal: %v", err)
+			}
+		})
+	}
 }
 
-if len(program.Statements) != 1 {
-t.Errorf("Input %q: expected 1 statement, got %d", test.input, len(program.Statements))
-continue
+// TestTerminatedStringStillParses guards the fix above against over-reach.
+func TestTerminatedStringStillParses(t *testing.T) {
+	for _, src := range []string{
+		`Print "hello".`,
+		`Print 'hello'.`,
+		`Print "with \"escaped\" quotes".`,
+		`Print "".`,
+	} {
+		if _, err := parse(src); err != nil {
+			t.Errorf("%q should parse, got: %v", src, err)
+		}
+	}
 }
 
-assign, ok := program.Statements[0].(*ast.Assignment)
-if !ok {
-t.Errorf("Input %q: expected *ast.Assignment, got %T", test.input, program.Statements[0])
-continue
+// TestIllegalCharacterReported covers the lexer's ERROR token, which the parser
+// previously had no case for and reported with a generic message.
+func TestIllegalCharacterReported(t *testing.T) {
+	_, err := parse("@ this is nonsense.")
+	if err == nil {
+		t.Fatal("expected an error for an illegal character, got none")
+	}
+	if !strings.Contains(err.Error(), "do not recognise the character") {
+		t.Errorf("error does not name the illegal character: %v", err)
+	}
 }
 
-if assign.Name != test.varName {
-t.Errorf("Input %q: expected variable name %q, got %q", test.input, test.varName, assign.Name)
+// TestTypeAnnotationForms covers the three annotation positions that used to be
+// served by three incompatible parsers. Keyword-named types ("integer",
+// "array", "lookup table") were syntax errors in the typed-declaration form
+// even though types.Parse accepts them, and a leading article was accepted for
+// struct fields but consumed as the type name in declarations.
+func TestTypeAnnotationForms(t *testing.T) {
+	for _, src := range []string{
+		`Declare a as number to be 1.`,
+		`Declare a as a number to be 1.`,
+		`Declare a as an integer to be 1.`,
+		`Declare a as text to be "x".`,
+		`Declare a as a text to be "x".`,
+		`Declare a as boolean to be true.`,
+		`Declare a as integer to be 1.`,
+		`Declare a as number.`,
+		`Declare a as a number.`,
+		`Print 1 cast to text.`,
+		`Print "1" cast to number.`,
+		`Print 1 cast to a number.`,
+	} {
+		if _, err := parse(src); err != nil {
+			t.Errorf("%q should parse, got: %v", src, err)
+		}
+	}
 }
 
-if _, ok := assign.Value.(*ast.AskExpression); !ok {
-t.Errorf("Input %q: expected *ast.AskExpression as value, got %T", test.input, assign.Value)
+// TestTypeAnnotationRejectsNonTypes covers the old parseTypeName default branch,
+// which accepted *any* token as a type name — so "cast x to 5" parsed cleanly
+// and only failed at run time.
+func TestTypeAnnotationRejectsNonTypes(t *testing.T) {
+	for _, src := range []string{
+		`Print 1 cast to 5.`,
+		`Print 1 cast to "number".`,
+		`Declare y as 42 to be 1.`,
+		`Declare y as "number" to be 1.`,
+	} {
+		_, err := parse(src)
+		if err == nil {
+			t.Errorf("%q should be rejected, but parsed", src)
+			continue
+		}
+		if !strings.Contains(err.Error(), "type name") {
+			t.Errorf("%q: error should mention a type name, got: %v", src, err)
+		}
+	}
 }
+
+// TestBlockEndIsMandatory covers the silent-swallow bug: parseBlock stopped at
+// EOF without complaint and every closer in parser.go was optional, so the
+// statements after an unclosed block were absorbed into it.
+func TestBlockEndIsMandatory(t *testing.T) {
+	for _, src := range []string{
+		"Declare function f that does the following:\n    Print 1.\nPrint 2.",
+		"If true, then\n    Print 1.",
+		"Declare x to be 0.\nRepeat the following while x is less than 1:\n    Set x to be 1.",
+	} {
+		if _, err := parse(src); err == nil {
+			t.Errorf("expected an error for an unclosed block:\n%s", src)
+		}
+	}
 }
+
+// TestComparisonsAreFirstClass covers the grammar bug where parseExpression
+// started below the relational and logical layers, so a comparison could not
+// appear anywhere a value was expected despite boolean being a declared type.
+func TestComparisonsAreFirstClass(t *testing.T) {
+	for _, src := range []string{
+		`Declare x to be 1.
+Declare b to be x is greater than 0.`,
+		`Declare function f that takes n and does the following:
+    Return n is equal to 1.
+thats it.`,
+		`Declare x to be 1.
+Declare b to be x is greater than 0 and x is less than 5.`,
+		`Declare x to be 1.
+Print x is equal to 1.`,
+	} {
+		if _, err := parse(src); err != nil {
+			t.Errorf("%q should parse, got: %v", src, err)
+		}
+	}
+}
+
+// TestAndStillSeparatesArguments guards the change above against over-reach:
+// "and" must remain an argument separator, not become an operator, in call
+// argument lists and after an "ask" prompt.
+func TestAndStillSeparatesArguments(t *testing.T) {
+	prog, err := parse(`Declare function add that takes a and b and does the following:
+    Return a + b.
+thats it.
+Set s to be the result of calling add with 5 and 7.`)
+	if err != nil {
+		t.Fatalf("should parse, got: %v", err)
+	}
+	// The last statement must call add with two arguments, not one "5 and 7".
+	last := prog.Statements[len(prog.Statements)-1]
+	asg, ok := last.(*ast.Assignment)
+	if !ok {
+		t.Fatalf("last statement is %T, want *ast.Assignment", last)
+	}
+	call, ok := asg.Value.(*ast.FunctionCall)
+	if !ok {
+		t.Fatalf("assigned value is %T, want *ast.FunctionCall", asg.Value)
+	}
+	if len(call.Arguments) != 2 {
+		t.Errorf("add was called with %d argument(s), want 2", len(call.Arguments))
+	}
+}
+
+// TestLogicalPrecedence pins the fix for "and"/"or" sharing one precedence
+// level, which made "a or b and c" parse as "(a or b) and c".
+func TestLogicalPrecedence(t *testing.T) {
+	prog, err := parse(`Declare r to be true or false and false.`)
+	if err != nil {
+		t.Fatalf("should parse, got: %v", err)
+	}
+	decl := prog.Statements[0].(*ast.VariableDecl)
+	top, ok := decl.Value.(*ast.BinaryExpression)
+	if !ok {
+		t.Fatalf("value is %T, want *ast.BinaryExpression", decl.Value)
+	}
+	if top.Operator != "or" {
+		t.Errorf("top-level operator is %q, want \"or\" (and binds tighter)", top.Operator)
+	}
+	right, ok := top.Right.(*ast.BinaryExpression)
+	if !ok {
+		t.Fatalf("right operand is %T, want *ast.BinaryExpression", top.Right)
+	}
+	if right.Operator != "and" {
+		t.Errorf("right operand operator is %q, want \"and\"", right.Operator)
+	}
+}
+
+// TestNotPrecedence pins the fix for "not" living in parsePrimary, which bound
+// it tighter than comparison so "not x is equal to y" meant "(not x) is equal
+// to y".
+func TestNotPrecedence(t *testing.T) {
+	prog, err := parse(`Declare x to be 1.
+Declare r to be not x is equal to 2.`)
+	if err != nil {
+		t.Fatalf("should parse, got: %v", err)
+	}
+	decl := prog.Statements[1].(*ast.VariableDecl)
+	un, ok := decl.Value.(*ast.UnaryExpression)
+	if !ok {
+		t.Fatalf("value is %T, want *ast.UnaryExpression (not should be outermost)", decl.Value)
+	}
+	if un.Operator != "not" {
+		t.Errorf("operator is %q, want \"not\"", un.Operator)
+	}
+	if _, ok := un.Right.(*ast.BinaryExpression); !ok {
+		t.Errorf("operand of not is %T, want the comparison", un.Right)
+	}
 }

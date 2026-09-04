@@ -1,10 +1,11 @@
 package vm
 
 import (
-	"github.com/Advik-B/english/astvm/types"
 	"fmt"
 	"strconv"
 	"strings"
+
+	"github.com/Advik-B/english/astvm/types"
 )
 
 // ToString converts any Value to its textual representation.

@@ -48,6 +48,9 @@ func (t *TypeInfo) String() string {
 	case TypeRef:
 		return "reference"
 	default:
+		if t.Name != "" {
+			return t.Name
+		}
 		return "unknown"
 	}
 }
@@ -57,4 +60,79 @@ func (t *TypeInfo) String() string {
 type TypedValue struct {
 	Value    interface{}
 	TypeInfo *TypeInfo
+}
+
+// TypeNamer is implemented by runtime values whose type is defined outside this
+// package — function values, struct instances and references, which live in the
+// engine packages.  It lets Describe classify them without types importing the
+// engines, so both the AST evaluator and the instruction VM share one
+// implementation instead of maintaining divergent copies.
+type TypeNamer interface {
+	EnglishType() *TypeInfo
+}
+
+// Describe returns full type metadata for any runtime value.  It is the single
+// source of truth for "what type is this value" across both engines, the stdlib
+// and the type checker.
+func Describe(v interface{}) *TypeInfo {
+	// TypedValue carries its own annotation; prefer it.
+	if tv, ok := v.(*TypedValue); ok {
+		if tv.TypeInfo != nil {
+			return tv.TypeInfo
+		}
+		return Describe(tv.Value)
+	}
+	// Engine-defined values describe themselves.
+	if tn, ok := v.(TypeNamer); ok {
+		return tn.EnglishType()
+	}
+
+	switch val := v.(type) {
+	case float64:
+		return &TypeInfo{Kind: TypeF64, Name: "f64"}
+	case int32:
+		return &TypeInfo{Kind: TypeI32, Name: "i32"}
+	case int64:
+		return &TypeInfo{Kind: TypeI64, Name: "i64"}
+	case uint32:
+		return &TypeInfo{Kind: TypeU32, Name: "u32"}
+	case uint64:
+		return &TypeInfo{Kind: TypeU64, Name: "u64"}
+	case float32:
+		return &TypeInfo{Kind: TypeF32, Name: "f32"}
+	case string:
+		return &TypeInfo{Kind: TypeString, Name: "text"}
+	case bool:
+		return &TypeInfo{Kind: TypeBool, Name: "boolean"}
+	case []interface{}:
+		return &TypeInfo{Kind: TypeList, Name: "list"}
+	case *ArrayValue:
+		return &TypeInfo{
+			Kind:        TypeArray,
+			Name:        "array",
+			ElementType: &TypeInfo{Kind: val.ElementType, Name: Name(val.ElementType)},
+		}
+	case *RangeValue:
+		return &TypeInfo{Kind: TypeUnknown, Name: "range"}
+	case *LookupTableValue:
+		return &TypeInfo{Kind: TypeLookup, Name: "lookup table"}
+	case *ErrorValue:
+		return &TypeInfo{Kind: TypeError, Name: "error"}
+	case nil:
+		return &TypeInfo{Kind: TypeNull, Name: "nothing"}
+	default:
+		return &TypeInfo{Kind: TypeUnknown, Name: "unknown"}
+	}
+}
+
+// Infer determines the TypeKind of a runtime value.
+func Infer(v interface{}) TypeKind {
+	return Describe(v).Kind
+}
+
+// NameOf returns the user-facing type name of a runtime value ("number",
+// "text", …).  This is the renderer to use in error messages; TypeInfo.String
+// is the finer-grained diagnostic renderer used by "the type of".
+func NameOf(v interface{}) string {
+	return Name(Infer(v))
 }

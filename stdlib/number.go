@@ -1,8 +1,9 @@
 package stdlib
 
 import (
-	"github.com/Advik-B/english/astvm"
 	"math"
+
+	vm "github.com/Advik-B/english/astvm"
 )
 
 func evalNumber(name string, args []vm.Value) (vm.Value, error) {
@@ -47,10 +48,4 @@ func evalNumber(name string, args []vm.Value) (vm.Value, error) {
 		return float64(0), nil
 	}
 	return nil, vm.NewRuntimeError("unknown number function: " + name)
-}
-
-func registerNumberFunctions(env *vm.Environment) {
-	env.DefineFunction("is_integer", &vm.FunctionValue{Name: "is_integer", Parameters: []string{"x"}, Body: nil, Closure: env})
-	env.DefineFunction("clamp", &vm.FunctionValue{Name: "clamp", Parameters: []string{"x", "min", "max"}, Body: nil, Closure: env})
-	env.DefineFunction("sign", &vm.FunctionValue{Name: "sign", Parameters: []string{"x"}, Body: nil, Closure: env})
 }

@@ -9,13 +9,13 @@ const (
 	OP_LOAD_NOTHING               // push nil
 
 	// ── Variables ─────────────────────────────────────────────────────────
-	OP_LOAD_VAR        // push env[names[operand]]
-	OP_STORE_VAR       // env.Set(names[operand], pop())
-	OP_DEFINE_VAR      // env.Define(names[operand], pop(), false)
-	OP_DEFINE_CONST    // env.Define(names[operand], pop(), true)
-	OP_DEFINE_TYPED    // pop value, pop type_name_str; env.DefineTyped(names[operand], type, val, false)
+	OP_LOAD_VAR           // push env[names[operand]]
+	OP_STORE_VAR          // env.Set(names[operand], pop())
+	OP_DEFINE_VAR         // env.Define(names[operand], pop(), false)
+	OP_DEFINE_CONST       // env.Define(names[operand], pop(), true)
+	OP_DEFINE_TYPED       // pop value, pop type_name_str; env.DefineTyped(names[operand], type, val, false)
 	OP_DEFINE_TYPED_CONST // pop value, pop type_name_str; env.DefineTyped(names[operand], type, val, true)
-	OP_TOGGLE_VAR      // toggle boolean at names[operand]
+	OP_TOGGLE_VAR         // toggle boolean at names[operand]
 
 	// ── Arithmetic / comparison ────────────────────────────────────────────
 	OP_BINARY_OP // binary operation; operand encodes BinOp
@@ -31,10 +31,10 @@ const (
 	OP_POP_SCOPE  // restore parent environment
 
 	// ── Functions ─────────────────────────────────────────────────────────
-	OP_DEFINE_FUNC  // define function; operand = func chunk index in chunk.Funcs
-	OP_CALL         // call function; operand = argc<<16 | name_idx
-	OP_CALL_METHOD  // call method; operand = argc<<16 | method_name_idx; object on stack below args
-	OP_RETURN       // return top of stack (or nil if stack empty)
+	OP_DEFINE_FUNC // define function; operand = func chunk index in chunk.Funcs
+	OP_CALL        // call function; operand = argc<<16 | name_idx
+	OP_CALL_METHOD // call method; operand = argc<<16 | method_name_idx; object on stack below args
+	OP_RETURN      // return top of stack (or nil if stack empty)
 
 	// ── Output ────────────────────────────────────────────────────────────
 	OP_PRINT // print; operand = count<<1 | newline_flag
@@ -54,9 +54,9 @@ const (
 	OP_LOOKUP_HAS // pop key, pop table; push bool (key in table)
 
 	// ── Type operations ───────────────────────────────────────────────────
-	OP_TYPEOF          // pop value; push type name string
-	OP_CAST            // operand = type name index; pop value; push cast(value, type)
-	OP_NIL_CHECK       // operand: 1=is_something, 0=is_nothing; pop value; push bool
+	OP_TYPEOF           // pop value; push type name string
+	OP_CAST             // operand = type name index; pop value; push cast(value, type)
+	OP_NIL_CHECK        // operand: 1=is_something, 0=is_nothing; pop value; push bool
 	OP_ERROR_TYPE_CHECK // operand = type name index; pop value; push bool
 
 	// ── Input ─────────────────────────────────────────────────────────────
@@ -72,10 +72,10 @@ const (
 	OP_SET_FIELD     // operand = field_name_idx; pop value, then load object by name (object_name in next operand via names); simpler: pop value, pop object; set field
 
 	// ── Error handling ────────────────────────────────────────────────────
-	OP_RAISE         // operand = type_name_idx (0 = generic/RuntimeError); pop message
-	OP_TRY_BEGIN     // operand = catch offset; push try frame
-	OP_TRY_END       // pop try frame; operand = end offset (jump past catch+finally)
-	OP_CATCH         // operand = error_var_name_idx; bind error var (type check moved to handleError)
+	OP_RAISE     // operand = type_name_idx (0 = generic/RuntimeError); pop message
+	OP_TRY_BEGIN // operand = catch offset; push try frame
+	OP_TRY_END   // pop try frame; operand = end offset (jump past catch+finally)
+	OP_CATCH     // operand = error_var_name_idx; bind error var (type check moved to handleError)
 
 	// OP_TRY_SET_ERRORTYPE sets the error-type filter on the top try frame.
 	// operand = nameIdx+1 (0 means catch-all / no filter).

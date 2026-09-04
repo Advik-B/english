@@ -1,9 +1,10 @@
 package vm
 
 import (
+	"fmt"
+
 	"github.com/Advik-B/english/ast"
 	"github.com/Advik-B/english/astvm/types"
-	"fmt"
 )
 
 // Value is the universal runtime value interface for the English language.
@@ -102,3 +103,14 @@ type LookupTableValue = types.LookupTableValue
 
 // RangeValue is re-exported from vm/types for convenience within vm/.
 type RangeValue = types.RangeValue
+
+// EnglishType implements types.TypeNamer so that types.Describe can classify a
+// function value without the types package importing this one.
+func (f *FunctionValue) EnglishType() *types.TypeInfo {
+	return &types.TypeInfo{Kind: types.TypeFunction, Name: "function"}
+}
+
+// EnglishType implements types.TypeNamer for references.
+func (r *ReferenceValue) EnglishType() *types.TypeInfo {
+	return &types.TypeInfo{Kind: types.TypeRef, Name: "reference"}
+}

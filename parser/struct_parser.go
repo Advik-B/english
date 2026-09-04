@@ -1,9 +1,11 @@
 package parser
 
 import (
+	"fmt"
+	"strings"
+
 	"github.com/Advik-B/english/ast"
 	"github.com/Advik-B/english/token"
-	"fmt"
 )
 
 // parseStructDeclaration parses a struct declaration
@@ -77,21 +79,11 @@ func (p *Parser) parseStructDeclaration() (ast.Statement, error) {
 	}
 	p.nextToken()
 
-	// Skip optional newline
-	if p.curToken.Type == token.NEWLINE {
-		p.nextToken()
-	}
-
 	// Parse fields and methods
 	var fields []*ast.StructField
 	var methods []*ast.FunctionDecl
 
 	for p.curToken.Type != token.THATS && p.curToken.Type != token.EOF {
-		// Skip newlines and indentation
-		for p.curToken.Type == token.NEWLINE {
-			p.nextToken()
-		}
-
 		if p.curToken.Type == token.THATS {
 			break
 		}
@@ -114,20 +106,9 @@ func (p *Parser) parseStructDeclaration() (ast.Statement, error) {
 	}
 
 	// Expect "thats it."
-	if err := p.expectToken(token.THATS); err != nil {
+	if err := p.expectBlockEnd(); err != nil {
 		return nil, err
 	}
-	p.nextToken()
-
-	if err := p.expectToken(token.IT); err != nil {
-		return nil, err
-	}
-	p.nextToken()
-
-	if err := p.expectToken(token.PERIOD); err != nil {
-		return nil, err
-	}
-	p.nextToken()
 
 	return &ast.StructDecl{
 		Name:    nameToken.Value,
@@ -156,31 +137,13 @@ func (p *Parser) parseStructField() (*ast.StructField, error) {
 	}
 	p.nextToken()
 
-	// Skip optional "a" or "an"
-	if p.curToken.Type == token.IDENTIFIER && (p.curToken.Value == "a" || p.curToken.Value == "an") {
-		p.nextToken()
+	// parseTypeName skips an optional article and handles multi-word names such
+	// as "unsigned integer" and "lookup table".
+	typeName, err := p.parseTypeName()
+	if err != nil {
+		return nil, err
 	}
-
-	// Check for "unsigned"
-	isUnsigned := false
-	if p.curToken.Type == token.UNSIGNED {
-		isUnsigned = true
-		p.nextToken()
-	}
-
-	// Get type name
-	typeToken := p.curToken
-	if p.curToken.Type != token.IDENTIFIER && p.curToken.Type != token.INTEGER {
-		return nil, p.syntaxErr(
-			fmt.Sprintf(msgFmtFieldTypeName, nameToken.Value, p.curToken.Value),
-			hintFieldType,
-		)
-	}
-	typeName := typeToken.Value
-	if p.curToken.Type == token.INTEGER {
-		typeName = "integer"
-	}
-	p.nextToken()
+	isUnsigned := strings.EqualFold(typeName, "unsigned integer")
 
 	var defaultValue ast.Expression
 
@@ -330,20 +293,9 @@ func (p *Parser) parseStructMethod() (*ast.FunctionDecl, error) {
 	}
 
 	// Expect "thats it." at the end of the method
-	if err := p.expectToken(token.THATS); err != nil {
+	if err := p.expectBlockEnd(); err != nil {
 		return nil, err
 	}
-	p.nextToken()
-
-	if err := p.expectToken(token.IT); err != nil {
-		return nil, err
-	}
-	p.nextToken()
-
-	if err := p.expectToken(token.PERIOD); err != nil {
-		return nil, err
-	}
-	p.nextToken()
 
 	return &ast.FunctionDecl{
 		Name:       nameToken.Value,
@@ -416,18 +368,8 @@ func (p *Parser) parseStructInstantiation() (ast.Expression, error) {
 		}
 		p.nextToken()
 
-		// Skip optional newline
-		if p.curToken.Type == token.NEWLINE {
-			p.nextToken()
-		}
-
 		// Parse field assignments
 		for p.curToken.Type != token.THATS && p.curToken.Type != token.EOF {
-			// Skip newlines and indentation
-			for p.curToken.Type == token.NEWLINE {
-				p.nextToken()
-			}
-
 			if p.curToken.Type == token.THATS {
 				break
 			}
@@ -465,15 +407,9 @@ func (p *Parser) parseStructInstantiation() (ast.Expression, error) {
 		}
 
 		// Expect "thats it."
-		if err := p.expectToken(token.THATS); err != nil {
+		if err := p.expectBlockEndNoPeriod(); err != nil {
 			return nil, err
 		}
-		p.nextToken()
-
-		if err := p.expectToken(token.IT); err != nil {
-			return nil, err
-		}
-		p.nextToken()
 	}
 
 	return &ast.StructInstantiation{
@@ -504,15 +440,13 @@ func (p *Parser) parseTypedVariableDecl() (ast.Statement, error) {
 	}
 	p.nextToken()
 
-	// Read the type name (e.g. "number", "text", "boolean")
-	if p.curToken.Type != token.IDENTIFIER {
-		return nil, p.syntaxErr(
-			fmt.Sprintf(msgFmtTypedVarType, p.curToken.Value),
-			hintTypedVarType,
-		)
+	// Read the type name. parseTypeName accepts an optional article and the
+	// type names that are lexed as keywords ("integer", "array", "lookup
+	// table"), which this position used to reject.
+	typeName, err := p.parseTypeName()
+	if err != nil {
+		return nil, err
 	}
-	typeName := p.curToken.Value
-	p.nextToken()
 
 	isConstant := false
 	var value ast.Expression

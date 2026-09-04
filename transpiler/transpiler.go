@@ -10,8 +10,9 @@
 package transpiler
 
 import (
-	"github.com/Advik-B/english/ast"
 	"strings"
+
+	"github.com/Advik-B/english/ast"
 )
 
 // Transpiler converts an English AST to Python source code.

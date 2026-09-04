@@ -1,16 +1,16 @@
 package cmd
 
 import (
-	"github.com/Advik-B/english/bytecode"
-	"github.com/Advik-B/english/bytecode/disasm"
-	"github.com/Advik-B/english/ivm"
-	"github.com/Advik-B/english/parser"
-	"github.com/Advik-B/english/stacktraces"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 
+	"github.com/Advik-B/english/bytecode"
+	"github.com/Advik-B/english/bytecode/disasm"
+	"github.com/Advik-B/english/ivm"
+	"github.com/Advik-B/english/parser"
+	"github.com/Advik-B/english/stacktraces"
 	"github.com/spf13/cobra"
 )
 

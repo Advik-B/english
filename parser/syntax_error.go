@@ -1,8 +1,10 @@
 package parser
 
 import (
-	"github.com/Advik-B/english/token"
 	"fmt"
+
+	"github.com/Advik-B/english/token"
+	"github.com/Advik-B/english/tokeniser"
 )
 
 // SyntaxError is a structured parse-time error.
@@ -50,6 +52,12 @@ func (p *Parser) syntaxErr(msg string, hint string) *SyntaxError {
 }
 
 // tokenFriendlyName returns a human-readable name for the expected token type.
+// tokenFriendlyName renders a token type the way a user would read it.
+//
+// Punctuation and literals get hand-written wording; every keyword and
+// multi-word operator is derived from the lexer's own spelling table, so a
+// token can never again fall through to its Go constant name (a missing "then"
+// used to produce "I expected 'THEN' here").
 func tokenFriendlyName(t token.Type) string {
 	switch t {
 	case token.PERIOD:
@@ -58,64 +66,6 @@ func tokenFriendlyName(t token.Type) string {
 		return "a comma (,)"
 	case token.COLON:
 		return "a colon (:)"
-	case token.IDENTIFIER:
-		return "a name"
-	case token.NUMBER:
-		return "a number"
-	case token.STRING:
-		return "some text (in quotes)"
-	case token.BE:
-		return "the word 'be'"
-	case token.TO:
-		return "the word 'to'"
-	case token.THATS:
-		return "the word 'thats'"
-	case token.IT:
-		return "the word 'it'"
-	case token.FUNCTION:
-		return "the word 'function'"
-	case token.DOES:
-		return "the word 'does'"
-	case token.FOLLOWING:
-		return "the word 'following'"
-	case token.TIMES:
-		return "the word 'times'"
-	case token.IN:
-		return "the word 'in'"
-	case token.AND:
-		return "the word 'and'"
-	case token.WITH:
-		return "the word 'with'"
-	case token.THE:
-		return "the word 'the'"
-	case token.OF:
-		return "the word 'of'"
-	case token.AT:
-		return "the word 'at'"
-	case token.POSITION:
-		return "the word 'position'"
-	case token.ITEM:
-		return "the word 'item'"
-	case token.DOING:
-		return "the word 'doing'"
-	case token.WHILE:
-		return "the word 'while'"
-	case token.RETURN:
-		return "the word 'return'"
-	case token.IMPORT:
-		return "the word 'import'"
-	case token.DECLARE:
-		return "the word 'declare'"
-	case token.SET:
-		return "the word 'set'"
-	case token.PRINT:
-		return "the word 'print'"
-	case token.CALL:
-		return "the word 'call'"
-	case token.IF:
-		return "the word 'if'"
-	case token.REPEAT:
-		return "the word 'repeat'"
 	case token.LBRACKET:
 		return "an opening bracket ([)"
 	case token.RBRACKET:
@@ -124,9 +74,42 @@ func tokenFriendlyName(t token.Type) string {
 		return "an opening parenthesis (()"
 	case token.RPAREN:
 		return "a closing parenthesis ())"
-	default:
-		return fmt.Sprintf("'%s'", t)
+	case token.PLUS:
+		return "a plus sign (+)"
+	case token.MINUS:
+		return "a minus sign (-)"
+	case token.STAR:
+		return "a multiplication sign (*)"
+	case token.SLASH:
+		return "a division sign (/)"
+	case token.ASSIGN:
+		return "an equals sign (=)"
+	case token.DOTDOT:
+		return "a range operator (..)"
+	case token.IDENTIFIER:
+		return "a name"
+	case token.NUMBER:
+		return "a number"
+	case token.STRING:
+		return "some text (in quotes)"
+	case token.COMMENT:
+		return "a comment"
+	case token.NEWLINE:
+		return "a new line"
+	case token.EOF:
+		return "the end of the file"
+	case token.ERROR:
+		return "an unrecognised character"
+	case token.WHITESPACE:
+		return "whitespace"
 	}
+	if word, ok := tokeniser.Spelling(t); ok {
+		if token.IsKeyword(t) {
+			return fmt.Sprintf("the word '%s'", word)
+		}
+		return fmt.Sprintf("'%s'", word)
+	}
+	return fmt.Sprintf("'%s'", t)
 }
 
 // tokenFriendlyValue returns a human-readable description of a token type + value.

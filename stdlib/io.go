@@ -2,10 +2,11 @@ package stdlib
 
 import (
 	"bufio"
-	"github.com/Advik-B/english/astvm"
 	"fmt"
 	"os"
 	"strings"
+
+	vm "github.com/Advik-B/english/astvm"
 )
 
 func evalIO(name string, args []vm.Value) (vm.Value, error) {
@@ -22,8 +23,4 @@ func evalIO(name string, args []vm.Value) (vm.Value, error) {
 		return strings.TrimRight(line, "\r\n"), nil
 	}
 	return nil, vm.NewRuntimeError("unknown IO function: " + name)
-}
-
-func registerIOFunctions(env *vm.Environment) {
-	env.DefineFunction("ask", &vm.FunctionValue{Name: "ask", Parameters: []string{"prompt"}, Body: nil, Closure: env})
 }

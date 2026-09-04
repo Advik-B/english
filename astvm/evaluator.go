@@ -2,14 +2,15 @@ package vm
 
 import (
 	"bufio"
-	"github.com/Advik-B/english/ast"
-	"github.com/Advik-B/english/bytecode"
-	"github.com/Advik-B/english/parser"
-	"github.com/Advik-B/english/astvm/types"
 	"fmt"
 	"io"
 	"os"
 	"strings"
+
+	"github.com/Advik-B/english/ast"
+	"github.com/Advik-B/english/astvm/types"
+	"github.com/Advik-B/english/bytecode"
+	"github.com/Advik-B/english/parser"
 )
 
 // Evaluator executes the AST
@@ -44,6 +45,21 @@ func (ev *Evaluator) runtimeError(message string) error {
 		Message:   message,
 		CallStack: append([]string{}, ev.callStack...),
 		Line:      ev.currentLine,
+	}
+}
+
+// checkCallDepth reports a catchable StackOverflowError when the call stack has
+// grown past types.MaxCallDepth. Without it, runaway recursion aborted the whole
+// process with an unrecoverable Go "stack overflow" fatal error, which no
+// English program could catch and no user could diagnose.
+func (ev *Evaluator) checkCallDepth(name string) error {
+	if len(ev.callStack) < types.MaxCallDepth {
+		return nil
+	}
+	return &types.ErrorValue{
+		ErrorType: types.StackOverflowErrorType,
+		Message:   fmt.Sprintf(types.StackOverflowMessage, types.MaxCallDepth, name),
+		CallStack: append([]string{}, ev.callStack[:min(len(ev.callStack), 10)]...),
 	}
 }
 
@@ -1038,6 +1054,10 @@ func (ev *Evaluator) evalFunctionCall(fc *ast.FunctionCall) (Value, error) {
 		return nil, ev.runtimeError(fmt.Sprintf("function '%s' expects %s, got %s%s", fc.Name, expected, got, paramList))
 	}
 
+	if err := ev.checkCallDepth(fc.Name); err != nil {
+		return nil, err
+	}
+
 	// Create new environment for function execution
 	funcEnv := fn.Closure.NewChild()
 
@@ -1100,6 +1120,10 @@ func (ev *Evaluator) callFunction(name string, args []Value) (Value, error) {
 	// User-defined function path
 	if len(args) != len(fn.Parameters) {
 		return nil, ev.runtimeError(fmt.Sprintf("function '%s' expects %d argument(s), got %d", name, len(fn.Parameters), len(args)))
+	}
+
+	if err := ev.checkCallDepth(name); err != nil {
+		return nil, err
 	}
 
 	funcEnv := fn.Closure.NewChild()

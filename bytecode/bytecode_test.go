@@ -2,8 +2,9 @@ package bytecode
 
 import (
 	"bytes"
-	"github.com/Advik-B/english/ast"
 	"testing"
+
+	"github.com/Advik-B/english/ast"
 )
 
 func TestEncodeDecode(t *testing.T) {

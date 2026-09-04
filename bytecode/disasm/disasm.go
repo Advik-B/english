@@ -23,7 +23,6 @@ import (
 	"github.com/Advik-B/english/ast"
 	"github.com/Advik-B/english/bytecode"
 	"github.com/Advik-B/english/parser"
-
 	"github.com/charmbracelet/lipgloss"
 )
 

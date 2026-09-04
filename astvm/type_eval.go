@@ -1,9 +1,10 @@
 package vm
 
 import (
+	"fmt"
+
 	"github.com/Advik-B/english/ast"
 	"github.com/Advik-B/english/astvm/types"
-	"fmt"
 )
 
 // evalTryStatement evaluates a try/error/finally block

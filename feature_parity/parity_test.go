@@ -15,14 +15,15 @@ package feature_parity_test
 
 import (
 	"bytes"
-	"github.com/Advik-B/english/astvm"
-	"github.com/Advik-B/english/stdlib"
-	"github.com/Advik-B/english/ivm"
-	"github.com/Advik-B/english/parser"
 	"io"
 	"os"
 	"strings"
 	"testing"
+
+	vm "github.com/Advik-B/english/astvm"
+	"github.com/Advik-B/english/ivm"
+	"github.com/Advik-B/english/parser"
+	"github.com/Advik-B/english/stdlib"
 )
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -866,4 +867,82 @@ func TestParityPredefinedConstants(t *testing.T) {
 	// Just assert parity — exact float formatting must match
 	assertParity(t, `Print pi.
 Print e.`)
+}
+
+// ─── Crash-class regressions ─────────────────────────────────────────────────
+
+// TestParityRunawayRecursion covers the crash class where unbounded recursion
+// aborted the AST evaluator with an unrecoverable Go "stack overflow" fatal
+// error and hung the instruction VM indefinitely. Both engines must now report
+// a normal, identical, language-level error.
+func TestParityRunawayRecursion(t *testing.T) {
+	src := `Declare function boom that takes n and does the following:
+    Return boom of n.
+thats it.
+Print boom of 1.`
+	astOut, astErr := runAST(src)
+	ivmOut, ivmErr := runIVM(src)
+
+	if astErr == nil {
+		t.Error("astvm: expected a stack-overflow error, got none")
+	}
+	if ivmErr == nil {
+		t.Error("ivm: expected a stack-overflow error, got none")
+	}
+	if astErr != nil && !strings.Contains(astErr.Error(), "maximum call depth") {
+		t.Errorf("astvm error does not mention the call-depth limit: %v", astErr)
+	}
+	if ivmErr != nil && !strings.Contains(ivmErr.Error(), "maximum call depth") {
+		t.Errorf("ivm error does not mention the call-depth limit: %v", ivmErr)
+	}
+	if astOut != ivmOut {
+		t.Errorf("output parity mismatch:\n  astvm: %q\n  ivm:   %q", astOut, ivmOut)
+	}
+}
+
+// TestParityStackOverflowIsCatchable asserts the depth limit surfaces as an
+// ordinary catchable error rather than killing the program, in both engines.
+func TestParityStackOverflowIsCatchable(t *testing.T) {
+	assertOutputContains(t, `Declare function boom that takes n and does the following:
+    Return boom of n.
+thats it.
+
+Try doing the following:
+    Print boom of 1.
+on StackOverflowError:
+    Print "caught".
+thats it.
+Print "still running".`, "caught")
+}
+
+// TestParityBuiltinArity covers the crash class where calling a built-in with
+// too few arguments indexed past the end of the argument slice and panicked,
+// taking down the process (and the REPL) instead of reporting a user error.
+func TestParityBuiltinArity(t *testing.T) {
+	for _, src := range []string{
+		`Call sqrt.`,
+		`Call uppercase.`,
+		`Declare s to be "hi".
+Print s's replace.`,
+		`Print pad_left of "x".`,
+	} {
+		astOut, astErr := runAST(src)
+		ivmOut, ivmErr := runIVM(src)
+
+		if astErr == nil {
+			t.Errorf("astvm: expected an arity error for:\n%s", src)
+		}
+		if ivmErr == nil {
+			t.Errorf("ivm: expected an arity error for:\n%s", src)
+		}
+		if astOut != ivmOut {
+			t.Errorf("output parity mismatch for:\n%s\n  astvm: %q\n  ivm:   %q", src, astOut, ivmOut)
+		}
+		if astErr != nil && ivmErr != nil {
+			// Both engines route through stdlib.Eval, so the message must match.
+			if !strings.Contains(astErr.Error(), "expects") || !strings.Contains(ivmErr.Error(), "expects") {
+				t.Errorf("arity errors not reported for:\n%s\n  astvm: %v\n  ivm:   %v", src, astErr, ivmErr)
+			}
+		}
+	}
 }

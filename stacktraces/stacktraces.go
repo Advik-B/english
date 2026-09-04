@@ -6,11 +6,11 @@
 package stacktraces
 
 import (
-	"github.com/Advik-B/english/highlight"
 	"fmt"
 	"os"
 	"strings"
 
+	"github.com/Advik-B/english/highlight"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/mattn/go-isatty"
 	"github.com/muesli/termenv"

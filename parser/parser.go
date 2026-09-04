@@ -1,11 +1,14 @@
 package parser
 
 import (
-	"github.com/Advik-B/english/ast"
-	"github.com/Advik-B/english/token"
 	"fmt"
 	"strconv"
 	"strings"
+
+	"github.com/Advik-B/english/ast"
+	"github.com/Advik-B/english/astvm/types"
+	"github.com/Advik-B/english/token"
+	"github.com/Advik-B/english/tokeniser"
 )
 
 // Magic string constants used in parsing
@@ -107,20 +110,18 @@ func (p *Parser) Parse() (*ast.Program, error) {
 		if err != nil {
 			return nil, err
 		}
-		if stmt != nil {
-			program.Statements = append(program.Statements, stmt)
-			// Comments don't count toward the politeness tally.
-			if _, isComment := stmt.(*ast.CommentStatement); !isComment {
-				program.TotalCount++
-				if polite {
-					program.PoliteCount++
-				} else {
-					line := stmtLine(stmt)
-					if line == 0 {
-						line = stmtStartLine
-					}
-					program.ImpoliteLines = append(program.ImpoliteLines, line)
+		program.Statements = append(program.Statements, stmt)
+		// Comments don't count toward the politeness tally.
+		if _, isComment := stmt.(*ast.CommentStatement); !isComment {
+			program.TotalCount++
+			if polite {
+				program.PoliteCount++
+			} else {
+				line := stmtLine(stmt)
+				if line == 0 {
+					line = stmtStartLine
 				}
+				program.ImpoliteLines = append(program.ImpoliteLines, line)
 			}
 		}
 	}
@@ -128,7 +129,60 @@ func (p *Parser) Parse() (*ast.Program, error) {
 	return program, nil
 }
 
+// errorTokenErr turns a lexer ERROR token into a syntax error. The lexer emits
+// one for an unterminated text literal or an unrecognised character; before
+// this the parser had no case for it and reported a confusing generic message.
+func (p *Parser) errorTokenErr() error {
+	if p.curToken.Value == tokeniser.UnterminatedString {
+		return p.syntaxErr(msgUnterminatedText, hintUnterminatedText)
+	}
+	return p.syntaxErr(
+		fmt.Sprintf(msgFmtIllegalChar, p.curToken.Value),
+		hintIllegalChar,
+	)
+}
+
+// expectBlockEnd consumes the "thats it." that closes a block.
+//
+// This epilogue was previously written out ten times: six copies in this file
+// guarded by "if p.curToken.Type == token.THATS", which made the closer
+// *optional*, and four mandatory copies elsewhere. Because parseBlock also
+// stops at EOF without complaint, a missing "thats it." was not an error at
+// all — the statements that followed were silently absorbed into the block:
+//
+//	Declare function f that does the following:
+//	    Print 1.
+//	Print 2.            <- silently became part of f's body
+//
+// It is now required everywhere, in one place.
+func (p *Parser) expectBlockEnd() error {
+	if err := p.expectBlockEndNoPeriod(); err != nil {
+		return err
+	}
+	if err := p.expectToken(token.PERIOD); err != nil {
+		return err
+	}
+	p.nextToken()
+	return nil
+}
+
+// expectBlockEndNoPeriod consumes "thats it" without the trailing period.
+// Used where the block closes an expression — a struct instantiation — and the
+// period belongs to the enclosing statement.
+func (p *Parser) expectBlockEndNoPeriod() error {
+	if err := p.expectToken(token.THATS); err != nil {
+		return err
+	}
+	p.nextToken()
+	if err := p.expectToken(token.IT); err != nil {
+		return err
+	}
+	p.nextToken()
+	return nil
+}
+
 func (p *Parser) parseStatement() (ast.Statement, error) {
+
 	// A politeness prefix (please / kindly / could you / would you kindly) may
 	// appear inside blocks (loops, function bodies, if-branches) as well as at
 	// the top level.  Consuming it here means every call site automatically
@@ -184,6 +238,8 @@ func (p *Parser) parseStatement() (ast.Statement, error) {
 		return p.parseSleepStatement()
 	default:
 		switch p.curToken.Type {
+		case token.ERROR:
+			return nil, p.errorTokenErr()
 		case token.IDENTIFIER:
 			name := p.curToken.Value
 			return nil, &SyntaxError{
@@ -586,16 +642,8 @@ func (p *Parser) parseFunctionDeclaration() (ast.Statement, error) {
 		return nil, err
 	}
 
-	if p.curToken.Type == token.THATS {
-		p.nextToken()
-		if err := p.expectToken(token.IT); err != nil {
-			return nil, err
-		}
-		p.nextToken()
-		if err := p.expectToken(token.PERIOD); err != nil {
-			return nil, err
-		}
-		p.nextToken()
+	if err := p.expectBlockEnd(); err != nil {
+		return nil, err
 	}
 
 	return &ast.FunctionDecl{
@@ -922,7 +970,7 @@ func (p *Parser) parseCallArguments() []ast.Expression {
 	var args []ast.Expression
 
 	for {
-		arg, err := p.parseExpression()
+		arg, err := p.parseArgument()
 		if err != nil {
 			break
 		}
@@ -944,7 +992,7 @@ func (p *Parser) parseIfStatement() (ast.Statement, error) {
 	startLine := p.curToken.Line
 	p.nextToken()
 
-	condition, err := p.parseComparison()
+	condition, err := p.parseExpression()
 	if err != nil {
 		return nil, err
 	}
@@ -971,7 +1019,7 @@ func (p *Parser) parseIfStatement() (ast.Statement, error) {
 		p.nextToken()
 		if p.curToken.Type == token.IF {
 			p.nextToken()
-			eifCond, err := p.parseComparison()
+			eifCond, err := p.parseExpression()
 			if err != nil {
 				return nil, err
 			}
@@ -1000,16 +1048,8 @@ func (p *Parser) parseIfStatement() (ast.Statement, error) {
 		}
 	}
 
-	if p.curToken.Type == token.THATS {
-		p.nextToken()
-		if err := p.expectToken(token.IT); err != nil {
-			return nil, err
-		}
-		p.nextToken()
-		if err := p.expectToken(token.PERIOD); err != nil {
-			return nil, err
-		}
-		p.nextToken()
+	if err := p.expectBlockEnd(); err != nil {
+		return nil, err
 	}
 
 	return &ast.IfStatement{
@@ -1042,16 +1082,8 @@ func (p *Parser) parseRepeat() (ast.Statement, error) {
 			return nil, err
 		}
 
-		if p.curToken.Type == token.THATS {
-			p.nextToken()
-			if err := p.expectToken(token.IT); err != nil {
-				return nil, err
-			}
-			p.nextToken()
-			if err := p.expectToken(token.PERIOD); err != nil {
-				return nil, err
-			}
-			p.nextToken()
+		if err := p.expectBlockEnd(); err != nil {
+			return nil, err
 		}
 
 		return &ast.WhileLoop{
@@ -1074,7 +1106,7 @@ func (p *Parser) parseRepeat() (ast.Statement, error) {
 	// Check if it's a while loop or for loop
 	if p.curToken.Type == token.WHILE {
 		p.nextToken()
-		condition, err := p.parseComparison()
+		condition, err := p.parseExpression()
 		if err != nil {
 			return nil, err
 		}
@@ -1089,16 +1121,8 @@ func (p *Parser) parseRepeat() (ast.Statement, error) {
 			return nil, err
 		}
 
-		if p.curToken.Type == token.THATS {
-			p.nextToken()
-			if err := p.expectToken(token.IT); err != nil {
-				return nil, err
-			}
-			p.nextToken()
-			if err := p.expectToken(token.PERIOD); err != nil {
-				return nil, err
-			}
-			p.nextToken()
+		if err := p.expectBlockEnd(); err != nil {
+			return nil, err
 		}
 
 		return &ast.WhileLoop{
@@ -1129,16 +1153,8 @@ func (p *Parser) parseRepeat() (ast.Statement, error) {
 		return nil, err
 	}
 
-	if p.curToken.Type == token.THATS {
-		p.nextToken()
-		if err := p.expectToken(token.IT); err != nil {
-			return nil, err
-		}
-		p.nextToken()
-		if err := p.expectToken(token.PERIOD); err != nil {
-			return nil, err
-		}
-		p.nextToken()
+	if err := p.expectBlockEnd(); err != nil {
+		return nil, err
 	}
 
 	return &ast.ForLoop{
@@ -1214,16 +1230,8 @@ func (p *Parser) parseForEach() (ast.Statement, error) {
 		return nil, err
 	}
 
-	if p.curToken.Type == token.THATS {
-		p.nextToken()
-		if err := p.expectToken(token.IT); err != nil {
-			return nil, err
-		}
-		p.nextToken()
-		if err := p.expectToken(token.PERIOD); err != nil {
-			return nil, err
-		}
-		p.nextToken()
+	if err := p.expectBlockEnd(); err != nil {
+		return nil, err
 	}
 
 	return &ast.ForEachLoop{
@@ -1371,7 +1379,7 @@ func (p *Parser) parseAskStatement() (ast.Statement, error) {
 	p.nextToken() // consume ASK
 
 	// Parse the prompt expression
-	prompt, err := p.parseExpression()
+	prompt, err := p.parseArgument()
 	if err != nil {
 		return nil, err
 	}
@@ -1446,43 +1454,69 @@ func (p *Parser) parseBlock() ([]ast.Statement, error) {
 		if err != nil {
 			return nil, err
 		}
-		if stmt != nil {
-			statements = append(statements, stmt)
-		}
+		statements = append(statements, stmt)
 	}
 
 	return statements, nil
 }
 
-func (p *Parser) parseComparison() (ast.Expression, error) {
-	return p.parseLogical()
-}
-
-// parseLogical handles logical "and" / "or" operators (lowest precedence above comparison)
-func (p *Parser) parseLogical() (ast.Expression, error) {
-	left, err := p.parseRelational()
+// parseOr handles "or", the loosest-binding operator.
+//
+// "and" used to share this level with "or", which made "a or b and c" parse as
+// "(a or b) and c" instead of the conventional "a or (b and c)".
+func (p *Parser) parseOr() (ast.Expression, error) {
+	left, err := p.parseAnd()
 	if err != nil {
 		return nil, err
 	}
 
-	for p.curToken.Type == token.AND || p.curToken.Type == token.OR {
-		op := "and"
-		if p.curToken.Type == token.OR {
-			op = "or"
-		}
+	for p.curToken.Type == token.OR {
 		p.nextToken()
-		right, err := p.parseRelational()
+		right, err := p.parseAnd()
 		if err != nil {
 			return nil, err
 		}
-		left = &ast.BinaryExpression{
-			Left:     left,
-			Operator: op,
-			Right:    right,
-		}
+		left = &ast.BinaryExpression{Left: left, Operator: "or", Right: right}
 	}
 
 	return left, nil
+}
+
+// parseAnd handles "and", which binds tighter than "or".
+func (p *Parser) parseAnd() (ast.Expression, error) {
+	left, err := p.parseNot()
+	if err != nil {
+		return nil, err
+	}
+
+	for p.curToken.Type == token.AND {
+		p.nextToken()
+		right, err := p.parseNot()
+		if err != nil {
+			return nil, err
+		}
+		left = &ast.BinaryExpression{Left: left, Operator: "and", Right: right}
+	}
+
+	return left, nil
+}
+
+// parseNot handles the "not" prefix operator.
+//
+// It sits above the relational layer so that "not x is equal to y" means
+// "not (x is equal to y)". It used to live in parsePrimary, which bound it
+// tighter than both arithmetic and comparison, so the same phrase parsed as
+// "(not x) is equal to y".
+func (p *Parser) parseNot() (ast.Expression, error) {
+	if p.curToken.Type == token.NOT {
+		p.nextToken()
+		right, err := p.parseNot()
+		if err != nil {
+			return nil, err
+		}
+		return &ast.UnaryExpression{Operator: "not", Right: right}, nil
+	}
+	return p.parseRelational()
 }
 
 // parseRelational handles comparison operators like "is equal to", "is less than", etc.
@@ -1570,7 +1604,37 @@ func (p *Parser) parseRelational() (ast.Expression, error) {
 	return left, nil
 }
 
+// parseExpression parses a complete expression, including comparisons and
+// "and"/"or".
+//
+// It used to start at parseCast, which sits *below* the relational and logical
+// layers, so a comparison could not appear anywhere a value was expected:
+// "Declare b to be x is greater than 5." was a syntax error even though
+// boolean is a first-class declared type. Only conditions and parenthesised
+// expressions reached the comparison layer.
 func (p *Parser) parseExpression() (ast.Expression, error) {
+	return p.parseOr()
+}
+
+// parseArgument parses an expression in a position where "and" is a separator
+// rather than an operator — argument lists ("with 5 and 7"), "X of Y" call
+// arguments, and the "ask" prompt.
+//
+// It stops below the "and"/"or" layer so those keywords stay available as
+// separators; write parentheses to use them as operators in such a position,
+// as in "Call f with (a and b).".
+func (p *Parser) parseArgument() (ast.Expression, error) {
+	return p.parseNot()
+}
+
+// parseOfArgument parses the operand of an "X of Y" phrase — "casefold of name",
+// "the length of items", "the value of x".
+//
+// It binds tightest of the three entry points, because such a phrase is itself
+// the left operand of any following comparison: "casefold of answer is equal to
+// \"y\"" must group as "(casefold of answer) is equal to \"y\"", not as
+// "casefold of (answer is equal to \"y\")".
+func (p *Parser) parseOfArgument() (ast.Expression, error) {
 	return p.parseCast()
 }
 
@@ -1596,12 +1660,9 @@ func (p *Parser) parseCast() (ast.Expression, error) {
 		if p.curToken.Type == token.TO {
 			p.nextToken()
 		}
-		typeName := p.parseTypeName()
-		if typeName == "" {
-			return nil, p.syntaxErr(
-				fmt.Sprintf(msgFmtCastTypeName, p.curToken.Value),
-				hintCastType,
-			)
+		typeName, err := p.parseTypeName()
+		if err != nil {
+			return nil, err
 		}
 		return &ast.CastExpression{Value: expr, TypeName: typeName}, nil
 	}
@@ -1653,34 +1714,79 @@ func (p *Parser) parseCast() (ast.Expression, error) {
 	return expr, nil
 }
 
-// parseTypeName parses a type name (single word or "unsigned integer")
-func (p *Parser) parseTypeName() string {
-	// Handle "unsigned integer"
-	if p.curToken.Type == token.UNSIGNED {
+// canNameAType reports whether a token may begin a type annotation.
+//
+// Several type names are lexed as keywords rather than identifiers — "integer",
+// "array", "table", "range", "type" — which is why the typed-declaration form
+// used to reject "Declare x as integer to be 5." even though types.Parse
+// accepts "integer" and the error hint advertised it.
+func canNameAType(t token.Type) bool {
+	switch t {
+	case token.IDENTIFIER, token.INTEGER, token.UNSIGNED,
+		token.ARRAY, token.LOOKUP, token.TABLE, token.RANGE, token.TYPE:
+		return true
+	}
+	return false
+}
+
+// parseTypeName parses a type annotation and returns its name.
+//
+// This is the single entry point for every annotation position — typed
+// declarations, struct fields, "cast to", and array element types. Those four
+// used to be served by three separate implementations that disagreed: one
+// accepted *any* token at all (so "cast x to 5" parsed cleanly and only failed
+// at run time), one accepted only bare identifiers (so keyword-named types were
+// syntax errors), and they differed on case handling and on whether a leading
+// article was allowed.
+//
+// A name that matches a built-in type is normalised to lower case; anything
+// else keeps its original spelling, because it may name a struct — which only
+// the type checker can resolve.
+func (p *Parser) parseTypeName() (string, error) {
+	// An article reads naturally here: "Declare x as a number to be 5."
+	if p.curToken.Type == token.IDENTIFIER &&
+		(strings.EqualFold(p.curToken.Value, "a") || strings.EqualFold(p.curToken.Value, "an")) {
 		p.nextToken()
-		if p.curToken.Type == token.INTEGER {
-			p.nextToken()
-			return "unsigned integer"
-		}
-		return "unsigned"
 	}
 
-	name := ""
+	if !canNameAType(p.curToken.Type) {
+		return "", p.syntaxErr(
+			fmt.Sprintf(msgFmtTypeNameExpected, tokenFriendlyValue(p.curToken.Type, p.curToken.Value)),
+			fmt.Sprintf(hintFmtTypeName, strings.Join(types.UserTypeNames(), ", ")),
+		)
+	}
+
+	// Multi-word built-in names.
 	switch p.curToken.Type {
-	case token.IDENTIFIER:
-		name = strings.ToLower(p.curToken.Value)
-	case token.INTEGER:
-		name = "integer"
-	case token.TYPE:
-		name = strings.ToLower(p.curToken.Value)
-	default:
-		// Try interpreting keyword token values as type names
-		name = strings.ToLower(p.curToken.Value)
-	}
-	if name != "" {
+	case token.UNSIGNED:
 		p.nextToken()
+		if p.curToken.Type != token.INTEGER {
+			return "", p.syntaxErr(
+				msgUnsignedNeedsInteger,
+				hintUnsignedInteger,
+			)
+		}
+		p.nextToken()
+		return "unsigned integer", nil
+	case token.LOOKUP:
+		p.nextToken()
+		if p.curToken.Type == token.TABLE {
+			p.nextToken()
+		}
+		return "lookup table", nil
+	case token.INTEGER:
+		p.nextToken()
+		return "integer", nil
 	}
-	return name
+
+	name := p.curToken.Value
+	p.nextToken()
+	// Normalise built-in spellings; leave anything else alone so that a struct
+	// name keeps the case it was declared with.
+	if types.Parse(name) != types.TypeUnknown {
+		return strings.ToLower(name), nil
+	}
+	return name, nil
 }
 
 func (p *Parser) parseAdditive() (ast.Expression, error) {
@@ -1759,18 +1865,6 @@ func (p *Parser) parsePrimary() (ast.Expression, error) {
 		p.nextToken()
 		return &ast.NothingLiteral{}, nil
 
-	case token.NOT:
-		// Logical NOT unary operator: "not <expression>"
-		p.nextToken()
-		expr, err := p.parsePrimary()
-		if err != nil {
-			return nil, err
-		}
-		return &ast.UnaryExpression{
-			Operator: "not",
-			Right:    expr,
-		}, nil
-
 	case token.ASK:
 		// "ask(<prompt>)" or "ask" used as expression
 		p.nextToken() // consume ASK
@@ -1791,7 +1885,7 @@ func (p *Parser) parsePrimary() (ast.Expression, error) {
 			return &ast.AskExpression{Prompt: prompt}, nil
 		}
 		// "ask" with a string directly (no parentheses)
-		prompt, err := p.parseExpression()
+		prompt, err := p.parseArgument()
 		if err != nil {
 			return nil, err
 		}
@@ -1829,7 +1923,7 @@ func (p *Parser) parsePrimary() (ast.Expression, error) {
 			p.nextToken()
 			if p.curToken.Type == token.OF {
 				p.nextToken()
-				obj, err := p.parseExpression()
+				obj, err := p.parseOfArgument()
 				if err != nil {
 					return nil, err
 				}
@@ -1855,7 +1949,7 @@ func (p *Parser) parsePrimary() (ast.Expression, error) {
 			if p.curToken.Type == token.OF {
 				p.nextToken()
 			}
-			return p.parseExpression()
+			return p.parseOfArgument()
 		}
 		return nil, p.syntaxErr(
 			fmt.Sprintf(msgFmtTheUnknown, p.curToken.Value),
@@ -1951,7 +2045,7 @@ func (p *Parser) parsePrimary() (ast.Expression, error) {
 		// The name is passed as-is (original case) to match how all other function calls work.
 		if p.curToken.Type == token.OF {
 			p.nextToken()
-			arg, err := p.parseExpression()
+			arg, err := p.parseOfArgument()
 			if err != nil {
 				return nil, err
 			}
@@ -1983,7 +2077,7 @@ func (p *Parser) parsePrimary() (ast.Expression, error) {
 	case token.LPAREN:
 		p.nextToken()
 		// Allow logical operators (and/or) inside parentheses
-		expr, err := p.parseComparison()
+		expr, err := p.parseExpression()
 		if err != nil {
 			return nil, err
 		}
@@ -2007,6 +2101,9 @@ func (p *Parser) parsePrimary() (ast.Expression, error) {
 	case token.NEW:
 		// "new instance of Person" (without "a")
 		return p.parseStructInstantiation()
+
+	case token.ERROR:
+		return nil, p.errorTokenErr()
 
 	default:
 		return nil, p.syntaxErr(
@@ -2377,7 +2474,7 @@ func (p *Parser) parseFunctionArguments() ([]ast.Expression, error) {
 	if p.curToken.Type == token.WITH {
 		p.nextToken()
 		for {
-			arg, err := p.parseExpression()
+			arg, err := p.parseArgument()
 			if err != nil {
 				return nil, err
 			}
@@ -2430,7 +2527,11 @@ func (p *Parser) parseArrayLiteral() (ast.Expression, error) {
 	// Optional element type hint before the bracket
 	elementType := ""
 	if p.curToken.Type != token.LBRACKET {
-		elementType = p.parseTypeName()
+		var err error
+		elementType, err = p.parseTypeName()
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	if p.curToken.Type != token.LBRACKET {
@@ -2514,7 +2615,7 @@ func (p *Parser) parseLookupKeyAssignment(setLine int) (ast.Statement, error) {
 	if p.curToken.Type != token.IDENTIFIER {
 		return nil, p.syntaxErr(
 			msgLookupTableName,
-			hintLookupTableName,
+			hintLookupSetEntry,
 		)
 	}
 	tableName := p.curToken.Value

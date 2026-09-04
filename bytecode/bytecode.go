@@ -7,13 +7,13 @@ package bytecode
 import (
 	"bytes"
 	"encoding/binary"
-	"github.com/Advik-B/english/ast"
 	"fmt"
 	"io"
 	"math"
 	"os"
 	"path/filepath"
 
+	"github.com/Advik-B/english/ast"
 	"github.com/dchest/siphash"
 )
 
@@ -190,6 +190,11 @@ func (e *Encoder) encodeStatement(stmt ast.Statement) error {
 		return nil
 
 	case *ast.CallStatement:
+		if s.FunctionCall == nil {
+			// The statement holds a MethodCall, which this format cannot
+			// represent. Report it instead of dereferencing a nil pointer.
+			return fmt.Errorf("bytecode: method calls are not supported by format version %d", FormatVersion)
+		}
 		e.buf.WriteByte(NodeCallStatement)
 		return e.encodeFunctionCall(s.FunctionCall)
 
@@ -425,8 +430,44 @@ func (e *Encoder) encodeExpression(expr ast.Expression) error {
 
 // Decoder deserializes binary bytecode to AST
 type Decoder struct {
-	reader io.Reader
+	reader *bytes.Reader
+	// depth guards against a crafted file whose nested statements/expressions
+	// recurse deeply enough to exhaust the Go stack, which is a fatal,
+	// unrecoverable error rather than something a caller can handle.
+	depth int
 }
+
+// maxDecodeDepth bounds statement/expression nesting in a bytecode file.
+const maxDecodeDepth = 1000
+
+// remaining reports how many bytes of input are still unread. It is the budget
+// used to sanity-check length prefixes before allocating.
+func (d *Decoder) remaining() int { return d.reader.Len() }
+
+// checkCount rejects an element count that cannot possibly be satisfied by the
+// bytes left in the file. Every element costs at least one byte, so a count
+// larger than the remaining input is corrupt. Without this, a hostile or
+// truncated file could name a count of 4 billion and trigger a multi-gigabyte
+// allocation before the truncation was ever noticed.
+func (d *Decoder) checkCount(count uint32, what string) error {
+	if int64(count) > int64(d.remaining()) {
+		return fmt.Errorf("corrupt bytecode: %s count %d exceeds %d remaining byte(s)",
+			what, count, d.remaining())
+	}
+	return nil
+}
+
+// enter increments the recursion depth, refusing to go deeper than maxDecodeDepth.
+func (d *Decoder) enter() error {
+	d.depth++
+	if d.depth > maxDecodeDepth {
+		return fmt.Errorf("corrupt bytecode: nesting deeper than %d levels", maxDecodeDepth)
+	}
+	return nil
+}
+
+// leave undoes enter.
+func (d *Decoder) leave() { d.depth-- }
 
 // NewDecoder creates a new bytecode decoder
 func NewDecoder(data []byte) *Decoder {
@@ -469,6 +510,9 @@ func (d *Decoder) readByte() (byte, error) {
 func (d *Decoder) readString() (string, error) {
 	length, err := d.readUint32()
 	if err != nil {
+		return "", err
+	}
+	if err := d.checkCount(length, "string length"); err != nil {
 		return "", err
 	}
 	data := make([]byte, length)
@@ -516,6 +560,9 @@ func (d *Decoder) decodeProgram() (*ast.Program, error) {
 		return nil, err
 	}
 
+	if err := d.checkCount(count, "statements"); err != nil {
+		return nil, err
+	}
 	statements := make([]ast.Statement, count)
 	for i := uint32(0); i < count; i++ {
 		stmt, err := d.decodeStatement()
@@ -529,6 +576,11 @@ func (d *Decoder) decodeProgram() (*ast.Program, error) {
 }
 
 func (d *Decoder) decodeStatement() (ast.Statement, error) {
+	if err := d.enter(); err != nil {
+		return nil, err
+	}
+	defer d.leave()
+
 	nodeType, err := d.readByte()
 	if err != nil {
 		return nil, err
@@ -600,6 +652,9 @@ func (d *Decoder) decodeStatement() (ast.Statement, error) {
 		if err != nil {
 			return nil, err
 		}
+		if err := d.checkCount(paramCount, "params"); err != nil {
+			return nil, err
+		}
 		params := make([]string, paramCount)
 		for i := uint32(0); i < paramCount; i++ {
 			params[i], err = d.readString()
@@ -609,6 +664,9 @@ func (d *Decoder) decodeStatement() (ast.Statement, error) {
 		}
 		bodyCount, err := d.readUint32()
 		if err != nil {
+			return nil, err
+		}
+		if err := d.checkCount(bodyCount, "body"); err != nil {
 			return nil, err
 		}
 		body := make([]ast.Statement, bodyCount)
@@ -636,6 +694,9 @@ func (d *Decoder) decodeStatement() (ast.Statement, error) {
 		if err != nil {
 			return nil, err
 		}
+		if err := d.checkCount(thenCount, "thenBody"); err != nil {
+			return nil, err
+		}
 		thenBody := make([]ast.Statement, thenCount)
 		for i := uint32(0); i < thenCount; i++ {
 			thenBody[i], err = d.decodeStatement()
@@ -647,6 +708,9 @@ func (d *Decoder) decodeStatement() (ast.Statement, error) {
 		if err != nil {
 			return nil, err
 		}
+		if err := d.checkCount(elseIfCount, "elseIfParts"); err != nil {
+			return nil, err
+		}
 		elseIfParts := make([]*ast.ElseIfPart, elseIfCount)
 		for i := uint32(0); i < elseIfCount; i++ {
 			elseIfParts[i], err = d.decodeElseIfPart()
@@ -656,6 +720,9 @@ func (d *Decoder) decodeStatement() (ast.Statement, error) {
 		}
 		elseCount, err := d.readUint32()
 		if err != nil {
+			return nil, err
+		}
+		if err := d.checkCount(elseCount, "elseBody"); err != nil {
 			return nil, err
 		}
 		elseBody := make([]ast.Statement, elseCount)
@@ -676,6 +743,9 @@ func (d *Decoder) decodeStatement() (ast.Statement, error) {
 		if err != nil {
 			return nil, err
 		}
+		if err := d.checkCount(bodyCount, "body"); err != nil {
+			return nil, err
+		}
 		body := make([]ast.Statement, bodyCount)
 		for i := uint32(0); i < bodyCount; i++ {
 			body[i], err = d.decodeStatement()
@@ -692,6 +762,9 @@ func (d *Decoder) decodeStatement() (ast.Statement, error) {
 		}
 		bodyCount, err := d.readUint32()
 		if err != nil {
+			return nil, err
+		}
+		if err := d.checkCount(bodyCount, "body"); err != nil {
 			return nil, err
 		}
 		body := make([]ast.Statement, bodyCount)
@@ -714,6 +787,9 @@ func (d *Decoder) decodeStatement() (ast.Statement, error) {
 		}
 		bodyCount, err := d.readUint32()
 		if err != nil {
+			return nil, err
+		}
+		if err := d.checkCount(bodyCount, "body"); err != nil {
 			return nil, err
 		}
 		body := make([]ast.Statement, bodyCount)
@@ -753,6 +829,9 @@ func (d *Decoder) decodeStatement() (ast.Statement, error) {
 		if err != nil {
 			return nil, err
 		}
+		if err := d.checkCount(count, "values"); err != nil {
+			return nil, err
+		}
 		values := make([]ast.Expression, count)
 		for i := uint32(0); i < count; i++ {
 			value, err := d.decodeExpression()
@@ -785,6 +864,9 @@ func (d *Decoder) decodeStatement() (ast.Statement, error) {
 		}
 		itemCount, err := d.readUint32()
 		if err != nil {
+			return nil, err
+		}
+		if err := d.checkCount(itemCount, "items"); err != nil {
 			return nil, err
 		}
 		items := make([]string, itemCount)
@@ -831,6 +913,9 @@ func (d *Decoder) decodeElseIfPart() (*ast.ElseIfPart, error) {
 	if err != nil {
 		return nil, err
 	}
+	if err := d.checkCount(bodyCount, "body"); err != nil {
+		return nil, err
+	}
 	body := make([]ast.Statement, bodyCount)
 	for i := uint32(0); i < bodyCount; i++ {
 		body[i], err = d.decodeStatement()
@@ -858,6 +943,9 @@ func (d *Decoder) decodeFunctionCall() (*ast.FunctionCall, error) {
 	if err != nil {
 		return nil, err
 	}
+	if err := d.checkCount(argCount, "args"); err != nil {
+		return nil, err
+	}
 	args := make([]ast.Expression, argCount)
 	for i := uint32(0); i < argCount; i++ {
 		args[i], err = d.decodeExpression()
@@ -869,6 +957,11 @@ func (d *Decoder) decodeFunctionCall() (*ast.FunctionCall, error) {
 }
 
 func (d *Decoder) decodeExpression() (ast.Expression, error) {
+	if err := d.enter(); err != nil {
+		return nil, err
+	}
+	defer d.leave()
+
 	nodeType, err := d.readByte()
 	if err != nil {
 		return nil, err
@@ -899,6 +992,9 @@ func (d *Decoder) decodeExpression() (ast.Expression, error) {
 	case NodeListLiteral:
 		count, err := d.readUint32()
 		if err != nil {
+			return nil, err
+		}
+		if err := d.checkCount(count, "elements"); err != nil {
 			return nil, err
 		}
 		elements := make([]ast.Expression, count)
@@ -951,6 +1047,9 @@ func (d *Decoder) decodeExpression() (ast.Expression, error) {
 		}
 		argCount, err := d.readUint32()
 		if err != nil {
+			return nil, err
+		}
+		if err := d.checkCount(argCount, "args"); err != nil {
 			return nil, err
 		}
 		args := make([]ast.Expression, argCount)

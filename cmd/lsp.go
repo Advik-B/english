@@ -1,11 +1,11 @@
 package cmd
 
 import (
-	"github.com/Advik-B/english/lsp"
 	"fmt"
 	"log"
 	"os"
 
+	"github.com/Advik-B/english/lsp"
 	"github.com/spf13/cobra"
 )
 

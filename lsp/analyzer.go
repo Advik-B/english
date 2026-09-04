@@ -107,7 +107,8 @@ func (a *Analyzer) Analyze(doc *Document) *AnalysisResult {
 	return result
 }
 
-// tokenizeAll returns all tokens including newlines
+// tokenizeAll returns all tokens with NEWLINE tokens stripped, matching the
+// token stream tokeniser.TokenizeAll hands the parser.
 func (a *Analyzer) tokenizeAll(lexer *parser.Lexer) []token.Token {
 	var tokens []token.Token
 	for {

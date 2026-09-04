@@ -16,7 +16,11 @@ const (
 	STRING
 	IDENTIFIER
 
-	// Keywords
+	// Keywords.
+	// keywordBeg and keywordEnd bracket this block; IsKeyword tests against
+	// them, so a keyword added anywhere between them is picked up automatically
+	// and a non-keyword added after keywordEnd can never be misclassified.
+	keywordBeg
 	DECLARE
 	LET
 	EQUAL
@@ -76,7 +80,6 @@ const (
 	TRY
 	DOING
 	ON
-	ONERROR
 	FINALLY
 	RAISE
 	REFERENCE
@@ -84,7 +87,6 @@ const (
 	SWAP
 	CASTED
 	TYPE
-	WHICH
 	IS
 	FROM
 	UNSIGNED
@@ -119,6 +121,7 @@ const (
 	// SLEEP is emitted for the "sleep" and "wait" keywords used in
 	// "Sleep for <duration>." / "Wait for <duration>." statements.
 	SLEEP
+	keywordEnd
 
 	// WHITESPACE is emitted by TokenizeForHighlight to represent horizontal
 	// whitespace (spaces / tabs) that was skipped by the lexer between tokens.
@@ -169,12 +172,15 @@ type Token struct {
 
 // IsKeyword reports whether t is a language keyword token.
 func IsKeyword(t Type) bool {
-	return t >= DECLARE && t <= SLEEP
+	return t > keywordBeg && t < keywordEnd
 }
 
 // String representation of token type
 func (t Type) String() string {
 	switch t {
+	case keywordBeg, keywordEnd:
+		// Range sentinels used by IsKeyword; never emitted by the lexer.
+		return "<internal>"
 	case EOF:
 		return "EOF"
 	case ERROR:
@@ -305,8 +311,6 @@ func (t Type) String() string {
 		return "DOING"
 	case ON:
 		return "ON"
-	case ONERROR:
-		return "ONERROR"
 	case FINALLY:
 		return "FINALLY"
 	case RAISE:
@@ -321,8 +325,6 @@ func (t Type) String() string {
 		return "CASTED"
 	case TYPE:
 		return "TYPE"
-	case WHICH:
-		return "WHICH"
 	case IS:
 		return "IS"
 	case FROM:

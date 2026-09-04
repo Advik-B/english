@@ -1,26 +1,32 @@
 package ivm
 
 import (
-	"github.com/Advik-B/english/ast"
 	"fmt"
+
+	"github.com/Advik-B/english/ast"
 )
 
 // Compiler walks an AST and emits instructions into a Chunk.
 type Compiler struct {
-	chunk            *Chunk
-	loopStarts       []int   // jump-back targets for while loops (before condition test)
-	loopContinues    [][]int // like loopEnds: positions of continue JUMPs to patch (for for/for-each)
-	loopEnds         [][]int // positions of break JUMPs to patch to loop end
-	loopScopeDepths  []int   // scope depth at the start of each loop's body
-	scopeDepth       int     // current number of active scopes (each PUSH_SCOPE increments)
-	funcName         string  // name of the function being compiled (for error messages)
-	counter          int     // for generating unique hidden variable names
+	chunk           *Chunk
+	loopStarts      []int   // jump-back targets for while loops (before condition test)
+	loopContinues   [][]int // like loopEnds: positions of continue JUMPs to patch (for for/for-each)
+	loopEnds        [][]int // positions of break JUMPs to patch to loop end
+	loopScopeDepths []int   // scope depth at the start of each loop's body
+	scopeDepth      int     // current number of active scopes (each PUSH_SCOPE increments)
+	funcName        string  // name of the function being compiled (for error messages)
+	counter         int     // for generating unique hidden variable names
 }
 
 // Compile compiles an ast.Program to a Chunk.
 func Compile(prog *ast.Program) (*Chunk, error) {
 	c := &Compiler{chunk: NewChunk()}
 	if err := c.compileStatements(prog.Statements); err != nil {
+		return nil, err
+	}
+	// Fail loudly if the program outgrew the encoding's packed-operand limits,
+	// rather than emitting bytecode that silently refers to the wrong names.
+	if err := c.chunk.CheckLimits(); err != nil {
 		return nil, err
 	}
 	return c.chunk, nil
@@ -587,5 +593,3 @@ func parseBinOp(op string) (BinOp, error) {
 		return 0, fmt.Errorf("unknown binary operator: %s", op)
 	}
 }
-
-

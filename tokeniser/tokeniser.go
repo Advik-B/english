@@ -6,10 +6,15 @@
 package tokeniser
 
 import (
-	"github.com/Advik-B/english/token"
 	"strings"
 	"unicode"
+
+	"github.com/Advik-B/english/token"
 )
+
+// UnterminatedString is the Value carried by the ERROR token emitted for a
+// string literal with no closing quote. The parser turns it into a syntax error.
+const UnterminatedString = "unterminated text literal"
 
 // Lexer tokenizes English language source code.
 type Lexer struct {
@@ -101,7 +106,10 @@ func (l *Lexer) readComment() (token.Token, bool) {
 	return token.Token{Type: token.COMMENT, Value: text, Line: line, Col: col, Pos: pos}, true
 }
 
-func (l *Lexer) readString(quote byte) string {
+// readString reads a quoted literal. It returns the unquoted contents and
+// whether a closing quote was actually found; an unterminated literal used to
+// be accepted silently, swallowing the remainder of the file.
+func (l *Lexer) readString(quote byte) (string, bool) {
 	l.readChar() // skip opening quote
 	var result strings.Builder
 	for l.ch != quote && l.ch != 0 {
@@ -132,8 +140,12 @@ func (l *Lexer) readString(quote byte) string {
 		}
 		l.readChar()
 	}
+	if l.ch != quote {
+		// Hit end of input without a closing quote.
+		return result.String(), false
+	}
 	l.readChar() // skip closing quote
-	return result.String()
+	return result.String(), true
 }
 
 func (l *Lexer) readNumber() string {
@@ -236,7 +248,6 @@ var keywords = map[string]token.Type{
 	"casted":     token.CASTED,
 	"cast":       token.CASTED,
 	"type":       token.TYPE,
-	"which":      token.WHICH,
 	"is":         token.IS,
 	"from":       token.FROM,
 	"unsigned":   token.UNSIGNED,
@@ -366,11 +377,19 @@ func (l *Lexer) NextToken() token.Token {
 			l.readChar() // consume s
 			tok = token.Token{Type: token.POSSESSIVE, Value: "'s", Line: line, Col: col, Pos: pos}
 		} else {
-			str := l.readString(l.ch)
+			str, ok := l.readString(l.ch)
+			if !ok {
+				tok = token.Token{Type: token.ERROR, Value: UnterminatedString, Line: line, Col: col, Pos: pos}
+				break
+			}
 			tok = token.Token{Type: token.STRING, Value: str, Line: line, Col: col, Pos: pos}
 		}
 	case '"':
-		str := l.readString(l.ch)
+		str, ok := l.readString(l.ch)
+		if !ok {
+			tok = token.Token{Type: token.ERROR, Value: UnterminatedString, Line: line, Col: col, Pos: pos}
+			break
+		}
 		tok = token.Token{Type: token.STRING, Value: str, Line: line, Col: col, Pos: pos}
 	case '\n':
 		tok = token.Token{Type: token.NEWLINE, Value: "\n", Line: line, Col: col, Pos: pos}

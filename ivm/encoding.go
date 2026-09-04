@@ -70,6 +70,11 @@ func DecodeFileAll(data []byte) (*Chunk, string, error) {
 	if err != nil {
 		return nil, "", err
 	}
+	// Reject a chunk whose instructions point outside its own constant pools
+	// before any of it runs; the machine indexes those pools unchecked.
+	if err := chunk.Validate(); err != nil {
+		return nil, "", err
+	}
 	// Check for optional source trailer: [uint32-LE len][source bytes]
 	remaining := d.data[d.pos:]
 	var source string
@@ -234,7 +239,47 @@ func (e *encoder) writeStructDef(sd *StructDef) error {
 type decoder struct {
 	data []byte
 	pos  int
+	// depth guards against a crafted file whose nested chunks recurse deeply
+	// enough to exhaust the Go stack, which is fatal and unrecoverable.
+	depth int
 }
+
+// maxDecodeDepth bounds chunk nesting in a bytecode file.
+const maxDecodeDepth = 1000
+
+// remaining reports how many bytes of input are still unread. It is the budget
+// used to sanity-check element counts before allocating.
+func (d *decoder) remaining() int {
+	if d.pos > len(d.data) {
+		return 0
+	}
+	return len(d.data) - d.pos
+}
+
+// checkCount rejects an element count that cannot possibly be satisfied by the
+// bytes left in the file. Every element costs at least one byte, so a count
+// larger than the remaining input is corrupt. Without this a truncated or
+// hostile file could name a count of four billion and trigger a multi-gigabyte
+// allocation before the truncation was noticed.
+func (d *decoder) checkCount(count uint32, what string) error {
+	if int64(count) > int64(d.remaining()) {
+		return fmt.Errorf("ivm: corrupt bytecode: %s count %d exceeds %d remaining byte(s)",
+			what, count, d.remaining())
+	}
+	return nil
+}
+
+// enter increments the recursion depth, refusing to go deeper than maxDecodeDepth.
+func (d *decoder) enter() error {
+	d.depth++
+	if d.depth > maxDecodeDepth {
+		return fmt.Errorf("ivm: corrupt bytecode: nesting deeper than %d levels", maxDecodeDepth)
+	}
+	return nil
+}
+
+// leave undoes enter.
+func (d *decoder) leave() { d.depth-- }
 
 func (d *decoder) readUint32() (uint32, error) {
 	if d.pos+4 > len(d.data) {
@@ -277,11 +322,19 @@ func (d *decoder) readFloat64() (float64, error) {
 }
 
 func (d *decoder) readChunk() (*Chunk, error) {
+	if err := d.enter(); err != nil {
+		return nil, err
+	}
+	defer d.leave()
+
 	c := NewChunk()
 
 	// Constants
 	cCount, err := d.readUint32()
 	if err != nil {
+		return nil, err
+	}
+	if err := d.checkCount(cCount, "c.Constants"); err != nil {
 		return nil, err
 	}
 	c.Constants = make([]interface{}, cCount)
@@ -298,6 +351,9 @@ func (d *decoder) readChunk() (*Chunk, error) {
 	if err != nil {
 		return nil, err
 	}
+	if err := d.checkCount(nCount, "c.Names"); err != nil {
+		return nil, err
+	}
 	c.Names = make([]string, nCount)
 	for i := uint32(0); i < nCount; i++ {
 		s, err := d.readString()
@@ -310,6 +366,9 @@ func (d *decoder) readChunk() (*Chunk, error) {
 	// Instructions
 	iCount, err := d.readUint32()
 	if err != nil {
+		return nil, err
+	}
+	if err := d.checkCount(iCount, "c.Code"); err != nil {
 		return nil, err
 	}
 	c.Code = make([]Instruction, iCount)
@@ -330,6 +389,9 @@ func (d *decoder) readChunk() (*Chunk, error) {
 	if err != nil {
 		return nil, err
 	}
+	if err := d.checkCount(fCount, "c.Funcs"); err != nil {
+		return nil, err
+	}
 	c.Funcs = make([]*FuncChunk, fCount)
 	for i := uint32(0); i < fCount; i++ {
 		fc, err := d.readFuncChunk()
@@ -342,6 +404,9 @@ func (d *decoder) readChunk() (*Chunk, error) {
 	// StructDefs
 	sCount, err := d.readUint32()
 	if err != nil {
+		return nil, err
+	}
+	if err := d.checkCount(sCount, "c.StructDefs"); err != nil {
 		return nil, err
 	}
 	c.StructDefs = make([]*StructDef, sCount)
@@ -379,6 +444,9 @@ func (d *decoder) readConstant() (interface{}, error) {
 		if err != nil {
 			return nil, err
 		}
+		if err := d.checkCount(n, "items"); err != nil {
+			return nil, err
+		}
 		items := make([]interface{}, n)
 		for i := uint32(0); i < n; i++ {
 			s, err := d.readString()
@@ -400,6 +468,9 @@ func (d *decoder) readFuncChunk() (*FuncChunk, error) {
 	}
 	pCount, err := d.readUint32()
 	if err != nil {
+		return nil, err
+	}
+	if err := d.checkCount(pCount, "params"); err != nil {
 		return nil, err
 	}
 	params := make([]string, pCount)
@@ -427,6 +498,9 @@ func (d *decoder) readStructDef() (*StructDef, error) {
 	// Fields
 	fCount, err := d.readUint32()
 	if err != nil {
+		return nil, err
+	}
+	if err := d.checkCount(fCount, "sd.Fields"); err != nil {
 		return nil, err
 	}
 	sd.Fields = make([]*FieldDef, fCount)
@@ -457,6 +531,9 @@ func (d *decoder) readStructDef() (*StructDef, error) {
 	// Methods
 	mCount, err := d.readUint32()
 	if err != nil {
+		return nil, err
+	}
+	if err := d.checkCount(mCount, "sd.Methods"); err != nil {
 		return nil, err
 	}
 	sd.Methods = make([]*FuncChunk, mCount)

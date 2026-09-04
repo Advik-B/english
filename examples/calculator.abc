@@ -34,8 +34,8 @@ Print "With grouping ((a + b) * 2):", (a + b) * 2.
 Print "Negative number (-a):", -a.
 
 # Decimal numbers
-Declare pi to be 3.14159.
+Declare pi_approx to be 3.14159.
 Declare radius to be 5.
-Print "Area of circle with radius 5:", pi * radius * radius.
+Print "Area of circle with radius 5:", pi_approx * radius * radius.
 
 Print "=== Done! ===".

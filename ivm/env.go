@@ -1,8 +1,9 @@
 package ivm
 
 import (
-	"github.com/Advik-B/english/astvm/types"
 	"fmt"
+
+	"github.com/Advik-B/english/astvm/types"
 )
 
 // BuiltinFunc is the stdlib function dispatcher.
@@ -161,11 +162,6 @@ func (e *ivmEnv) defineErrorType(name, parent string) {
 	e.root().errorTypes[name] = parent
 }
 
-func (e *ivmEnv) isKnownErrorType(name string) bool {
-	_, ok := e.root().errorTypes[name]
-	return ok
-}
-
 func (e *ivmEnv) isSubtypeOf(child, parent string) bool {
 	r := e.root()
 	current := child
@@ -180,4 +176,19 @@ func (e *ivmEnv) isSubtypeOf(child, parent string) bool {
 		current = p
 	}
 	return false
+}
+
+// EnglishType implements types.TypeNamer, reporting the struct's declared name
+// so that ivm and astvm produce identical type names.
+func (s *StructInstance) EnglishType() *types.TypeInfo {
+	name := s.DefName
+	if name == "" {
+		name = "struct"
+	}
+	return &types.TypeInfo{Kind: types.TypeStruct, Name: name}
+}
+
+// EnglishType implements types.TypeNamer for references.
+func (r *ReferenceValue) EnglishType() *types.TypeInfo {
+	return &types.TypeInfo{Kind: types.TypeRef, Name: "reference"}
 }

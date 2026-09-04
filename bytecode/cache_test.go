@@ -1,11 +1,12 @@
 package bytecode
 
 import (
-	"github.com/Advik-B/english/ast"
 	"os"
 	"path/filepath"
 	"testing"
 	"time"
+
+	"github.com/Advik-B/english/ast"
 )
 
 func TestGetCachePath(t *testing.T) {

@@ -1988,7 +1988,16 @@ func (p *Parser) parsePrimary() (ast.Expression, error) {
 func (p *Parser) parsePrimaryExpr() (ast.Expression, error) {
 	switch p.curToken.Type {
 	case token.NUMBER:
-		value, _ := strconv.ParseFloat(p.curToken.Value, 64)
+		// A literal too large for a 64-bit float used to become +Inf here,
+		// silently, because the error was discarded: a program full of digits
+		// ran and computed with infinity.
+		value, err := strconv.ParseFloat(p.curToken.Value, 64)
+		if err != nil {
+			return nil, p.syntaxErr(
+				fmt.Sprintf(msgFmtNumberOutOfRange, p.curToken.Value),
+				hintNumberOutOfRange,
+			)
+		}
 		p.nextToken()
 		return &ast.NumberLiteral{Value: value}, nil
 

@@ -1586,3 +1586,28 @@ func TestPossessiveIsOneConstruct(t *testing.T) {
 		}
 	}
 }
+
+// TestNumberOutOfRangeIsReported covers a literal too large for a 64-bit
+// float, which used to become +Inf silently because the conversion's error was
+// discarded: a program full of digits ran and computed with infinity.
+func TestNumberOutOfRangeIsReported(t *testing.T) {
+	huge := strings.Repeat("9", 400)
+	_, err := parse("Declare huge to be " + huge + ".")
+	if err == nil {
+		t.Fatal("a 400-digit literal was accepted")
+	}
+	if !strings.Contains(err.Error(), "too large") {
+		t.Errorf("unexpected message: %v", err)
+	}
+
+	// A literal that does fit is unaffected, exponent included.
+	for _, src := range []string{
+		"Declare x to be 1e10.",
+		"Declare x to be 2.5E-3.",
+		"Declare x to be 1.7976931348623157e308.",
+	} {
+		if _, err := parse(src); err != nil {
+			t.Errorf("%s: %v", src, err)
+		}
+	}
+}

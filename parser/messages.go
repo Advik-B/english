@@ -40,12 +40,13 @@ const (
 	hintImportPath          = "For example: 'Import \"myfile.abc\".' or 'Import everything from \"utils.abc\".'"
 
 	// Assignment / Set statements.
-	hintSetVarName    = "For example: 'Set score to be 10.' or 'Set name to be \"Alice\".'"
-	hintSetTheFull    = "After 'Set the' you can write 'item at position N in myList to be VALUE' or 'entry KEY in myTable to be VALUE'."
-	hintSetCallResult = "For example: 'Set result to be the result of calling square of x.'"
-	hintSetListName   = "For example: 'Set the item at position 1 in myList to be 99.'"
-	hintSetTableFull  = "The full form is: 'Set tableName at key to be value.'"
-	hintSetField      = "For example: 'Set person's name to be \"Alice\".'"
+	hintSetVarName       = "For example: 'Set score to be 10.' or 'Set name to be \"Alice\".'"
+	hintSetTheFull       = "After 'Set the' you can write 'item at position N in myList to be VALUE' or 'entry KEY in myTable to be VALUE'."
+	hintSetCallResult    = "For example: 'Set result to be the result of calling square of x.'"
+	hintSetListName      = "For example: 'Set the item at position 1 in myList to be 99.'"
+	hintSetTableFull     = "The full form is: 'Set tableName at key to be value.'"
+	hintSetField         = "For example: 'Set person's name to be \"Alice\".'"
+	hintNumberOutOfRange = "A number must fit in a 64-bit float, so it can be at most about 1.8e308."
 
 	// Call statements.
 	hintCallName = "For example: 'Call greet.' or 'Call add with 3 and 5.'"
@@ -120,6 +121,7 @@ const (
 	msgSetCallFuncName      = "I expected the name of a function to call here."
 	msgSetListName          = "I expected the name of the list here."
 	msgSetFieldName         = "I expected the name of a field after the apostrophe-s."
+	msgFmtNumberOutOfRange  = "The number %s is too large to represent."
 	msgCallName             = "I expected a function or method name after 'Call'."
 	msgForEachVar           = "I expected a loop variable name here."
 	msgPrintOrWrite         = "I expected 'Print' or 'Write' here."

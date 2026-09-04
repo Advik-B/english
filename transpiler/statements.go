@@ -193,8 +193,8 @@ func (t *Transpiler) transpileLookupKeyAssignment(s *ast.LookupKeyAssignment) {
 }
 
 func (t *Transpiler) transpileFunctionDecl(s *ast.FunctionDecl) {
-	params := make([]string, len(s.Parameters))
-	for i, p := range s.Parameters {
+	params := make([]string, len(s.ParamNames()))
+	for i, p := range s.ParamNames() {
 		params[i] = sanitizeIdent(p)
 	}
 	t.writeLine(fmt.Sprintf("def %s(%s):", sanitizeIdent(s.Name), strings.Join(params, ", ")))
@@ -371,9 +371,9 @@ func (t *Transpiler) transpileStructDecl(s *ast.StructDecl) {
 
 	for _, method := range s.Methods {
 		t.write("\n")
-		mparams := make([]string, 0, len(method.Parameters)+1)
+		mparams := make([]string, 0, len(method.ParamNames())+1)
 		mparams = append(mparams, "self")
-		for _, p := range method.Parameters {
+		for _, p := range method.ParamNames() {
 			mparams = append(mparams, sanitizeIdent(p))
 		}
 		t.writeLine(fmt.Sprintf("def %s(%s):", sanitizeIdent(method.Name), strings.Join(mparams, ", ")))

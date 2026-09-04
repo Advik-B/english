@@ -222,8 +222,8 @@ func TestEncodeDecodeFunctionDecl(t *testing.T) {
 	program := &ast.Program{
 		Statements: []ast.Statement{
 			&ast.FunctionDecl{
-				Name:       "add",
-				Parameters: []string{"a", "b"},
+				Name:   "add",
+				Params: ast.ParamsFromNames([]string{"a", "b"}),
 				Body: []ast.Statement{
 					&ast.ReturnStatement{
 						Value: &ast.BinaryExpression{
@@ -253,8 +253,8 @@ func TestEncodeDecodeFunctionDecl(t *testing.T) {
 	if funcDecl.Name != "add" {
 		t.Errorf("Expected name 'add', got %q", funcDecl.Name)
 	}
-	if len(funcDecl.Parameters) != 2 {
-		t.Errorf("Expected 2 parameters, got %d", len(funcDecl.Parameters))
+	if len(funcDecl.ParamNames()) != 2 {
+		t.Errorf("Expected 2 parameters, got %d", len(funcDecl.ParamNames()))
 	}
 	if len(funcDecl.Body) != 1 {
 		t.Errorf("Expected 1 body statement, got %d", len(funcDecl.Body))

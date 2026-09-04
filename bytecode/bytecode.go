@@ -176,8 +176,9 @@ func (e *Encoder) encodeStatement(stmt ast.Statement) error {
 	case *ast.FunctionDecl:
 		e.buf.WriteByte(NodeFunctionDecl)
 		e.writeString(s.Name)
-		e.writeUint32(uint32(len(s.Parameters)))
-		for _, param := range s.Parameters {
+		paramNames := s.ParamNames()
+		e.writeUint32(uint32(len(paramNames)))
+		for _, param := range paramNames {
 			e.writeString(param)
 		}
 		body := filterComments(s.Body)
@@ -676,7 +677,7 @@ func (d *Decoder) decodeStatement() (ast.Statement, error) {
 				return nil, err
 			}
 		}
-		return &ast.FunctionDecl{Name: name, Parameters: params, Body: body}, nil
+		return &ast.FunctionDecl{Name: name, Params: ast.ParamsFromNames(params), Body: body}, nil
 
 	case NodeCallStatement:
 		fc, err := d.decodeFunctionCall()

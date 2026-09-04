@@ -177,12 +177,53 @@ type Assignment struct {
 func (a *Assignment) node()          {}
 func (a *Assignment) statementNode() {}
 
+// Param is one function parameter.
+//
+// Type is nil for a parameter written without an annotation. Parameters were
+// previously a plain []string, so a function had no signature at all: nothing
+// could check an argument's type at a call site, or a return against what the
+// function claims to give back.
+type Param struct {
+	Base
+	Name string
+	Type *TypeExpr
+}
+
 // FunctionDecl represents a function declaration
 type FunctionDecl struct {
 	Base
-	Name       string
-	Parameters []string
+	Name   string
+	Params []Param
+	// ReturnType is what the function gives back, or nil when it is
+	// unannotated or returns nothing.
+	ReturnType *TypeExpr
 	Body       []Statement
+}
+
+// ParamNames returns the parameter names in order. The runtime binds arguments
+// by name and does not need the annotations.
+func (fd *FunctionDecl) ParamNames() []string {
+	if len(fd.Params) == 0 {
+		return nil
+	}
+	names := make([]string, len(fd.Params))
+	for i, p := range fd.Params {
+		names[i] = p.Name
+	}
+	return names
+}
+
+// ParamsFromNames builds unannotated parameters from names alone, for tools
+// that recover a program from bytecode where annotations do not survive.
+func ParamsFromNames(names []string) []Param {
+	if len(names) == 0 {
+		return nil
+	}
+	params := make([]Param, len(names))
+	for i, n := range names {
+		params[i] = Param{Name: n}
+	}
+	return params
 }
 
 func (fd *FunctionDecl) node()          {}

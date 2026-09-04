@@ -294,3 +294,46 @@ Declare n as NUMBER to be 1.`)
 		t.Errorf("built-in annotation is %q, want %q (normalised)", builtin.Name, "number")
 	}
 }
+
+// TestFunctionParametersArePositioned covers the change from a bare []string
+// of parameter names to []ast.Param. A function had no signature at all
+// before: nothing could check an argument's type at a call site, or a return
+// against what the function claims to give back.
+func TestFunctionParametersArePositioned(t *testing.T) {
+	prog, err := parse(`Declare function add that takes a and b and does the following:
+    Return a + b.
+thats it.`)
+	if err != nil {
+		t.Fatalf("failed to parse: %v", err)
+	}
+	fd := prog.Statements[0].(*ast.FunctionDecl)
+
+	if len(fd.Params) != 2 {
+		t.Fatalf("got %d parameter(s), want 2", len(fd.Params))
+	}
+	if fd.Params[0].Name != "a" || fd.Params[1].Name != "b" {
+		t.Errorf("parameter names are %q and %q, want \"a\" and \"b\"",
+			fd.Params[0].Name, fd.Params[1].Name)
+	}
+	for i, p := range fd.Params {
+		if !p.Pos().IsKnown() {
+			t.Errorf("parameter %d (%s) has no position", i, p.Name)
+		}
+		if p.Type != nil {
+			t.Errorf("parameter %d (%s) has an annotation %v, but none was written",
+				i, p.Name, p.Type)
+		}
+	}
+	if fd.Params[1].Pos().Col <= fd.Params[0].Pos().Col {
+		t.Error("parameter positions are not in source order")
+	}
+	if fd.ReturnType != nil {
+		t.Errorf("return type is %v, but none was written", fd.ReturnType)
+	}
+
+	// ParamNames keeps the runtime's binding path simple.
+	names := fd.ParamNames()
+	if len(names) != 2 || names[0] != "a" || names[1] != "b" {
+		t.Errorf("ParamNames() = %v, want [a b]", names)
+	}
+}

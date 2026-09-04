@@ -52,8 +52,8 @@ func (d *disassembler) stmt(node ast.Statement) {
 		d.emit(styleOpcodeAssign, "ASSIGN", name+"  "+arrow+"  "+d.expr(s.Value))
 
 	case *ast.FunctionDecl:
-		params := make([]string, len(s.Parameters))
-		for i, p := range s.Parameters {
+		params := make([]string, len(s.ParamNames()))
+		for i, p := range s.ParamNames() {
 			params[i] = d.s(styleIdent, p)
 		}
 		paramStr := d.s(stylePunct, "(") +
@@ -223,8 +223,8 @@ func (d *disassembler) stmt(node ast.Statement) {
 				d.s(styleIdent, f.Name)+typeTag+defPart)
 		}
 		for _, m := range s.Methods {
-			params := make([]string, len(m.Parameters))
-			for i, p := range m.Parameters {
+			params := make([]string, len(m.ParamNames()))
+			for i, p := range m.ParamNames() {
 				params[i] = d.s(styleIdent, p)
 			}
 			paramStr := d.s(stylePunct, "(") +

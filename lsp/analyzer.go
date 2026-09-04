@@ -221,7 +221,7 @@ func (a *Analyzer) extractFromStatement(stmt ast.Statement, result *AnalysisResu
 		// Add to functions map
 		result.Functions[s.Name] = &FunctionInfo{
 			Name:          s.Name,
-			Parameters:    s.Parameters,
+			Parameters:    s.ParamNames(),
 			Range:         sym.Range,
 			DefRange:      sym.DefRange,
 			Body:          s.Body,
@@ -393,9 +393,9 @@ func (a *Analyzer) createVariableSymbol(v *ast.VariableDecl, doc *Document) *Sym
 func (a *Analyzer) createFunctionSymbol(f *ast.FunctionDecl, doc *Document) *Symbol {
 	nameRange := a.findIdentifierRange(f.Name, doc)
 
-	params := strings.Join(f.Parameters, ", ")
+	params := strings.Join(f.ParamNames(), ", ")
 	detail := "function"
-	if len(f.Parameters) > 0 {
+	if len(f.ParamNames()) > 0 {
 		detail = "function(" + params + ")"
 	}
 
@@ -478,9 +478,9 @@ func (a *Analyzer) generateFunctionDoc(f *ast.FunctionDecl) string {
 	doc.WriteString(f.Name)
 	doc.WriteString("**\n\n")
 
-	if len(f.Parameters) > 0 {
+	if len(f.ParamNames()) > 0 {
 		doc.WriteString("Parameters:\n")
-		for _, param := range f.Parameters {
+		for _, param := range f.ParamNames() {
 			doc.WriteString("- `")
 			doc.WriteString(param)
 			doc.WriteString("`\n")

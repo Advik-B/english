@@ -482,7 +482,7 @@ func (ev *Evaluator) evalToggle(ts *ast.ToggleStatement) (Value, error) {
 func (ev *Evaluator) evalFunctionDecl(fd *ast.FunctionDecl) (Value, error) {
 	fn := &FunctionValue{
 		Name:       fd.Name,
-		Parameters: fd.Parameters,
+		Parameters: fd.ParamNames(),
 		Body:       fd.Body,
 		Closure:    ev.env,
 	}

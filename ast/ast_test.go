@@ -62,9 +62,9 @@ func TestAssignment(t *testing.T) {
 // TestFunctionDecl tests FunctionDecl node
 func TestFunctionDecl(t *testing.T) {
 	fd := &FunctionDecl{
-		Name:       "add",
-		Parameters: []string{"a", "b"},
-		Body:       []Statement{},
+		Name:   "add",
+		Params: ParamsFromNames([]string{"a", "b"}),
+		Body:   []Statement{},
 	}
 	fd.node()
 	fd.statementNode()
@@ -72,8 +72,8 @@ func TestFunctionDecl(t *testing.T) {
 	if fd.Name != "add" {
 		t.Errorf("FunctionDecl.Name = %q, want \"add\"", fd.Name)
 	}
-	if len(fd.Parameters) != 2 {
-		t.Errorf("len(FunctionDecl.Parameters) = %d, want 2", len(fd.Parameters))
+	if len(fd.ParamNames()) != 2 {
+		t.Errorf("len(FunctionDecl.Parameters) = %d, want 2", len(fd.ParamNames()))
 	}
 }
 

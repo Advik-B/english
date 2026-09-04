@@ -403,8 +403,8 @@ thats it.`
 		t.Errorf("Expected function name 'greet', got %q", funcDecl.Name)
 	}
 
-	if len(funcDecl.Parameters) != 0 {
-		t.Errorf("Expected 0 parameters, got %d", len(funcDecl.Parameters))
+	if len(funcDecl.ParamNames()) != 0 {
+		t.Errorf("Expected 0 parameters, got %d", len(funcDecl.ParamNames()))
 	}
 }
 
@@ -427,12 +427,12 @@ thats it.`
 		t.Errorf("Expected function name 'add', got %q", funcDecl.Name)
 	}
 
-	if len(funcDecl.Parameters) != 2 {
-		t.Errorf("Expected 2 parameters, got %d", len(funcDecl.Parameters))
+	if len(funcDecl.ParamNames()) != 2 {
+		t.Errorf("Expected 2 parameters, got %d", len(funcDecl.ParamNames()))
 	}
 
-	if funcDecl.Parameters[0] != "a" || funcDecl.Parameters[1] != "b" {
-		t.Errorf("Expected parameters [a, b], got %v", funcDecl.Parameters)
+	if funcDecl.ParamNames()[0] != "a" || funcDecl.ParamNames()[1] != "b" {
+		t.Errorf("Expected parameters [a, b], got %v", funcDecl.ParamNames())
 	}
 }
 
@@ -451,12 +451,12 @@ thats it.`
 		t.Fatalf("Expected FunctionDecl, got %T", program.Statements[0])
 	}
 
-	if len(funcDecl.Parameters) != 1 {
-		t.Errorf("Expected 1 parameter, got %d", len(funcDecl.Parameters))
+	if len(funcDecl.ParamNames()) != 1 {
+		t.Errorf("Expected 1 parameter, got %d", len(funcDecl.ParamNames()))
 	}
 
-	if funcDecl.Parameters[0] != "x" {
-		t.Errorf("Expected parameter 'x', got %q", funcDecl.Parameters[0])
+	if funcDecl.ParamNames()[0] != "x" {
+		t.Errorf("Expected parameter 'x', got %q", funcDecl.ParamNames()[0])
 	}
 }
 

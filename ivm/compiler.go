@@ -129,7 +129,7 @@ func (c *Compiler) compileStatement(stmt ast.Statement) error {
 
 	case *ast.FunctionDecl:
 		// Compile function body as a child FuncChunk
-		bodyChunk, err := c.compileFuncBody(s.Name, s.Parameters, s.Body)
+		bodyChunk, err := c.compileFuncBody(s.Name, s.ParamNames(), s.Body)
 		if err != nil {
 			return err
 		}

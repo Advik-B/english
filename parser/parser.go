@@ -603,7 +603,7 @@ func (p *Parser) parseFunctionDeclaration() (ast.Statement, error) {
 	}
 	p.nextToken()
 
-	var parameters []string
+	var parameters []ast.Param
 
 	// Skip optional "that" before "takes" or "does"
 	if p.curToken.Type == token.THAT {
@@ -620,7 +620,7 @@ func (p *Parser) parseFunctionDeclaration() (ast.Statement, error) {
 					hintParameterName,
 				)
 			}
-			parameters = append(parameters, paramToken.Value)
+			parameters = append(parameters, ast.Param{Base: at(paramToken), Name: paramToken.Value})
 			p.nextToken()
 
 			if p.curToken.Type != token.AND {
@@ -669,10 +669,10 @@ func (p *Parser) parseFunctionDeclaration() (ast.Statement, error) {
 	}
 
 	return &ast.FunctionDecl{
-		Name:       nameToken.Value,
-		Parameters: parameters,
-		Body:       body,
-		Base:       funcPos,
+		Name:   nameToken.Value,
+		Params: parameters,
+		Body:   body,
+		Base:   funcPos,
 	}, nil
 }
 

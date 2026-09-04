@@ -223,7 +223,7 @@ func (p *Parser) parseStructMethod() (*ast.FunctionDecl, error) {
 	}
 	p.nextToken()
 
-	var parameters []string
+	var parameters []ast.Param
 
 	// Check for "that takes" for parameters
 	if p.curToken.Type == token.THAT {
@@ -238,7 +238,7 @@ func (p *Parser) parseStructMethod() (*ast.FunctionDecl, error) {
 						hintMethodParam,
 					)
 				}
-				parameters = append(parameters, paramToken.Value)
+				parameters = append(parameters, ast.Param{Base: at(paramToken), Name: paramToken.Value})
 				p.nextToken()
 
 				if p.curToken.Type != token.AND {
@@ -297,10 +297,10 @@ func (p *Parser) parseStructMethod() (*ast.FunctionDecl, error) {
 	}
 
 	return &ast.FunctionDecl{
-		Base:       methodPos,
-		Name:       nameToken.Value,
-		Parameters: parameters,
-		Body:       body,
+		Base:   methodPos,
+		Name:   nameToken.Value,
+		Params: parameters,
+		Body:   body,
 	}, nil
 }
 

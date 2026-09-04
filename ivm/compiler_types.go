@@ -25,7 +25,7 @@ func (c *Compiler) compileStructDecl(s *ast.StructDecl) error {
 
 	// Compile methods
 	for _, method := range s.Methods {
-		fc, err := c.compileFuncBody(method.Name, method.Parameters, method.Body)
+		fc, err := c.compileFuncBody(method.Name, method.ParamNames(), method.Body)
 		if err != nil {
 			return err
 		}

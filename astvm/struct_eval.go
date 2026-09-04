@@ -69,7 +69,7 @@ func (ev *Evaluator) evalStructDecl(node *ast.StructDecl) (Value, error) {
 		// Create function value for the method
 		methods[method.Name] = &FunctionValue{
 			Name:       method.Name,
-			Parameters: method.Parameters,
+			Parameters: method.ParamNames(),
 			Body:       method.Body,
 			Closure:    ev.env, // Methods capture the struct definition environment
 		}

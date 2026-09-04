@@ -15,10 +15,10 @@ func (ev *Evaluator) evalStructDecl(node *ast.StructDecl) (Value, error) {
 
 	for _, field := range node.Fields {
 		// Parse type name
-		typeKind := types.Parse(field.TypeName)
+		typeKind := field.Type.Kind
 		typeInfo := &types.TypeInfo{
 			Kind: typeKind,
-			Name: field.TypeName,
+			Name: field.Type.Name,
 		}
 
 		// Evaluate default value if provided

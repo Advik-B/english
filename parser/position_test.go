@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/Advik-B/english/ast"
+	"github.com/Advik-B/english/types"
 )
 
 // walkNodes visits every ast.Node reachable from v, reporting each one's path.
@@ -202,5 +203,94 @@ func TestOperatorPositions(t *testing.T) {
 	}
 	if bin.Right.Pos().Col != 21 {
 		t.Errorf("right operand is at column %d, want 21", bin.Right.Pos().Col)
+	}
+}
+
+// TestTypeAnnotationsAreNodes covers the change from bare type-name strings to
+// ast.TypeExpr. The four annotation positions used to hold a plain string, so
+// the name was re-parsed with types.Parse every time it was needed — including
+// on every cast and every struct instantiation at run time — and carried no
+// position, so nothing could point at a bad annotation.
+func TestTypeAnnotationsAreNodes(t *testing.T) {
+	prog, err := parse(`Declare count as number to be 0.
+Declare Point as a structure with the following fields:
+    x is a number with 0 being the default.
+thats it.
+Print 1 cast to text.
+Declare arr to be an array of number [1, 2].`)
+	if err != nil {
+		t.Fatalf("failed to parse: %v", err)
+	}
+
+	// Typed declaration: kind resolved, position recorded.
+	decl := prog.Statements[0].(*ast.TypedVariableDecl)
+	if decl.Type == nil {
+		t.Fatal("typed declaration has no annotation")
+	}
+	if decl.Type.Name != "number" || decl.Type.Kind != types.TypeF64 {
+		t.Errorf("annotation is %q/%v, want \"number\"/TypeF64", decl.Type.Name, decl.Type.Kind)
+	}
+	if !decl.Type.Pos().IsKnown() {
+		t.Error("annotation has no position")
+	}
+	// "Declare count as number to be 0." — "number" starts at column 18.
+	if got := decl.Type.Pos().Col; got != 18 {
+		t.Errorf("annotation is at column %d, want 18", got)
+	}
+
+	// Struct field annotation.
+	sd := prog.Statements[1].(*ast.StructDecl)
+	if len(sd.Fields) != 1 {
+		t.Fatalf("struct has %d field(s), want 1", len(sd.Fields))
+	}
+	if f := sd.Fields[0]; f.Type == nil || f.Type.Kind != types.TypeF64 {
+		t.Errorf("field annotation is %v, want a number", f.Type)
+	} else if !f.Type.Pos().IsKnown() {
+		t.Error("field annotation has no position")
+	}
+
+	// Cast target.
+	out := prog.Statements[2].(*ast.OutputStatement)
+	cast, ok := out.Values[0].(*ast.CastExpression)
+	if !ok {
+		t.Fatalf("printed value is %T, want *ast.CastExpression", out.Values[0])
+	}
+	if cast.Type == nil || cast.Type.Kind != types.TypeString {
+		t.Errorf("cast target is %v, want text", cast.Type)
+	}
+	if !cast.Type.Pos().IsKnown() {
+		t.Error("cast target has no position")
+	}
+
+	// Array element type.
+	arr := prog.Statements[3].(*ast.VariableDecl)
+	lit, ok := arr.Value.(*ast.ArrayLiteral)
+	if !ok {
+		t.Fatalf("array value is %T, want *ast.ArrayLiteral", arr.Value)
+	}
+	if lit.ElemType == nil || lit.ElemType.Kind != types.TypeF64 {
+		t.Errorf("element type is %v, want a number", lit.ElemType)
+	}
+}
+
+// TestStructNameAnnotationKeepsCase checks a non-built-in annotation is left
+// alone so the type checker can match it against a declared struct, while a
+// built-in name is normalised.
+func TestStructNameAnnotationKeepsCase(t *testing.T) {
+	prog, err := parse(`Declare p as Point.
+Declare n as NUMBER to be 1.`)
+	if err != nil {
+		t.Fatalf("failed to parse: %v", err)
+	}
+	structAnnot := prog.Statements[0].(*ast.TypedVariableDecl).Type
+	if structAnnot.Name != "Point" {
+		t.Errorf("struct annotation is %q, want %q (case preserved)", structAnnot.Name, "Point")
+	}
+	if structAnnot.Kind != types.TypeUnknown {
+		t.Errorf("struct annotation kind is %v, want TypeUnknown (only sema can resolve it)", structAnnot.Kind)
+	}
+	builtin := prog.Statements[1].(*ast.TypedVariableDecl).Type
+	if builtin.Name != "number" {
+		t.Errorf("built-in annotation is %q, want %q (normalised)", builtin.Name, "number")
 	}
 }

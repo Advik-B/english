@@ -243,7 +243,7 @@ func (d *disassembler) stmtMaybeUnroll(node ast.Statement) {
 		for _, tmp := range extras {
 			d.stmt(tmp)
 		}
-		d.stmt(&ast.TypedVariableDecl{Name: s.Name, TypeName: s.TypeName, Value: newVal, IsConstant: s.IsConstant})
+		d.stmt(&ast.TypedVariableDecl{Name: s.Name, Type: s.Type, Value: newVal, IsConstant: s.IsConstant})
 	case *ast.Assignment:
 		extras, newVal := d.unrollTopExpr(s.Value)
 		for _, tmp := range extras {

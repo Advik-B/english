@@ -68,7 +68,7 @@ func (c *Compiler) compileStatement(stmt ast.Statement) error {
 
 	case *ast.TypedVariableDecl:
 		// Stack: compile type name first, then value
-		typeIdx := c.chunk.AddConst(s.TypeName)
+		typeIdx := c.chunk.AddConst(ast.TypeName(s.Type))
 		c.chunk.Emit(OP_LOAD_CONST, typeIdx)
 		if s.Value != nil {
 			if err := c.compileExpression(s.Value); err != nil {
@@ -372,7 +372,7 @@ func (c *Compiler) compileExpression(expr ast.Expression) error {
 				return err
 			}
 		}
-		typeIdx := c.chunk.AddConst(e.ElementType)
+		typeIdx := c.chunk.AddConst(ast.TypeName(e.ElemType))
 		c.chunk.Emit(OP_LOAD_CONST, typeIdx)
 		c.chunk.Emit(OP_BUILD_ARRAY, uint32(len(e.Elements)))
 
@@ -431,7 +431,7 @@ func (c *Compiler) compileExpression(expr ast.Expression) error {
 		if err := c.compileExpression(e.Value); err != nil {
 			return err
 		}
-		tIdx := c.chunk.AddName(e.TypeName)
+		tIdx := c.chunk.AddName(ast.TypeName(e.Type))
 		c.chunk.Emit(OP_CAST, tIdx)
 
 	case *ast.NilCheckExpression:

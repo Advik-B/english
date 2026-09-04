@@ -2,6 +2,8 @@
 // for the English programming language.
 package ast
 
+import "github.com/Advik-B/english/types"
+
 // Position identifies a location in source text.
 //
 // Line and Col are 1-based; Offset is the byte offset of the first character.
@@ -31,6 +33,58 @@ func (b Base) Pos() Position { return b.Position }
 // At builds a Base for the given position.
 func At(line, col, offset int) Base {
 	return Base{Position{Line: line, Col: col, Offset: offset}}
+}
+
+// TypeExpr is a type annotation as written in the source: the type in
+// "Declare count as number", a struct field's type, a "cast to" target, or an
+// array literal's element type.
+//
+// Those four positions used to hold a bare string, which meant the name was
+// re-parsed with types.Parse every time it was needed — at run time, on every
+// struct instantiation and every cast — and carried no position, so nothing
+// could point at a bad annotation. Kind is resolved once, when the annotation
+// is parsed.
+type TypeExpr struct {
+	Base
+	// Name is the annotation as written, so that a struct name keeps the case
+	// it was declared with.
+	Name string
+	// Kind is the built-in type Name resolves to, or types.TypeUnknown when it
+	// names something only the type checker can resolve, such as a struct.
+	Kind types.TypeKind
+}
+
+func (te *TypeExpr) node() {}
+
+// String renders the annotation as written.
+func (te *TypeExpr) String() string {
+	if te == nil {
+		return ""
+	}
+	return te.Name
+}
+
+// IsBuiltin reports whether the annotation names a built-in type.
+func (te *TypeExpr) IsBuiltin() bool {
+	return te != nil && te.Kind != types.TypeUnknown
+}
+
+// NewTypeExpr builds an annotation from a name alone, resolving its kind.
+// Used by tools that recover a program from bytecode, where only the name of
+// the annotation survives.
+func NewTypeExpr(name string) *TypeExpr {
+	if name == "" {
+		return nil
+	}
+	return &TypeExpr{Name: name, Kind: types.Parse(name)}
+}
+
+// TypeName returns the annotation's name, or "" when there is no annotation.
+func TypeName(te *TypeExpr) string {
+	if te == nil {
+		return ""
+	}
+	return te.Name
 }
 
 // Node is the base interface for all AST nodes
@@ -350,9 +404,8 @@ func (sd *StructDecl) statementNode() {}
 type StructField struct {
 	Base
 	Name         string
-	TypeName     string
+	Type         *TypeExpr
 	DefaultValue Expression
-	IsUnsigned   bool
 }
 
 // StructInstantiation creates a new instance of a struct
@@ -436,8 +489,8 @@ func (te *TypeExpression) expressionNode() {}
 // CastExpression casts a value to a type
 type CastExpression struct {
 	Base
-	Value    Expression
-	TypeName string
+	Value Expression
+	Type  *TypeExpr
 }
 
 func (ce *CastExpression) node()           {}
@@ -495,8 +548,10 @@ func (ae *AskExpression) expressionNode() {}
 // ArrayLiteral is a typed homogeneous array literal: "an array of number [1, 2, 3]"
 type ArrayLiteral struct {
 	Base
-	ElementType string // "number", "text", "boolean" — empty = infer from elements
-	Elements    []Expression
+	// ElemType is the declared element type, or nil to infer it from the
+	// elements.
+	ElemType *TypeExpr
+	Elements []Expression
 }
 
 func (al *ArrayLiteral) node()           {}
@@ -555,7 +610,7 @@ func (nc *NilCheckExpression) expressionNode() {}
 type TypedVariableDecl struct {
 	Base
 	Name       string
-	TypeName   string
+	Type       *TypeExpr
 	IsConstant bool
 	Value      Expression
 }

@@ -214,7 +214,7 @@ func (tc *TypeChecker) checkStatement(stmt ast.Statement) {
 		}
 	case *ast.TypedVariableDecl:
 		tc.declareVar(s.Name, s.Line)
-		declaredKind := types.Parse(s.TypeName)
+		declaredKind := s.Type.Kind
 		if declaredKind != types.TypeUnknown {
 			tc.varTypes[s.Name] = types.Canonical(declaredKind)
 		}

@@ -158,7 +158,7 @@ func (e *Encoder) encodeStatement(stmt ast.Statement) error {
 	case *ast.TypedVariableDecl:
 		e.buf.WriteByte(NodeTypedVariableDecl)
 		e.writeString(s.Name)
-		e.writeString(s.TypeName)
+		e.writeString(ast.TypeName(s.Type))
 		e.writeBool(s.IsConstant)
 		return e.encodeExpression(s.Value)
 
@@ -619,7 +619,7 @@ func (d *Decoder) decodeStatement() (ast.Statement, error) {
 		if err != nil {
 			return nil, err
 		}
-		return &ast.TypedVariableDecl{Name: name, TypeName: typeName, IsConstant: isConstant, Value: value}, nil
+		return &ast.TypedVariableDecl{Name: name, Type: ast.NewTypeExpr(typeName), IsConstant: isConstant, Value: value}, nil
 
 	case NodeErrorTypeDecl:
 		name, err := d.readString()

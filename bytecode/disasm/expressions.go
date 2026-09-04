@@ -82,7 +82,7 @@ func (d *disassembler) expr(node ast.Expression) string {
 			d.expr(ex.Value) +
 			d.s(stylePunct, ")") +
 			d.s(styleMeta, " as ") +
-			d.s(styleType, ex.TypeName)
+			d.s(styleType, ast.TypeName(ex.Type))
 
 	case *ast.AskExpression:
 		if ex.Prompt != nil {
@@ -97,8 +97,8 @@ func (d *disassembler) expr(node ast.Expression) string {
 			elems[i] = d.expr(e)
 		}
 		typeTag := ""
-		if ex.ElementType != "" {
-			typeTag = d.s(styleType, ex.ElementType+"[]")
+		if ex.ElemType != nil {
+			typeTag = d.s(styleType, ex.ElemType.Name+"[]")
 		}
 		return typeTag + d.s(stylePunct, "[") +
 			strings.Join(elems, d.s(stylePunct, ", ")) +

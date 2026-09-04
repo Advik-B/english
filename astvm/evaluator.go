@@ -1142,8 +1142,8 @@ func (ev *Evaluator) evalArrayLiteral(al *ast.ArrayLiteral) (Value, error) {
 
 	// Determine element type: from explicit hint or infer from first element
 	elemType := types.TypeUnknown
-	if al.ElementType != "" {
-		elemType = types.Parse(al.ElementType)
+	if al.ElemType != nil {
+		elemType = al.ElemType.Kind
 	}
 
 	for _, expr := range al.Elements {

@@ -156,7 +156,7 @@ func (t *Transpiler) transpileVariableDecl(s *ast.VariableDecl) {
 func (t *Transpiler) transpileTypedVariableDecl(s *ast.TypedVariableDecl) {
 	name := sanitizeIdent(s.Name)
 	val := t.transpileExpr(s.Value)
-	typeName := mapTypeName(s.TypeName)
+	typeName := mapTypeName(ast.TypeName(s.Type))
 	if s.IsConstant {
 		t.writeLine(fmt.Sprintf("%s: Final[%s] = %s", name, typeName, val))
 	} else {
@@ -346,7 +346,7 @@ func (t *Transpiler) transpileStructDecl(s *ast.StructDecl) {
 				defVal := t.transpileExpr(field.DefaultValue)
 				params = append(params, fmt.Sprintf("%s=%s", fname, defVal))
 			} else {
-				params = append(params, fmt.Sprintf("%s=%s", fname, typeZeroValue(field.TypeName)))
+				params = append(params, fmt.Sprintf("%s=%s", fname, typeZeroValue(ast.TypeName(field.Type))))
 			}
 		}
 		t.writeLine(fmt.Sprintf("def __init__(%s):", strings.Join(params, ", ")))

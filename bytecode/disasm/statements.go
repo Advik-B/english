@@ -29,7 +29,7 @@ func (d *disassembler) stmt(node ast.Statement) {
 
 	case *ast.TypedVariableDecl:
 		name := d.s(styleIdent, s.Name)
-		typeTag := d.s(styleType, ":"+s.TypeName)
+		typeTag := d.s(styleType, ":"+ast.TypeName(s.Type))
 		constTag := ""
 		if s.IsConstant {
 			constTag = " " + d.s(styleConst, "[const]")
@@ -213,7 +213,7 @@ func (d *disassembler) stmt(node ast.Statement) {
 		d.emit(styleOpcodeDecl, "STRUCT_DECL", d.s(styleLabel, s.Name))
 		d.depth++
 		for _, f := range s.Fields {
-			typeTag := d.s(styleType, ":"+f.TypeName)
+			typeTag := d.s(styleType, ":"+ast.TypeName(f.Type))
 			defPart := ""
 			if f.DefaultValue != nil {
 				defPart = "  " + d.s(styleArrow, "←") + "  " + d.expr(f.DefaultValue)

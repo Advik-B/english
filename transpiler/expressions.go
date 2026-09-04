@@ -175,7 +175,7 @@ func (t *Transpiler) transpileMethodCallExpr(e *ast.MethodCall) string {
 
 func (t *Transpiler) transpileCast(e *ast.CastExpression) string {
 	inner := t.transpileExpr(e.Value)
-	switch strings.ToLower(e.TypeName) {
+	switch strings.ToLower(ast.TypeName(e.Type)) {
 	case "number", "float":
 		return fmt.Sprintf("float(%s)", inner)
 	case "integer", "int":
@@ -186,7 +186,7 @@ func (t *Transpiler) transpileCast(e *ast.CastExpression) string {
 		return fmt.Sprintf("bool(%s)", inner)
 	default:
 		// Treat any other cast as a constructor / type call.
-		return fmt.Sprintf("%s(%s)", e.TypeName, inner)
+		return fmt.Sprintf("%s(%s)", ast.TypeName(e.Type), inner)
 	}
 }
 

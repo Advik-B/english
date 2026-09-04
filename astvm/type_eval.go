@@ -146,7 +146,7 @@ func (ev *Evaluator) evalTypedVariableDecl(node *ast.TypedVariableDecl) (Value, 
 			return nil, err
 		}
 	}
-	if err := ev.env.DefineTyped(node.Name, node.TypeName, value, node.IsConstant); err != nil {
+	if err := ev.env.DefineTyped(node.Name, node.Type.Name, value, node.IsConstant); err != nil {
 		// Type annotation errors and redefinition errors are compile-time
 		// errors. Return a TypeError so the renderer shows "Compile Error".
 		return nil, &TypeError{Line: node.Line, Message: err.Error()}
@@ -226,8 +226,8 @@ func (ev *Evaluator) evalCastExpression(node *ast.CastExpression) (Value, error)
 		return nil, err
 	}
 
-	// Parse target type
-	targetType := types.Parse(node.TypeName)
+	// The annotation's kind was resolved when it was parsed.
+	targetType := node.Type.Kind
 
 	// Attempt to cast
 	result, err := CastValue(val, targetType)

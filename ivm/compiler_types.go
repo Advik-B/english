@@ -9,7 +9,7 @@ func (c *Compiler) compileStructDecl(s *ast.StructDecl) error {
 	for _, field := range s.Fields {
 		fd := &FieldDef{
 			Name:     field.Name,
-			TypeName: field.TypeName,
+			TypeName: ast.TypeName(field.Type),
 		}
 		if field.DefaultValue != nil {
 			// Compile default value expression as a mini-chunk

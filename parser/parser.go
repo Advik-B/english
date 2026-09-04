@@ -1715,7 +1715,7 @@ func (p *Parser) parseCastExpr(start ast.Base) (ast.Expression, error) {
 		if err != nil {
 			return nil, err
 		}
-		return &ast.CastExpression{Value: expr, TypeName: typeName}, nil
+		return &ast.CastExpression{Value: expr, Type: typeName}, nil
 	}
 
 	// Postfix "has <key>" — lookup table membership test
@@ -1793,15 +1793,18 @@ func canNameAType(t token.Type) bool {
 // A name that matches a built-in type is normalised to lower case; anything
 // else keeps its original spelling, because it may name a struct — which only
 // the type checker can resolve.
-func (p *Parser) parseTypeName() (string, error) {
+func (p *Parser) parseTypeName() (*ast.TypeExpr, error) {
+	pos := at(p.curToken)
+
 	// An article reads naturally here: "Declare x as a number to be 5."
 	if p.curToken.Type == token.IDENTIFIER &&
 		(strings.EqualFold(p.curToken.Value, "a") || strings.EqualFold(p.curToken.Value, "an")) {
 		p.nextToken()
+		pos = at(p.curToken)
 	}
 
 	if !canNameAType(p.curToken.Type) {
-		return "", p.syntaxErr(
+		return nil, p.syntaxErr(
 			fmt.Sprintf(msgFmtTypeNameExpected, tokenFriendlyValue(p.curToken.Type, p.curToken.Value)),
 			fmt.Sprintf(hintFmtTypeName, strings.Join(types.UserTypeNames(), ", ")),
 		)
@@ -1812,22 +1815,22 @@ func (p *Parser) parseTypeName() (string, error) {
 	case token.UNSIGNED:
 		p.nextToken()
 		if p.curToken.Type != token.INTEGER {
-			return "", p.syntaxErr(
+			return nil, p.syntaxErr(
 				msgUnsignedNeedsInteger,
 				hintUnsignedInteger,
 			)
 		}
 		p.nextToken()
-		return "unsigned integer", nil
+		return typeExprAt(pos, "unsigned integer"), nil
 	case token.LOOKUP:
 		p.nextToken()
 		if p.curToken.Type == token.TABLE {
 			p.nextToken()
 		}
-		return "lookup table", nil
+		return typeExprAt(pos, "lookup table"), nil
 	case token.INTEGER:
 		p.nextToken()
-		return "integer", nil
+		return typeExprAt(pos, "integer"), nil
 	}
 
 	name := p.curToken.Value
@@ -1835,9 +1838,15 @@ func (p *Parser) parseTypeName() (string, error) {
 	// Normalise built-in spellings; leave anything else alone so that a struct
 	// name keeps the case it was declared with.
 	if types.Parse(name) != types.TypeUnknown {
-		return strings.ToLower(name), nil
+		name = strings.ToLower(name)
 	}
-	return name, nil
+	return typeExprAt(pos, name), nil
+}
+
+// typeExprAt builds a positioned type annotation, resolving its built-in kind
+// once so that nothing downstream has to re-parse the name at run time.
+func typeExprAt(pos ast.Base, name string) *ast.TypeExpr {
+	return &ast.TypeExpr{Base: pos, Name: name, Kind: types.Parse(name)}
 }
 
 func (p *Parser) parseAdditive() (ast.Expression, error) {
@@ -2597,7 +2606,7 @@ func (p *Parser) parseArrayLiteral() (ast.Expression, error) {
 	p.nextToken() // consume OF
 
 	// Optional element type hint before the bracket
-	elementType := ""
+	var elementType *ast.TypeExpr
 	if p.curToken.Type != token.LBRACKET {
 		var err error
 		elementType, err = p.parseTypeName()
@@ -2608,8 +2617,8 @@ func (p *Parser) parseArrayLiteral() (ast.Expression, error) {
 
 	if p.curToken.Type != token.LBRACKET {
 		hint := hintArrayLiteral
-		if elementType != "" {
-			hint = fmt.Sprintf(hintFmtArrayAfterType, elementType)
+		if elementType != nil {
+			hint = fmt.Sprintf(hintFmtArrayAfterType, elementType.Name)
 		}
 		return nil, p.syntaxErr(
 			fmt.Sprintf(msgFmtArrayOpenBracket, p.curToken.Value),
@@ -2637,7 +2646,7 @@ func (p *Parser) parseArrayLiteral() (ast.Expression, error) {
 	}
 	p.nextToken() // consume ]
 
-	return &ast.ArrayLiteral{ElementType: elementType, Elements: elements}, nil
+	return &ast.ArrayLiteral{ElemType: elementType, Elements: elements}, nil
 }
 
 // parseLookupKeyAccess parses "the entry KEY in TABLE".

@@ -2,7 +2,6 @@ package parser
 
 import (
 	"fmt"
-	"strings"
 
 	"github.com/Advik-B/english/ast"
 	"github.com/Advik-B/english/token"
@@ -139,11 +138,10 @@ func (p *Parser) parseStructField() (*ast.StructField, error) {
 
 	// parseTypeName skips an optional article and handles multi-word names such
 	// as "unsigned integer" and "lookup table".
-	typeName, err := p.parseTypeName()
+	fieldType, err := p.parseTypeName()
 	if err != nil {
 		return nil, err
 	}
-	isUnsigned := strings.EqualFold(typeName, "unsigned integer")
 
 	var defaultValue ast.Expression
 
@@ -182,10 +180,10 @@ func (p *Parser) parseStructField() (*ast.StructField, error) {
 	p.nextToken()
 
 	return &ast.StructField{
+		Base:         at(nameToken),
 		Name:         nameToken.Value,
-		TypeName:     typeName,
+		Type:         fieldType,
 		DefaultValue: defaultValue,
-		IsUnsigned:   isUnsigned,
 	}, nil
 }
 
@@ -445,7 +443,7 @@ func (p *Parser) parseTypedVariableDecl() (ast.Statement, error) {
 	// Read the type name. parseTypeName accepts an optional article and the
 	// type names that are lexed as keywords ("integer", "array", "lookup
 	// table"), which this position used to reject.
-	typeName, err := p.parseTypeName()
+	declaredType, err := p.parseTypeName()
 	if err != nil {
 		return nil, err
 	}
@@ -485,10 +483,10 @@ func (p *Parser) parseTypedVariableDecl() (ast.Statement, error) {
 	p.nextToken()
 
 	return &ast.TypedVariableDecl{
+		Base:       at(nameToken),
 		Name:       nameToken.Value,
-		TypeName:   typeName,
+		Type:       declaredType,
 		IsConstant: isConstant,
 		Value:      value,
-		Base:       at(nameToken),
 	}, nil
 }

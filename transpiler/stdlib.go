@@ -177,8 +177,6 @@ func (t *Transpiler) transpileFuncCallExpr(e *ast.FunctionCall) string {
 	case "append":
 		// append(list, item) → list + [item]
 		return fmt.Sprintf("%s + [%s]", a(0), a(1))
-	case "pop":
-		return fmt.Sprintf("%s[:-1]", a(0))
 	case "remove":
 		// remove(list, index) → list without element at index
 		return fmt.Sprintf("[v for i, v in enumerate(%s) if i != %s]", a(0), maybeInt(a(1)))
@@ -227,10 +225,6 @@ func (t *Transpiler) transpileFuncCallExpr(e *ast.FunctionCall) string {
 	// ── I/O ───────────────────────────────────────────────────────────────────
 	case "ask":
 		return fmt.Sprintf("input(%s)", a(0))
-	case "read_file":
-		return fmt.Sprintf("_read_file(%s)", a(0))
-	case "write_file":
-		return fmt.Sprintf("_write_file(%s, %s)", a(0), a(1))
 
 	// ── Time ──────────────────────────────────────────────────────────────────
 	case "sleep":

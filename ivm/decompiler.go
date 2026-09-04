@@ -12,6 +12,8 @@ import (
 	"math"
 	"strconv"
 	"strings"
+
+	"github.com/Advik-B/english/pygen"
 )
 
 // Decompile decompiles chunk and returns Python source code.
@@ -50,6 +52,7 @@ type decompiler struct {
 	needsMath   bool
 	needsRandom bool
 	needsCopy   bool
+	needsTime   bool
 	helpers     map[string]bool // helperDef keys from transpiler/helpers.go
 	// user-defined function names (to distinguish from stdlib)
 	userFuncs map[string]bool
@@ -160,6 +163,9 @@ func (d *decompiler) finish() string {
 	if d.needsCopy {
 		out.WriteString("import copy\n")
 	}
+	if d.needsTime {
+		out.WriteString("import time\n")
+	}
 
 	// User-module imports (hoisted to top to satisfy PEP8 E402).
 	// Deduplicate while preserving order.
@@ -171,7 +177,7 @@ func (d *decompiler) finish() string {
 		}
 	}
 
-	hasMod := d.needsMath || d.needsRandom || d.needsCopy || len(d.userImports) > 0
+	hasMod := d.needsMath || d.needsRandom || d.needsCopy || d.needsTime || len(d.userImports) > 0
 	if hasMod && len(d.helpers) > 0 {
 		out.WriteByte('\n')
 	}
@@ -266,23 +272,7 @@ func (d *decompiler) pyName(idx uint32) string {
 }
 
 // sanitizeDecompIdent mirrors transpiler.sanitizeIdent.
-func sanitizeDecompIdent(name string) string {
-	if pyKeywords[name] {
-		return name + "_"
-	}
-	return name
-}
-
-var pyKeywords = map[string]bool{
-	"False": true, "None": true, "True": true,
-	"and": true, "as": true, "assert": true, "async": true, "await": true,
-	"break": true, "class": true, "continue": true, "def": true, "del": true,
-	"elif": true, "else": true, "except": true, "finally": true, "for": true,
-	"from": true, "global": true, "if": true, "import": true, "in": true,
-	"is": true, "lambda": true, "nonlocal": true, "not": true, "or": true,
-	"pass": true, "raise": true, "return": true, "try": true, "type": true,
-	"while": true, "with": true, "yield": true,
-}
+func sanitizeDecompIdent(name string) string { return pygen.SanitizeIdent(name) }
 
 // ─── constant formatting ──────────────────────────────────────────────────────
 

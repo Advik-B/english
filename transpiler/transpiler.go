@@ -379,10 +379,6 @@ func (t *Transpiler) scanFuncCall(name string) {
 		t.helpers["_zip_with"] = true
 	case "sign":
 		t.helpers["_sign"] = true
-	case "read_file":
-		t.helpers["_read_file"] = true
-	case "write_file":
-		t.helpers["_write_file"] = true
 	case "sleep", "current_time", "elapsed_time":
 		t.needsTime = true
 		if name == "elapsed_time" {

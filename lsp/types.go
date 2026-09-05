@@ -35,7 +35,7 @@ type CompletionItem struct {
 	Kind                CompletionItemKind  `json:"kind,omitempty"`
 	Tags                []CompletionItemTag `json:"tags,omitempty"`
 	Detail              string              `json:"detail,omitempty"`
-	Documentation       interface{}         `json:"documentation,omitempty"`
+	Documentation       any                 `json:"documentation,omitempty"`
 	Deprecated          bool                `json:"deprecated,omitempty"`
 	Preselect           bool                `json:"preselect,omitempty"`
 	SortText            string              `json:"sortText,omitempty"`
@@ -47,7 +47,7 @@ type CompletionItem struct {
 	AdditionalTextEdits []TextEdit          `json:"additionalTextEdits,omitempty"`
 	CommitCharacters    []string            `json:"commitCharacters,omitempty"`
 	Command             *Command            `json:"command,omitempty"`
-	Data                interface{}         `json:"data,omitempty"`
+	Data                any                 `json:"data,omitempty"`
 }
 
 // CompletionItemKind defines the kind of a completion entry
@@ -106,9 +106,9 @@ const (
 
 // Command represents a reference to a command
 type Command struct {
-	Title     string        `json:"title"`
-	Command   string        `json:"command"`
-	Arguments []interface{} `json:"arguments,omitempty"`
+	Title     string `json:"title"`
+	Command   string `json:"command"`
+	Arguments []any  `json:"arguments,omitempty"`
 }
 
 // Hover Types
@@ -173,15 +173,15 @@ type SignatureHelp struct {
 // SignatureInformation represents the signature of something callable
 type SignatureInformation struct {
 	Label           string                 `json:"label"`
-	Documentation   interface{}            `json:"documentation,omitempty"`
+	Documentation   any                    `json:"documentation,omitempty"`
 	Parameters      []ParameterInformation `json:"parameters,omitempty"`
 	ActiveParameter *int                   `json:"activeParameter,omitempty"`
 }
 
 // ParameterInformation represents a parameter of a callable
 type ParameterInformation struct {
-	Label         interface{} `json:"label"`
-	Documentation interface{} `json:"documentation,omitempty"`
+	Label         any `json:"label"`
+	Documentation any `json:"documentation,omitempty"`
 }
 
 // Document Symbol Types
@@ -338,7 +338,7 @@ type CodeAction struct {
 	} `json:"disabled,omitempty"`
 	Edit    *WorkspaceEdit `json:"edit,omitempty"`
 	Command *Command       `json:"command,omitempty"`
-	Data    interface{}    `json:"data,omitempty"`
+	Data    any            `json:"data,omitempty"`
 }
 
 // CodeActionKind defines well-known code action kinds
@@ -355,7 +355,7 @@ const (
 // WorkspaceEdit represents changes to many resources managed in the workspace
 type WorkspaceEdit struct {
 	Changes         map[string][]TextEdit `json:"changes,omitempty"`
-	DocumentChanges []interface{}         `json:"documentChanges,omitempty"`
+	DocumentChanges []any                 `json:"documentChanges,omitempty"`
 }
 
 // Rename Types
@@ -451,7 +451,7 @@ type SemanticTokensLegend struct {
 type SemanticTokensOptions struct {
 	Legend SemanticTokensLegend `json:"legend"`
 	Range  bool                 `json:"range,omitempty"`
-	Full   interface{}          `json:"full,omitempty"`
+	Full   any                  `json:"full,omitempty"`
 }
 
 // Well-known semantic token types

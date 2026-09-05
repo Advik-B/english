@@ -26,7 +26,7 @@ func compileSource(src string) (*ivm.Chunk, error) {
 }
 
 // run compiles and executes English source code, returning the last value.
-func run(src string) (interface{}, error) {
+func run(src string) (any, error) {
 	chunk, err := compileSource(src)
 	if err != nil {
 		return nil, err

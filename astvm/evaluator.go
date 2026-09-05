@@ -64,7 +64,7 @@ func (ev *Evaluator) checkCallDepth(name string) error {
 }
 
 // Eval evaluates an AST node
-func (ev *Evaluator) Eval(node interface{}) (Value, error) {
+func (ev *Evaluator) Eval(node any) (Value, error) {
 	switch node := node.(type) {
 	case *ast.Program:
 		return ev.evalProgram(node)
@@ -596,7 +596,7 @@ func (ev *Evaluator) evalForEachLoop(fel *ast.ForEachLoop) (Value, error) {
 	var result Value
 
 	switch col := list.(type) {
-	case []interface{}:
+	case []any:
 		for _, item := range col {
 			childEnv := oldEnv.NewChild()
 			ev.env = childEnv
@@ -720,7 +720,7 @@ func (ev *Evaluator) evalStatements(stmts []ast.Statement) (Value, error) {
 }
 
 func (ev *Evaluator) evalListLiteral(ll *ast.ListLiteral) (Value, error) {
-	var result []interface{}
+	var result []any
 	for _, elem := range ll.Elements {
 		val, err := ev.Eval(elem)
 		if err != nil {
@@ -1079,7 +1079,7 @@ func (ev *Evaluator) findSimilarFunction(name string) string {
 // ─── Array ────────────────────────────────────────────────────────────────────
 
 func (ev *Evaluator) evalArrayLiteral(al *ast.ArrayLiteral) (Value, error) {
-	elements := make([]interface{}, 0, len(al.Elements))
+	elements := make([]any, 0, len(al.Elements))
 	for _, expr := range al.Elements {
 		val, err := ev.Eval(expr)
 		if err != nil {

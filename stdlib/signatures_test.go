@@ -8,7 +8,7 @@ import (
 
 // callSafely invokes Eval and converts a panic into an error so that a crashing
 // built-in is reported as a test failure rather than taking the suite down.
-func callSafely(name string, args []vm.Value) (err error, panicked interface{}) {
+func callSafely(name string, args []vm.Value) (err error, panicked any) {
 	defer func() {
 		if r := recover(); r != nil {
 			panicked = r

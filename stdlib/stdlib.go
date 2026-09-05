@@ -11,7 +11,7 @@ import (
 // predefinedConstants are the stdlib-provided constants visible to programs.
 // PredefinedNames and PredefinedValues both derive from this map so the two can
 // never disagree.
-var predefinedConstants = map[string]interface{}{
+var predefinedConstants = map[string]any{
 	"pi":       math.Pi,
 	"e":        math.E,
 	"infinity": math.Inf(1),
@@ -78,8 +78,8 @@ func PredefinedNames() []string {
 
 // PredefinedValues returns all constants registered by the stdlib as a map.
 // Used by ivm.Machine to initialize predefined constants.
-func PredefinedValues() map[string]interface{} {
-	out := make(map[string]interface{}, len(predefinedConstants))
+func PredefinedValues() map[string]any {
+	out := make(map[string]any, len(predefinedConstants))
 	for name, value := range predefinedConstants {
 		out[name] = value
 	}

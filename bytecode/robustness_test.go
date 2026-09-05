@@ -44,7 +44,7 @@ thats it.`
 }
 
 // decodeV1Safely reports a panic instead of letting it take the test binary down.
-func decodeV1Safely(data []byte) (panicked interface{}) {
+func decodeV1Safely(data []byte) (panicked any) {
 	defer func() {
 		if r := recover(); r != nil {
 			panicked = r
@@ -122,7 +122,7 @@ Call s's uppercase.`
 
 	done := make(chan struct{})
 	var encErr error
-	var panicked interface{}
+	var panicked any
 	go func() {
 		defer func() {
 			if r := recover(); r != nil {

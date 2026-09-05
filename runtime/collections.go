@@ -12,7 +12,7 @@ import (
 // depended on which engine you ran.
 func Length(v Value) (float64, error) {
 	switch val := v.(type) {
-	case []interface{}:
+	case []any:
 		return float64(len(val)), nil
 	case *types.ArrayValue:
 		return float64(len(val.Elements)), nil
@@ -41,7 +41,7 @@ func Index(container, index Value) (Value, error) {
 	at := int(i)
 
 	switch c := container.(type) {
-	case []interface{}:
+	case []any:
 		if at < 0 || at >= len(c) {
 			return nil, outOfRange(at, len(c), "list")
 		}
@@ -81,7 +81,7 @@ func SetIndex(container, index, value Value) error {
 	at := int(i)
 
 	switch c := container.(type) {
-	case []interface{}:
+	case []any:
 		if at < 0 || at >= len(c) {
 			return outOfRange(at, len(c), "list")
 		}
@@ -203,7 +203,7 @@ func TypeDefault(kind types.TypeKind) Value {
 	case types.TypeBool:
 		return false
 	case types.TypeList:
-		return []interface{}{}
+		return []any{}
 	case types.TypeArray:
 		return &types.ArrayValue{}
 	case types.TypeLookup:

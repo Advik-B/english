@@ -181,7 +181,7 @@ func (e *encoder) writeChunk(c *Chunk) error {
 	return nil
 }
 
-func (e *encoder) writeConstant(v interface{}) error {
+func (e *encoder) writeConstant(v any) error {
 	switch val := v.(type) {
 	case float64:
 		e.writeByte(0)
@@ -198,7 +198,7 @@ func (e *encoder) writeConstant(v interface{}) error {
 		}
 	case nil:
 		e.writeByte(3)
-	case []interface{}:
+	case []any:
 		// String-slice of items (used for import items)
 		e.writeByte(4)
 		e.writeUint32(uint32(len(val)))
@@ -350,7 +350,7 @@ func (d *decoder) readChunk() (*Chunk, error) {
 	if err := d.checkCount(cCount, "c.Constants"); err != nil {
 		return nil, err
 	}
-	c.Constants = make([]interface{}, cCount)
+	c.Constants = make([]any, cCount)
 	for i := uint32(0); i < cCount; i++ {
 		cv, err := d.readConstant()
 		if err != nil {
@@ -434,7 +434,7 @@ func (d *decoder) readChunk() (*Chunk, error) {
 	return c, nil
 }
 
-func (d *decoder) readConstant() (interface{}, error) {
+func (d *decoder) readConstant() (any, error) {
 	tag, err := d.readByte()
 	if err != nil {
 		return nil, err
@@ -452,7 +452,7 @@ func (d *decoder) readConstant() (interface{}, error) {
 		return b != 0, nil
 	case 3: // nil
 		return nil, nil
-	case 4: // []interface{} of strings
+	case 4: // []any of strings
 		n, err := d.readUint32()
 		if err != nil {
 			return nil, err
@@ -460,7 +460,7 @@ func (d *decoder) readConstant() (interface{}, error) {
 		if err := d.checkCount(n, "items"); err != nil {
 			return nil, err
 		}
-		items := make([]interface{}, n)
+		items := make([]any, n)
 		for i := uint32(0); i < n; i++ {
 			s, err := d.readString()
 			if err != nil {

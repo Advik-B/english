@@ -36,13 +36,13 @@ func evalString(name string, args []vm.Value) (vm.Value, error) {
 		}
 		sep := vm.ToString(args[1])
 		parts := strings.Split(text, sep)
-		result := make([]interface{}, len(parts))
+		result := make([]any, len(parts))
 		for i, part := range parts {
 			result[i] = part
 		}
 		return result, nil
 	case "join":
-		list, ok := args[0].([]interface{})
+		list, ok := args[0].([]any)
 		if !ok {
 			return nil, fmt.Errorf("TypeError: join expects list, got %s", types.NameOf(args[0]))
 		}
@@ -197,7 +197,7 @@ func evalString(name string, args []vm.Value) (vm.Value, error) {
 		switch v := args[0].(type) {
 		case string:
 			return len(v) == 0, nil
-		case []interface{}:
+		case []any:
 			return len(v) == 0, nil
 		case *types.ArrayValue:
 			return len(v.Elements) == 0, nil

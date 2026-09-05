@@ -329,7 +329,7 @@ func (b BinOp) String() string {
 	}
 }
 
-func formatConst(v interface{}) string {
+func formatConst(v any) string {
 	switch val := v.(type) {
 	case float64:
 		if math.IsInf(val, 1) {
@@ -351,7 +351,7 @@ func formatConst(v interface{}) string {
 		return "false"
 	case nil:
 		return "nothing"
-	case []interface{}:
+	case []any:
 		parts := make([]string, len(val))
 		for i, item := range val {
 			parts[i] = formatConst(item)

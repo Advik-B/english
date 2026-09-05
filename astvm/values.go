@@ -9,7 +9,7 @@ import (
 
 // Value is the universal runtime value interface for the English language.
 // Every evaluated expression produces a Value.
-type Value = interface{}
+type Value = any
 
 // BuiltinFunc is the signature for the injected standard-library evaluator.
 // It is called whenever a built-in function (Body == nil) is invoked.

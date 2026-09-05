@@ -17,7 +17,7 @@ import (
 // omitted its own type, so casting an i32 to i32 failed. The error for an
 // unsupported target read "cannot cast number to number", because all nine
 // kinds are called "number".
-func Cast(v interface{}, target TypeKind) (interface{}, error) {
+func Cast(v any, target TypeKind) (any, error) {
 	if tv, ok := v.(*TypedValue); ok {
 		v = tv.Value
 	}
@@ -34,7 +34,7 @@ func Cast(v interface{}, target TypeKind) (interface{}, error) {
 		Name(target))
 }
 
-func castToNumber(v interface{}) (interface{}, error) {
+func castToNumber(v any) (any, error) {
 	if f, ok := numeric(v); ok {
 		return f, nil
 	}
@@ -54,7 +54,7 @@ func castToNumber(v interface{}) (interface{}, error) {
 	return nil, fmt.Errorf("cannot cast %s to a number", NameOf(v))
 }
 
-func castToText(v interface{}) (interface{}, error) {
+func castToText(v any) (any, error) {
 	// Rendering a composite value needs the full renderer, which lives in the
 	// runtime package and cannot be imported here without a cycle. The engines
 	// route "cast to text" through that renderer directly; this handles the
@@ -79,7 +79,7 @@ func castToText(v interface{}) (interface{}, error) {
 	return fmt.Sprintf("%v", v), nil
 }
 
-func castToBoolean(v interface{}) (interface{}, error) {
+func castToBoolean(v any) (any, error) {
 	switch val := v.(type) {
 	case bool:
 		return val, nil
@@ -104,7 +104,7 @@ func castToBoolean(v interface{}) (interface{}, error) {
 //
 // Only float64 can be produced now, but a value decoded from bytecode or held
 // in a TypedValue may still be one of the others, so this stays total.
-func numeric(v interface{}) (float64, bool) {
+func numeric(v any) (float64, bool) {
 	switch val := v.(type) {
 	case float64:
 		return val, true

@@ -10,7 +10,7 @@ import (
 )
 
 // sprintf is fmt.Sprintf, kept local so value.go need not import fmt.
-func sprintf(format string, args ...interface{}) string {
+func sprintf(format string, args ...any) string {
 	return fmt.Sprintf(format, args...)
 }
 
@@ -41,7 +41,7 @@ func ToString(v Value) string {
 		return strconv.FormatUint(val, 10)
 	case float32:
 		return formatNumber(float64(val))
-	case []interface{}:
+	case []any:
 		// A sequence renders the same way whichever container holds it. A list
 		// used to render as "[1 2 3]" and an array as "[1, 2, 3]", so the same
 		// three numbers printed two different ways depending on how they were
@@ -181,14 +181,14 @@ func ToBool(v Value) (bool, error) {
 // them.
 func DeepCopy(v Value) Value {
 	switch val := v.(type) {
-	case []interface{}:
-		out := make([]interface{}, len(val))
+	case []any:
+		out := make([]any, len(val))
 		for i, el := range val {
 			out[i] = DeepCopy(el)
 		}
 		return out
 	case *types.ArrayValue:
-		out := make([]interface{}, len(val.Elements))
+		out := make([]any, len(val.Elements))
 		for i, el := range val.Elements {
 			out[i] = DeepCopy(el)
 		}

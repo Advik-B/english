@@ -58,7 +58,7 @@ func (t *TypeInfo) String() string {
 // TypedValue wraps a runtime value with explicit type information.
 // Used by the struct field system.
 type TypedValue struct {
-	Value    interface{}
+	Value    any
 	TypeInfo *TypeInfo
 }
 
@@ -74,7 +74,7 @@ type TypeNamer interface {
 // Describe returns full type metadata for any runtime value.  It is the single
 // source of truth for "what type is this value" across both engines, the stdlib
 // and the type checker.
-func Describe(v interface{}) *TypeInfo {
+func Describe(v any) *TypeInfo {
 	// TypedValue carries its own annotation; prefer it.
 	if tv, ok := v.(*TypedValue); ok {
 		if tv.TypeInfo != nil {
@@ -104,7 +104,7 @@ func Describe(v interface{}) *TypeInfo {
 		return &TypeInfo{Kind: TypeString, Name: "text"}
 	case bool:
 		return &TypeInfo{Kind: TypeBool, Name: "boolean"}
-	case []interface{}:
+	case []any:
 		return &TypeInfo{Kind: TypeList, Name: "list"}
 	case *ArrayValue:
 		return &TypeInfo{
@@ -133,13 +133,13 @@ func InfoFor(k TypeKind) *TypeInfo {
 }
 
 // Infer determines the TypeKind of a runtime value.
-func Infer(v interface{}) TypeKind {
+func Infer(v any) TypeKind {
 	return Describe(v).Kind
 }
 
 // NameOf returns the user-facing type name of a runtime value ("number",
 // "text", …).  This is the renderer to use in error messages; TypeInfo.String
 // is the finer-grained diagnostic renderer used by "the type of".
-func NameOf(v interface{}) string {
+func NameOf(v any) string {
 	return Name(Infer(v))
 }

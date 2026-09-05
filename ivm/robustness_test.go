@@ -60,7 +60,7 @@ Print total cast to text.`
 // forever by design; what is being asserted here is that decoding never panics
 // and never allocates unboundedly. Execution of a *valid* file is covered by
 // TestValidRoundTripStillWorks.
-func decodeSafely(data []byte) (panicked interface{}) {
+func decodeSafely(data []byte) (panicked any) {
 	defer func() {
 		if r := recover(); r != nil {
 			panicked = r

@@ -18,7 +18,7 @@ import (
 // messages where the other said "number"; and reported that "+" requires
 // matching types without naming the offending one.
 
-func doBinaryOp(op BinOp, left, right interface{}) (interface{}, error) {
+func doBinaryOp(op BinOp, left, right any) (any, error) {
 	switch op {
 	case BinAdd:
 		return runtime.Add(left, right)
@@ -46,7 +46,7 @@ func doBinaryOp(op BinOp, left, right interface{}) (interface{}, error) {
 	return nil, fmt.Errorf("unknown binary op: %d", op)
 }
 
-func doUnaryOp(op UnaryOp, val interface{}) (interface{}, error) {
+func doUnaryOp(op UnaryOp, val any) (any, error) {
 	switch op {
 	case UnaryNeg:
 		return runtime.Negate(val)
@@ -57,39 +57,39 @@ func doUnaryOp(op UnaryOp, val interface{}) (interface{}, error) {
 }
 
 // ivmToBool converts a value for use as a condition.
-func ivmToBool(v interface{}) (bool, error) { return runtime.ToBool(v) }
+func ivmToBool(v any) (bool, error) { return runtime.ToBool(v) }
 
 // ivmToString renders a value as text.
-func ivmToString(v interface{}) string { return runtime.ToString(v) }
+func ivmToString(v any) string { return runtime.ToString(v) }
 
 // inferKindName is the user-facing name of a value's type.
-func inferKindName(v interface{}) string { return runtime.NameOf(v) }
+func inferKindName(v any) string { return runtime.NameOf(v) }
 
 // doIndexGet reads the item at a position.
 //
 // Indexing a lookup table by position used to be accepted here, returning the
 // key at that position. The other engine rejected it, nothing documented it,
 // and keys(table) is the way to ask for that, so it is no longer special.
-func doIndexGet(container, index interface{}) (interface{}, error) {
+func doIndexGet(container, index any) (any, error) {
 	return runtime.Index(container, index)
 }
 
 // doIndexSet writes the item at a position.
-func doIndexSet(container, index, value interface{}) error {
+func doIndexSet(container, index, value any) error {
 	return runtime.SetIndex(container, index, value)
 }
 
 // doLength returns the number of items in a collection, or of characters in
 // text.
-func doLength(val interface{}) (float64, error) { return runtime.Length(val) }
+func doLength(val any) (float64, error) { return runtime.Length(val) }
 
 // doLookupGet reads a value from a lookup table.
-func doLookupGet(table, key interface{}) (interface{}, error) {
+func doLookupGet(table, key any) (any, error) {
 	return runtime.LookupGet(table, key)
 }
 
 // deepCopyValue returns an independent copy of a value.
-func deepCopyValue(val interface{}) interface{} { return runtime.DeepCopy(val) }
+func deepCopyValue(val any) any { return runtime.DeepCopy(val) }
 
 // typeDefault is the zero value for a declared type, used for a struct field
 // with no default expression.
@@ -97,7 +97,7 @@ func deepCopyValue(val interface{}) interface{} { return runtime.DeepCopy(val) }
 // It takes the name written in the source, because that is what survives into
 // the bytecode. Every numeric kind used to collapse to float64 here, so an i32
 // field held a float64 under this engine and an int32 under the other.
-func typeDefault(typeName string) interface{} {
+func typeDefault(typeName string) any {
 	return runtime.TypeDefault(types.Parse(typeName))
 }
 
@@ -106,7 +106,7 @@ func typeDefault(typeName string) interface{} {
 // Neither the field values written at instantiation nor those assigned later
 // were checked by this engine at all, so a text value could be stored in a
 // number field and only fail much later, somewhere else.
-func checkFieldType(structName string, fd *FieldDef, value interface{}) error {
+func checkFieldType(structName string, fd *FieldDef, value any) error {
 	if value == nil || fd.TypeName == "" {
 		return nil
 	}

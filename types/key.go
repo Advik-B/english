@@ -8,7 +8,7 @@ import "fmt"
 //
 // Valid key types are: float64 (number), string (text), bool (boolean).
 // Any other type returns a non-nil error.
-func SerializeKey(v interface{}) (string, error) {
+func SerializeKey(v any) (string, error) {
 	switch val := v.(type) {
 	case string:
 		return "s:" + val, nil
@@ -30,7 +30,7 @@ func SerializeKey(v interface{}) (string, error) {
 
 // DeserializeKey recovers the original value from a serialised key string.
 // It mirrors SerializeKey and returns (value, type, ok).
-func DeserializeKey(s string) (interface{}, TypeKind, bool) {
+func DeserializeKey(s string) (any, TypeKind, bool) {
 	if len(s) < 2 {
 		return nil, TypeUnknown, false
 	}

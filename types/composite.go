@@ -6,26 +6,26 @@ import "math"
 // The zero value has ElementType == TypeUnknown.
 type ArrayValue struct {
 	ElementType TypeKind
-	Elements    []interface{}
+	Elements    []any
 }
 
 // LookupTableValue is an ordered dictionary that maps hashable keys (number,
 // text, boolean) to values of any type.
 type LookupTableValue struct {
-	Entries  map[string]interface{} // serialised key (SerializeKey) → value
-	KeyOrder []string               // insertion-order serialised keys
+	Entries  map[string]any // serialised key (SerializeKey) → value
+	KeyOrder []string       // insertion-order serialised keys
 }
 
 // NewLookupTable returns an initialised, empty LookupTableValue.
 func NewLookupTable() *LookupTableValue {
 	return &LookupTableValue{
-		Entries:  make(map[string]interface{}),
+		Entries:  make(map[string]any),
 		KeyOrder: []string{},
 	}
 }
 
 // Set inserts or updates an entry.  key must already be serialised via SerializeKey.
-func (lt *LookupTableValue) Set(serialKey string, value interface{}) {
+func (lt *LookupTableValue) Set(serialKey string, value any) {
 	if _, exists := lt.Entries[serialKey]; !exists {
 		lt.KeyOrder = append(lt.KeyOrder, serialKey)
 	}
@@ -55,8 +55,8 @@ type RangeValue struct {
 	End       float64
 	Step      float64 // custom step value, default is 1
 	Ascending bool
-	cache     []interface{} // cached elements (up to 20 at a time)
-	cachePos  int           // position in the range where cache starts
+	cache     []any // cached elements (up to 20 at a time)
+	cachePos  int   // position in the range where cache starts
 }
 
 // NewRange creates a new RangeValue with default step (1), matching Python's range(start, stop).
@@ -105,7 +105,7 @@ func (r *RangeValue) Length() int {
 
 // Get returns the element at the given index (0-based).
 // Implements lazy evaluation by caching 20 elements at a time.
-func (r *RangeValue) Get(index int) (interface{}, bool) {
+func (r *RangeValue) Get(index int) (any, bool) {
 	length := r.Length()
 	if index < 0 || index >= length {
 		return nil, false
@@ -135,8 +135,8 @@ func (r *RangeValue) Get(index int) (interface{}, bool) {
 }
 
 // generateChunk generates a chunk of elements starting at offset with the given size.
-func (r *RangeValue) generateChunk(offset, size int) []interface{} {
-	result := make([]interface{}, size)
+func (r *RangeValue) generateChunk(offset, size int) []any {
+	result := make([]any, size)
 	startVal := r.Start + float64(offset)*r.Step
 	for i := 0; i < size; i++ {
 		result[i] = startVal + float64(i)*r.Step
@@ -146,9 +146,9 @@ func (r *RangeValue) generateChunk(offset, size int) []interface{} {
 
 // ToSlice converts the entire range to a slice (for iteration).
 // This is used when the range is small or when full materialization is needed.
-func (r *RangeValue) ToSlice() []interface{} {
+func (r *RangeValue) ToSlice() []any {
 	length := r.Length()
-	result := make([]interface{}, length)
+	result := make([]any, length)
 	for i := 0; i < length; i++ {
 		result[i] = r.Start + float64(i)*r.Step
 	}

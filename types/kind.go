@@ -19,7 +19,7 @@ const (
 	// Primary language types
 	TypeString   // text
 	TypeBool     // boolean
-	TypeList     // heterogeneous list  ([]interface{})
+	TypeList     // heterogeneous list  ([]any)
 	TypeStruct   // struct instance
 	TypeFunction // function value
 	TypeNull     // nothing / nil

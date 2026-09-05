@@ -114,7 +114,7 @@ func (a *Analyzer) run(prog *ast.Program) {
 
 // ─── Diagnostics ─────────────────────────────────────────────────────────────
 
-func (a *Analyzer) errorAt(pos ast.Position, format string, args ...interface{}) {
+func (a *Analyzer) errorAt(pos ast.Position, format string, args ...any) {
 	a.diags = append(a.diags, &Diagnostic{
 		Pos:     pos,
 		File:    a.cfg.File,
@@ -122,7 +122,7 @@ func (a *Analyzer) errorAt(pos ast.Position, format string, args ...interface{})
 	})
 }
 
-func (a *Analyzer) errorWithHint(pos ast.Position, hint, format string, args ...interface{}) {
+func (a *Analyzer) errorWithHint(pos ast.Position, hint, format string, args ...any) {
 	a.diags = append(a.diags, &Diagnostic{
 		Pos:     pos,
 		File:    a.cfg.File,

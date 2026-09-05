@@ -23,8 +23,8 @@ func requireNumber(fn string, arg vm.Value) (float64, error) {
 	return n, nil
 }
 
-func requireList(fn string, arg vm.Value) ([]interface{}, error) {
-	lst, ok := arg.([]interface{})
+func requireList(fn string, arg vm.Value) ([]any, error) {
+	lst, ok := arg.([]any)
 	if !ok {
 		return nil, fmt.Errorf("TypeError: %s expects list, got %s", fn, types.NameOf(arg))
 	}

@@ -40,7 +40,7 @@ func Add(left, right Value) (Value, error) {
 			return nil, TypeErrorf("TypeError: cannot concatenate array of %s with array of %s",
 				types.Name(l.ElementType), types.Name(r.ElementType))
 		}
-		combined := make([]interface{}, 0, len(l.Elements)+len(r.Elements))
+		combined := make([]any, 0, len(l.Elements)+len(r.Elements))
 		combined = append(combined, l.Elements...)
 		combined = append(combined, r.Elements...)
 		return &types.ArrayValue{ElementType: l.ElementType, Elements: combined}, nil
@@ -190,8 +190,8 @@ func Equals(left, right Value) bool {
 	case bool:
 		r, ok := right.(bool)
 		return ok && l == r
-	case []interface{}:
-		r, ok := right.([]interface{})
+	case []any:
+		r, ok := right.([]any)
 		return ok && sameElements(l, r)
 	case *types.ArrayValue:
 		r, ok := right.(*types.ArrayValue)
@@ -230,7 +230,7 @@ func Equals(left, right Value) bool {
 	return left == right
 }
 
-func sameElements(a, b []interface{}) bool {
+func sameElements(a, b []any) bool {
 	if len(a) != len(b) {
 		return false
 	}

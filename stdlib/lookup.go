@@ -17,7 +17,7 @@ func evalLookup(name string, args []vm.Value) (vm.Value, error) {
 		if !ok {
 			return nil, fmt.Errorf("TypeError: keys() expects a lookup table, got %s", types.NameOf(args[0]))
 		}
-		result := make([]interface{}, 0, len(lt.KeyOrder))
+		result := make([]any, 0, len(lt.KeyOrder))
 		for _, k := range lt.KeyOrder {
 			orig, _, ok := types.DeserializeKey(k)
 			if ok {
@@ -35,7 +35,7 @@ func evalLookup(name string, args []vm.Value) (vm.Value, error) {
 		if !ok {
 			return nil, fmt.Errorf("TypeError: values() expects a lookup table, got %s", types.NameOf(args[0]))
 		}
-		result := make([]interface{}, 0, len(lt.KeyOrder))
+		result := make([]any, 0, len(lt.KeyOrder))
 		for _, k := range lt.KeyOrder {
 			result = append(result, lt.Entries[k])
 		}

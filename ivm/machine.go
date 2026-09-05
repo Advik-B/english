@@ -21,7 +21,7 @@ type tryFrame struct {
 type callFrame struct {
 	chunk    *Chunk
 	ip       int
-	stack    []interface{}
+	stack    []any
 	env      *ivmEnv
 	envStack []*ivmEnv // scopes pushed during this frame
 	tryStack []tryFrame
@@ -40,7 +40,7 @@ type Machine struct {
 	cur     *callFrame
 	builtin BuiltinFunc
 	// importHandler is called for OP_IMPORT; if nil, imports are silently skipped.
-	importHandler func(path string, items []interface{}, importAll, isSafe bool, env *ivmEnv) error
+	importHandler func(path string, items []any, importAll, isSafe bool, env *ivmEnv) error
 	// stackFault is set when an instruction popped an empty operand stack or
 	// scope stack, which only a corrupt chunk can cause. step converts it into
 	// a runtime error instead of letting the VM panic.
@@ -51,7 +51,7 @@ func newMachine(builtin BuiltinFunc) *Machine {
 	return &Machine{builtin: builtin}
 }
 
-func (m *Machine) push(v interface{}) {
+func (m *Machine) push(v any) {
 	m.cur.stack = append(m.cur.stack, v)
 }
 
@@ -60,7 +60,7 @@ func (m *Machine) push(v interface{}) {
 // A well-formed chunk never pops an empty stack, but a corrupt or truncated one
 // can. Rather than panicking — which no caller could recover from — an
 // underflow records a fault that step turns into an ordinary runtime error.
-func (m *Machine) pop() interface{} {
+func (m *Machine) pop() any {
 	n := len(m.cur.stack) - 1
 	if n < 0 {
 		m.stackFault = true
@@ -73,7 +73,7 @@ func (m *Machine) pop() interface{} {
 
 // peek returns the top of the operand stack without removing it, recording a
 // fault rather than panicking if the stack is empty.
-func (m *Machine) peek() interface{} {
+func (m *Machine) peek() any {
 	if len(m.cur.stack) == 0 {
 		m.stackFault = true
 		return nil
@@ -144,7 +144,7 @@ func (e *machineError) RuntimeCallStack() []string {
 }
 
 // execute runs the machine until the outermost frame returns.
-func (m *Machine) execute(env *ivmEnv) (interface{}, error) {
+func (m *Machine) execute(env *ivmEnv) (any, error) {
 	for {
 		frame := m.cur
 		if frame.ip >= len(frame.chunk.Code) {
@@ -155,7 +155,7 @@ func (m *Machine) execute(env *ivmEnv) (interface{}, error) {
 			// If somehow frames remain, pop and continue
 			m.cur = m.frames[len(m.frames)-1]
 			m.frames = m.frames[:len(m.frames)-1]
-			m.push(interface{}(nil))
+			m.push(any(nil))
 			continue
 		}
 
@@ -242,7 +242,7 @@ func (m *Machine) handleError(err error) (bool, error) {
 	}
 }
 
-func (m *Machine) step(instr Instruction, chunk *Chunk) (result interface{}, stop bool, err error) {
+func (m *Machine) step(instr Instruction, chunk *Chunk) (result any, stop bool, err error) {
 	op := instr.Op
 	operand := instr.Operand
 
@@ -383,7 +383,7 @@ func (m *Machine) step(instr Instruction, chunk *Chunk) (result interface{}, sto
 		argc := int(operand >> 16)
 		nameIdx := operand & 0xFFFF
 		name := chunk.Names[nameIdx]
-		args := make([]interface{}, argc)
+		args := make([]any, argc)
 		for i := argc - 1; i >= 0; i-- {
 			args[i] = m.pop()
 		}
@@ -397,7 +397,7 @@ func (m *Machine) step(instr Instruction, chunk *Chunk) (result interface{}, sto
 		argc := int(operand >> 16)
 		methodNameIdx := operand & 0xFFFF
 		methodName := chunk.Names[methodNameIdx]
-		args := make([]interface{}, argc)
+		args := make([]any, argc)
 		for i := argc - 1; i >= 0; i-- {
 			args[i] = m.pop()
 		}
@@ -409,7 +409,7 @@ func (m *Machine) step(instr Instruction, chunk *Chunk) (result interface{}, sto
 		m.push(res)
 
 	case OP_RETURN:
-		var retVal interface{}
+		var retVal any
 		if len(m.cur.stack) > 0 {
 			retVal = m.pop()
 		}
@@ -432,7 +432,7 @@ func (m *Machine) step(instr Instruction, chunk *Chunk) (result interface{}, sto
 
 	case OP_BUILD_LIST:
 		count := int(operand)
-		elems := make([]interface{}, count)
+		elems := make([]any, count)
 		for i := count - 1; i >= 0; i-- {
 			elems[i] = m.pop()
 		}
@@ -440,7 +440,7 @@ func (m *Machine) step(instr Instruction, chunk *Chunk) (result interface{}, sto
 
 	case OP_BUILD_RANGE:
 		hasCustomStep := operand == 1
-		var stepVal interface{}
+		var stepVal any
 		if hasCustomStep {
 			stepVal = m.pop()
 		}
@@ -473,7 +473,7 @@ func (m *Machine) step(instr Instruction, chunk *Chunk) (result interface{}, sto
 		if !ok {
 			return nil, false, m.runtimeErr("BUILD_ARRAY: expected type name string")
 		}
-		elems := make([]interface{}, count)
+		elems := make([]any, count)
 		for i := count - 1; i >= 0; i-- {
 			elems[i] = m.pop()
 		}
@@ -482,7 +482,7 @@ func (m *Machine) step(instr Instruction, chunk *Chunk) (result interface{}, sto
 
 	case OP_BUILD_LOOKUP:
 		m.push(&types.LookupTableValue{
-			Entries:  make(map[string]interface{}),
+			Entries:  make(map[string]any),
 			KeyOrder: []string{},
 		})
 
@@ -567,7 +567,7 @@ func (m *Machine) step(instr Instruction, chunk *Chunk) (result interface{}, sto
 		typeName := chunk.Names[operand]
 		val := m.pop()
 		target := types.Parse(typeName)
-		var res interface{}
+		var res any
 		if target == types.TypeString {
 			res = ivmToString(val)
 		} else {
@@ -631,7 +631,7 @@ func (m *Machine) step(instr Instruction, chunk *Chunk) (result interface{}, sto
 
 		// Each written field arrives as a name followed by its value, so bind
 		// them by name rather than by position.
-		written := make(map[string]interface{}, fieldCount)
+		written := make(map[string]any, fieldCount)
 		order := make([]string, fieldCount)
 		for i := fieldCount - 1; i >= 0; i-- {
 			value := m.pop()
@@ -646,7 +646,7 @@ func (m *Machine) step(instr Instruction, chunk *Chunk) (result interface{}, sto
 		inst := &StructInstance{
 			DefName: structName,
 			DefRef:  sd,
-			Fields:  make(map[string]interface{}, len(sd.Fields)),
+			Fields:  make(map[string]any, len(sd.Fields)),
 		}
 
 		// A field the struct does not declare is a mistake, not something to
@@ -840,10 +840,10 @@ func (m *Machine) step(instr Instruction, chunk *Chunk) (result interface{}, sto
 		isSafe := flags&2 != 0
 		importAll := flags&4 != 0
 
-		var items []interface{}
+		var items []any
 		if hasItems {
 			itemsVal := m.pop()
-			items, _ = itemsVal.([]interface{})
+			items, _ = itemsVal.([]any)
 		}
 		path, ok := m.pop().(string)
 		if !ok {
@@ -892,7 +892,7 @@ func (m *Machine) step(instr Instruction, chunk *Chunk) (result interface{}, sto
 	return nil, false, nil
 }
 
-func (m *Machine) callFunction(name string, args []interface{}, callerChunk *Chunk) (interface{}, error) {
+func (m *Machine) callFunction(name string, args []any, callerChunk *Chunk) (any, error) {
 	// Look up user-defined function
 	fn, ok := m.env().getFunc(name)
 	if ok {
@@ -933,7 +933,7 @@ type errCaughtByParent struct{}
 
 func (errCaughtByParent) Error() string { return "caught by parent frame" }
 
-func (m *Machine) callFuncChunk(fn *FuncChunk, args []interface{}, selfEnv *ivmEnv) (interface{}, error) {
+func (m *Machine) callFuncChunk(fn *FuncChunk, args []any, selfEnv *ivmEnv) (any, error) {
 	if len(args) != len(fn.Params) {
 		return nil, m.runtimeErr(fmt.Sprintf("function '%s' expects %d argument(s), got %d", fn.Name, len(fn.Params), len(args)))
 	}
@@ -966,7 +966,7 @@ func (m *Machine) callFuncChunk(fn *FuncChunk, args []interface{}, selfEnv *ivmE
 	funcFrame := &callFrame{
 		chunk: fn.Body,
 		ip:    0,
-		stack: []interface{}{},
+		stack: []any{},
 		env:   funcEnv,
 		name:  fn.Name,
 	}
@@ -1019,7 +1019,7 @@ func (m *Machine) callFuncChunk(fn *FuncChunk, args []interface{}, selfEnv *ivmE
 	}
 }
 
-func (m *Machine) callMethod(obj interface{}, methodName string, args []interface{}, callerChunk *Chunk) (interface{}, error) {
+func (m *Machine) callMethod(obj any, methodName string, args []any, callerChunk *Chunk) (any, error) {
 	// Check if it's a struct instance
 	si, ok := obj.(*StructInstance)
 	if ok {
@@ -1050,17 +1050,17 @@ func (m *Machine) callMethod(obj interface{}, methodName string, args []interfac
 	}
 
 	// Non-struct: fall back to calling function with obj as first argument
-	allArgs := append([]interface{}{obj}, args...)
+	allArgs := append([]any{obj}, args...)
 	return m.callFunction(methodName, allArgs, callerChunk)
 }
 
-func (m *Machine) executeDefaultChunk(chunk *Chunk) (interface{}, error) {
+func (m *Machine) executeDefaultChunk(chunk *Chunk) (any, error) {
 	subMachine := &Machine{builtin: m.builtin}
 	env := m.env().newChild()
 	subMachine.cur = &callFrame{
 		chunk: chunk,
 		ip:    0,
-		stack: []interface{}{},
+		stack: []any{},
 		env:   env,
 	}
 	return subMachine.execute(env)

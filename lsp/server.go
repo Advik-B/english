@@ -45,7 +45,7 @@ type Server struct {
 }
 
 // MethodHandler is a function that handles a custom method
-type MethodHandler func(params json.RawMessage) (interface{}, error)
+type MethodHandler func(params json.RawMessage) (any, error)
 
 // ServerOption is a function that configures the server
 type ServerOption func(*Server)
@@ -175,7 +175,7 @@ func (s *Server) readMessage() (json.RawMessage, error) {
 }
 
 // writeMessage writes an LSP message to the output
-func (s *Server) writeMessage(msg interface{}) error {
+func (s *Server) writeMessage(msg any) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -222,7 +222,7 @@ func (s *Server) handleMessage(msg json.RawMessage) {
 func (s *Server) handleRequest(req RequestMessage) {
 	s.logger.Printf("Request: %s", req.Method)
 
-	var result interface{}
+	var result any
 	var err error
 
 	// Check for server state
@@ -302,7 +302,7 @@ func (s *Server) handleNotification(notif NotificationMessage) {
 }
 
 // sendResult sends a successful response
-func (s *Server) sendResult(id interface{}, result interface{}) {
+func (s *Server) sendResult(id any, result any) {
 	response := ResponseMessage{
 		Message: Message{JSONRPC: "2.0"},
 		ID:      id,
@@ -314,7 +314,7 @@ func (s *Server) sendResult(id interface{}, result interface{}) {
 }
 
 // sendError sends an error response
-func (s *Server) sendError(id interface{}, code int, message string) {
+func (s *Server) sendError(id any, code int, message string) {
 	response := ResponseMessage{
 		Message: Message{JSONRPC: "2.0"},
 		ID:      id,
@@ -329,7 +329,7 @@ func (s *Server) sendError(id interface{}, code int, message string) {
 }
 
 // sendNotification sends a notification to the client
-func (s *Server) sendNotification(method string, params interface{}) {
+func (s *Server) sendNotification(method string, params any) {
 	paramsJSON, err := json.Marshal(params)
 	if err != nil {
 		s.logger.Printf("Error marshaling notification params: %v", err)
@@ -415,7 +415,7 @@ func buildCompletionTriggerCharacters() []string {
 	return triggers
 }
 
-func (s *Server) handleShutdown() (interface{}, error) {
+func (s *Server) handleShutdown() (any, error) {
 	if s.onShutdown != nil {
 		if err := s.onShutdown(); err != nil {
 			return nil, err
@@ -522,7 +522,7 @@ func (s *Server) getAnalysis(uri string) *AnalysisResult {
 	return s.analyses[uri]
 }
 
-func (s *Server) handleCompletion(params json.RawMessage) (interface{}, error) {
+func (s *Server) handleCompletion(params json.RawMessage) (any, error) {
 	var compParams CompletionParams
 	if err := json.Unmarshal(params, &compParams); err != nil {
 		return nil, err
@@ -546,7 +546,7 @@ func (s *Server) handleCompletion(params json.RawMessage) (interface{}, error) {
 	}, nil
 }
 
-func (s *Server) handleHover(params json.RawMessage) (interface{}, error) {
+func (s *Server) handleHover(params json.RawMessage) (any, error) {
 	var hoverParams HoverParams
 	if err := json.Unmarshal(params, &hoverParams); err != nil {
 		return nil, err
@@ -566,7 +566,7 @@ func (s *Server) handleHover(params json.RawMessage) (interface{}, error) {
 	return hover, nil
 }
 
-func (s *Server) handleDefinition(params json.RawMessage) (interface{}, error) {
+func (s *Server) handleDefinition(params json.RawMessage) (any, error) {
 	var defParams DefinitionParams
 	if err := json.Unmarshal(params, &defParams); err != nil {
 		return nil, err
@@ -586,7 +586,7 @@ func (s *Server) handleDefinition(params json.RawMessage) (interface{}, error) {
 	return location, nil
 }
 
-func (s *Server) handleReferences(params json.RawMessage) (interface{}, error) {
+func (s *Server) handleReferences(params json.RawMessage) (any, error) {
 	var refParams ReferenceParams
 	if err := json.Unmarshal(params, &refParams); err != nil {
 		return nil, err
@@ -606,7 +606,7 @@ func (s *Server) handleReferences(params json.RawMessage) (interface{}, error) {
 	return locations, nil
 }
 
-func (s *Server) handleDocumentSymbol(params json.RawMessage) (interface{}, error) {
+func (s *Server) handleDocumentSymbol(params json.RawMessage) (any, error) {
 	var symbolParams DocumentSymbolParams
 	if err := json.Unmarshal(params, &symbolParams); err != nil {
 		return nil, err
@@ -626,7 +626,7 @@ func (s *Server) handleDocumentSymbol(params json.RawMessage) (interface{}, erro
 	return symbols, nil
 }
 
-func (s *Server) handleSignatureHelp(params json.RawMessage) (interface{}, error) {
+func (s *Server) handleSignatureHelp(params json.RawMessage) (any, error) {
 	var sigParams SignatureHelpParams
 	if err := json.Unmarshal(params, &sigParams); err != nil {
 		return nil, err
@@ -646,7 +646,7 @@ func (s *Server) handleSignatureHelp(params json.RawMessage) (interface{}, error
 	return sigHelp, nil
 }
 
-func (s *Server) handleFormatting(params json.RawMessage) (interface{}, error) {
+func (s *Server) handleFormatting(params json.RawMessage) (any, error) {
 	var fmtParams DocumentFormattingParams
 	if err := json.Unmarshal(params, &fmtParams); err != nil {
 		return nil, err
@@ -725,7 +725,7 @@ func (s *Server) formatDocument(doc *Document, options FormattingOptions) string
 	return result.String()
 }
 
-func (s *Server) handleCodeAction(params json.RawMessage) (interface{}, error) {
+func (s *Server) handleCodeAction(params json.RawMessage) (any, error) {
 	var caParams CodeActionParams
 	if err := json.Unmarshal(params, &caParams); err != nil {
 		return nil, err
@@ -789,7 +789,7 @@ func (s *Server) handleCodeAction(params json.RawMessage) (interface{}, error) {
 	return actions, nil
 }
 
-func (s *Server) handleDocumentHighlight(params json.RawMessage) (interface{}, error) {
+func (s *Server) handleDocumentHighlight(params json.RawMessage) (any, error) {
 	var hlParams DocumentHighlightParams
 	if err := json.Unmarshal(params, &hlParams); err != nil {
 		return nil, err
@@ -827,7 +827,7 @@ func (s *Server) handleDocumentHighlight(params json.RawMessage) (interface{}, e
 	return highlights, nil
 }
 
-func (s *Server) handleFoldingRange(params json.RawMessage) (interface{}, error) {
+func (s *Server) handleFoldingRange(params json.RawMessage) (any, error) {
 	var frParams FoldingRangeParams
 	if err := json.Unmarshal(params, &frParams); err != nil {
 		return nil, err

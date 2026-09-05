@@ -27,7 +27,7 @@ import (
 // Execute runs a compiled Chunk and returns the last value (or nil).
 // builtin is the stdlib function dispatcher.
 // predefined is a map of pre-defined constant values (e.g. math.Pi).
-func Execute(chunk *Chunk, builtin BuiltinFunc, predefined map[string]interface{}) (interface{}, error) {
+func Execute(chunk *Chunk, builtin BuiltinFunc, predefined map[string]any) (any, error) {
 	m := newMachine(builtin)
 
 	root := newIvmEnv()
@@ -37,7 +37,7 @@ func Execute(chunk *Chunk, builtin BuiltinFunc, predefined map[string]interface{
 	}
 
 	// Set up import handler that reads, compiles, and executes source files
-	m.importHandler = func(path string, items []interface{}, importAll, isSafe bool, env *ivmEnv) error {
+	m.importHandler = func(path string, items []any, importAll, isSafe bool, env *ivmEnv) error {
 		src, err := os.ReadFile(path)
 		if err != nil {
 			return err
@@ -65,7 +65,7 @@ func Execute(chunk *Chunk, builtin BuiltinFunc, predefined map[string]interface{
 			subMachine.cur = &callFrame{
 				chunk: subChunk,
 				ip:    0,
-				stack: []interface{}{},
+				stack: []any{},
 				env:   env, // define directly in caller's env
 			}
 			_, execErr := subMachine.execute(env)
@@ -82,7 +82,7 @@ func Execute(chunk *Chunk, builtin BuiltinFunc, predefined map[string]interface{
 		subMachine.cur = &callFrame{
 			chunk: subChunk,
 			ip:    0,
-			stack: []interface{}{},
+			stack: []any{},
 			env:   subEnv,
 		}
 		_, execErr := subMachine.execute(subEnv)
@@ -126,7 +126,7 @@ func Execute(chunk *Chunk, builtin BuiltinFunc, predefined map[string]interface{
 	m.cur = &callFrame{
 		chunk: chunk,
 		ip:    0,
-		stack: []interface{}{},
+		stack: []any{},
 		env:   root,
 		// The outermost frame is named so that a call stack from this engine
 		// reads the same as one from the other.

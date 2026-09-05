@@ -129,15 +129,15 @@ func TestHelpCoversEveryBuiltin(t *testing.T) {
 func TestStringFunctionsCountCharacters(t *testing.T) {
 	cases := []struct {
 		name string
-		args []interface{}
+		args []any
 		want string
 	}{
-		{"substring", []interface{}{"héllo", 1.0, 3.0}, "éll"},
-		{"substring", []interface{}{"日本語", 1.0, 2.0}, "本語"},
-		{"pad_left", []interface{}{"5", 4.0, "·"}, "···5"},
-		{"pad_right", []interface{}{"5", 3.0, "·"}, "5··"},
-		{"center", []interface{}{"x", 5.0, "·"}, "··x··"},
-		{"zfill", []interface{}{"é", 3.0}, "00é"},
+		{"substring", []any{"héllo", 1.0, 3.0}, "éll"},
+		{"substring", []any{"日本語", 1.0, 2.0}, "本語"},
+		{"pad_left", []any{"5", 4.0, "·"}, "···5"},
+		{"pad_right", []any{"5", 3.0, "·"}, "5··"},
+		{"center", []any{"x", 5.0, "·"}, "··x··"},
+		{"zfill", []any{"é", 3.0}, "00é"},
 	}
 	for _, c := range cases {
 		got, err := stdlib.Eval(c.name, c.args)
@@ -154,11 +154,11 @@ func TestStringFunctionsCountCharacters(t *testing.T) {
 // TestUniqueUsesLanguageEquality covers dedup, which keyed on the rendered
 // form of a value, so the number 1 and the text "1" were the same key.
 func TestUniqueUsesLanguageEquality(t *testing.T) {
-	got, err := stdlib.Eval("unique", []interface{}{[]interface{}{1.0, "1", 1.0, "1"}})
+	got, err := stdlib.Eval("unique", []any{[]any{1.0, "1", 1.0, "1"}})
 	if err != nil {
 		t.Fatalf("unique: %v", err)
 	}
-	list, ok := got.([]interface{})
+	list, ok := got.([]any)
 	if !ok {
 		t.Fatalf("unique returned %T, want a list", got)
 	}
@@ -171,20 +171,20 @@ func TestUniqueUsesLanguageEquality(t *testing.T) {
 // numeric when both happened to be numbers and textual otherwise — which is
 // not transitive on a mixed list, so the result was undefined.
 func TestSortIsConsistent(t *testing.T) {
-	mixed := []interface{}{"b", 2.0, nil, true, "a", 1.0, false}
+	mixed := []any{"b", 2.0, nil, true, "a", 1.0, false}
 
-	first, err := stdlib.Eval("sort", []interface{}{mixed})
+	first, err := stdlib.Eval("sort", []any{mixed})
 	if err != nil {
 		t.Fatalf("sort: %v", err)
 	}
 	// Sorting an already sorted list must not change it, which a
 	// non-transitive comparison cannot promise.
-	second, err := stdlib.Eval("sort", []interface{}{first})
+	second, err := stdlib.Eval("sort", []any{first})
 	if err != nil {
 		t.Fatalf("sort: %v", err)
 	}
-	a := first.([]interface{})
-	b := second.([]interface{})
+	a := first.([]any)
+	b := second.([]any)
 	for i := range a {
 		if !sameValue(a[i], b[i]) {
 			t.Errorf("sorting twice changed the order at %d: %v then %v", i, a[i], b[i])
@@ -192,21 +192,21 @@ func TestSortIsConsistent(t *testing.T) {
 	}
 }
 
-func sameValue(a, b interface{}) bool { return a == b }
+func sameValue(a, b any) bool { return a == b }
 
 // TestWrongTypeIsReported covers the functions that answered rather than
 // reporting: is_nan said true for text, is_infinite said false, and is_empty
 // said false for a number.
 func TestWrongTypeIsReported(t *testing.T) {
 	for _, name := range []string{"is_nan", "is_infinite"} {
-		if _, err := stdlib.Eval(name, []interface{}{"hello"}); err == nil {
+		if _, err := stdlib.Eval(name, []any{"hello"}); err == nil {
 			t.Errorf("%s accepted text", name)
 		}
 	}
-	if _, err := stdlib.Eval("is_empty", []interface{}{1.0}); err == nil {
+	if _, err := stdlib.Eval("is_empty", []any{1.0}); err == nil {
 		t.Error("is_empty accepted a number")
 	}
-	if _, err := stdlib.Eval("to_number", []interface{}{"12abc"}); err == nil {
+	if _, err := stdlib.Eval("to_number", []any{"12abc"}); err == nil {
 		t.Error("to_number accepted trailing text")
 	}
 }

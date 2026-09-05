@@ -293,7 +293,7 @@ func (c *Compiler) compileStatement(stmt ast.Statement) error {
 		c.chunk.Emit(OP_LOAD_CONST, pathIdx)
 		// Push items as a list constant if needed
 		if len(s.Items) > 0 {
-			items := make([]interface{}, len(s.Items))
+			items := make([]any, len(s.Items))
 			for i, item := range s.Items {
 				items[i] = item
 			}

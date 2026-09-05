@@ -8,7 +8,7 @@ import (
 )
 
 // BuiltinFunc is the stdlib function dispatcher.
-type BuiltinFunc func(name string, args []interface{}) (interface{}, error)
+type BuiltinFunc func(name string, args []any) (any, error)
 
 // ─── Value types ──────────────────────────────────────────────────────────────
 
@@ -17,7 +17,7 @@ type BuiltinFunc func(name string, args []interface{}) (interface{}, error)
 type StructInstance struct {
 	DefName string
 	DefRef  *StructDef
-	Fields  map[string]interface{}
+	Fields  map[string]any
 }
 
 // ReferenceValue holds a reference to a named variable in a specific scope.
@@ -29,7 +29,7 @@ type ReferenceValue struct {
 // ─── Environment ──────────────────────────────────────────────────────────────
 
 type envEntry struct {
-	value interface{}
+	value any
 	// declared is the type the name is locked to, or TypeUnknown when it is
 	// not locked at all. It is set for every declaration, whether the type was
 	// written or inferred from the initial value.
@@ -75,7 +75,7 @@ func (e *ivmEnv) newChild() *ivmEnv {
 	}
 }
 
-func (e *ivmEnv) getVar(name string) (interface{}, bool) {
+func (e *ivmEnv) getVar(name string) (any, bool) {
 	if en, ok := e.vars[name]; ok {
 		return en.value, true
 	}
@@ -85,7 +85,7 @@ func (e *ivmEnv) getVar(name string) (interface{}, bool) {
 	return nil, false
 }
 
-func (e *ivmEnv) setVar(name string, value interface{}) error {
+func (e *ivmEnv) setVar(name string, value any) error {
 	if en, ok := e.vars[name]; ok {
 		if en.isConst {
 			return fmt.Errorf("TypeError: cannot reassign constant '%s'", name)
@@ -118,7 +118,7 @@ func (e *ivmEnv) setVar(name string, value interface{}) error {
 	return nil
 }
 
-func (e *ivmEnv) defineVar(name string, value interface{}, isConst bool) error {
+func (e *ivmEnv) defineVar(name string, value any, isConst bool) error {
 	if _, ok := e.vars[name]; ok {
 		return fmt.Errorf("variable '%s' is already defined in this scope", name)
 	}
@@ -131,7 +131,7 @@ func (e *ivmEnv) defineVar(name string, value interface{}, isConst bool) error {
 	return nil
 }
 
-func (e *ivmEnv) defineTypedVar(name string, typeName string, value interface{}, isConst bool) error {
+func (e *ivmEnv) defineTypedVar(name string, typeName string, value any, isConst bool) error {
 	if _, ok := e.vars[name]; ok {
 		return fmt.Errorf("variable '%s' is already defined in this scope", name)
 	}
@@ -236,12 +236,12 @@ func (s *StructInstance) EnglishTypeName() string {
 }
 
 // EnglishFields implements runtime.Fielded.
-func (s *StructInstance) EnglishFields() map[string]interface{} { return s.Fields }
+func (s *StructInstance) EnglishFields() map[string]any { return s.Fields }
 
 // EnglishCopy implements runtime.Copier: only this engine can build a new
 // instance around its own definition record.
-func (s *StructInstance) EnglishCopy() interface{} {
-	fields := make(map[string]interface{}, len(s.Fields))
+func (s *StructInstance) EnglishCopy() any {
+	fields := make(map[string]any, len(s.Fields))
 	for name, value := range s.Fields {
 		fields[name] = runtime.DeepCopy(value)
 	}

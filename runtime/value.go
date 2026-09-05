@@ -15,11 +15,11 @@ import (
 
 // Value is any English value.
 //
-// It is an alias for interface{} rather than a tagged union, which is what
+// It is an alias for any rather than a tagged union, which is what
 // makes the language dynamically typed underneath: nothing about a value's Go
 // representation constrains what may be stored where. Static analysis is what
 // keeps programs honest; these functions are the last line of defence.
-type Value = interface{}
+type Value = any
 
 // Displayer is implemented by engine-specific values that know how to render
 // themselves for Print and for "cast to text".
@@ -54,7 +54,7 @@ type Copier interface {
 
 // TypeErrorf builds the standard type-error message shape, so that both
 // engines word the same failure identically.
-func TypeErrorf(format string, args ...interface{}) error {
+func TypeErrorf(format string, args ...any) error {
 	return &OperationError{Message: sprintf(format, args...)}
 }
 

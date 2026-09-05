@@ -10,8 +10,8 @@ type Instruction struct {
 
 // Chunk is a compiled instruction stream together with its supporting data pools.
 type Chunk struct {
-	Constants  []interface{} // number (float64), string, bool, nil
-	Names      []string      // variable/function names
+	Constants  []any    // number (float64), string, bool, nil
+	Names      []string // variable/function names
 	Code       []Instruction
 	Funcs      []*FuncChunk // user-defined function sub-chunks
 	StructDefs []*StructDef // struct type definitions
@@ -41,7 +41,7 @@ type FieldDef struct {
 // NewChunk allocates an empty Chunk.
 func NewChunk() *Chunk {
 	return &Chunk{
-		Constants:  []interface{}{},
+		Constants:  []any{},
 		Names:      []string{},
 		Code:       []Instruction{},
 		Funcs:      []*FuncChunk{},
@@ -51,7 +51,7 @@ func NewChunk() *Chunk {
 
 // AddConst appends a constant to the pool and returns its index.
 // Constants are NOT deduplicated so every literal gets its own slot.
-func (c *Chunk) AddConst(v interface{}) uint32 {
+func (c *Chunk) AddConst(v any) uint32 {
 	c.Constants = append(c.Constants, v)
 	return uint32(len(c.Constants) - 1)
 }

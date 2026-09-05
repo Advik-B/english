@@ -177,7 +177,7 @@ func TestToNumber(t *testing.T) {
 		{"10", 0, true},   // text needs explicit cast
 		{"3.14", 0, true}, // text needs explicit cast
 		{"invalid", 0, true},
-		{[]interface{}{}, 0, true},
+		{[]any{}, 0, true},
 	}
 
 	for _, test := range tests {
@@ -210,7 +210,7 @@ func TestToString(t *testing.T) {
 		{false, "false"},
 		// A sequence renders the same way whichever container holds it; a list
 		// used to render without the separators an array rendered with.
-		{[]interface{}{float64(1), float64(2), float64(3)}, "[1, 2, 3]"},
+		{[]any{float64(1), float64(2), float64(3)}, "[1, 2, 3]"},
 	}
 
 	for _, test := range tests {
@@ -231,10 +231,10 @@ func TestToBool(t *testing.T) {
 	}{
 		{true, true, false},
 		{false, false, false},
-		{nil, false, false},             // nothing is always false
-		{float64(1), false, true},       // TypeError: number is not boolean
-		{"hello", false, true},          // TypeError: text is not boolean
-		{[]interface{}{1}, false, true}, // TypeError: list is not boolean
+		{nil, false, false},       // nothing is always false
+		{float64(1), false, true}, // TypeError: number is not boolean
+		{"hello", false, true},    // TypeError: text is not boolean
+		{[]any{1}, false, true},   // TypeError: list is not boolean
 	}
 
 	for _, test := range tests {
@@ -268,7 +268,7 @@ func TestAdd(t *testing.T) {
 		t.Errorf("vm.Add(text,text): got %v, %v", r, err)
 	}
 	// list+list is now a TypeError
-	if _, err := vm.Add([]interface{}{1}, []interface{}{2}); err == nil {
+	if _, err := vm.Add([]any{1}, []any{2}); err == nil {
 		t.Error("vm.Add(list, list): expected TypeError, got nil")
 	}
 }
@@ -712,42 +712,42 @@ func TestEvaluatorRangeLiteral(t *testing.T) {
 	tests := []struct {
 		code     string
 		varName  string
-		expected []interface{}
+		expected []any
 	}{
 		{
 			code:     `Declare r to be [1 .. 5].`,
 			varName:  "r",
-			expected: []interface{}{float64(1), float64(2), float64(3), float64(4)},
+			expected: []any{float64(1), float64(2), float64(3), float64(4)},
 		},
 		{
 			code:     `Let myRange be a range from 1 to 3.`,
 			varName:  "myRange",
-			expected: []interface{}{float64(1), float64(2)},
+			expected: []any{float64(1), float64(2)},
 		},
 		{
 			code:     `Declare desc to be [5 .. 1].`,
 			varName:  "desc",
-			expected: []interface{}{},
+			expected: []any{},
 		},
 		{
 			code:     `Declare evens to be [0 .. 10 by 2].`,
 			varName:  "evens",
-			expected: []interface{}{float64(0), float64(2), float64(4), float64(6), float64(8)},
+			expected: []any{float64(0), float64(2), float64(4), float64(6), float64(8)},
 		},
 		{
 			code:     `Let odds be a range from 1 to 9 by 2.`,
 			varName:  "odds",
-			expected: []interface{}{float64(1), float64(3), float64(5), float64(7)},
+			expected: []any{float64(1), float64(3), float64(5), float64(7)},
 		},
 		{
 			code:     `Declare countdown to be [10 .. 0 by -2].`,
 			varName:  "countdown",
-			expected: []interface{}{float64(10), float64(8), float64(6), float64(4), float64(2)},
+			expected: []any{float64(10), float64(8), float64(6), float64(4), float64(2)},
 		},
 		{
 			code:     `Let multiples be a range from 5 to 25 by 5.`,
 			varName:  "multiples",
-			expected: []interface{}{float64(5), float64(10), float64(15), float64(20)},
+			expected: []any{float64(5), float64(10), float64(15), float64(20)},
 		},
 	}
 

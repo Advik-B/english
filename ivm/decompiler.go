@@ -293,7 +293,7 @@ func (d *decompiler) fmtConst(idx uint32) string {
 	return fmtValue(d.chunk.Constants[idx])
 }
 
-func fmtValue(v interface{}) string {
+func fmtValue(v any) string {
 	switch val := v.(type) {
 	case float64:
 		if math.IsInf(val, 1) {
@@ -318,7 +318,7 @@ func fmtValue(v interface{}) string {
 		return "False"
 	case nil:
 		return "None"
-	case []interface{}:
+	case []any:
 		parts := make([]string, len(val))
 		for i, item := range val {
 			parts[i] = fmtValue(item)

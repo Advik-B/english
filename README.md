@@ -1011,6 +1011,9 @@ reported before the program runs.
 # Run compiled bytecode
 ./english run program.101
 
+# Render a spinning ASCII doughnut in-place (Ctrl+C to stop)
+./english run examples/spinning_doughnut.abc
+
 # Show a compiled file as source, or as an opcode listing
 ./english cat program.101
 ./english inspect-ivm program.101

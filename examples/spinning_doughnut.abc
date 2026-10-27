@@ -1,0 +1,150 @@
+# Spinning ASCII Doughnut (math-based renderer)
+# Ported from the classic donut equations.
+# Run with: ./english run examples/spinning_doughnut.abc
+
+Declare screen_size to be 20.
+Declare theta_spacing to be 0.3.
+Declare phi_spacing to be 0.1.
+Declare illumination to be [".", ",", "-", "~", ":", ";", "=", "!", "*", "#", "$", "@"].
+
+Declare A to be 1.
+Declare B to be 1.
+Declare R1 to be 1.
+Declare R2 to be 2.
+Declare K2 to be 5.
+Declare K1 to be screen_size * K2 * 3 / (8 * (R1 + R2)).
+
+# Precompute angle tables (similar spirit to NumPy arrays in the reference).
+Declare theta_values to be [].
+Declare cos_thetas to be [].
+Declare sin_thetas to be [].
+Declare circle_x_values to be [].
+Declare circle_y_values to be [].
+Declare theta to be 0.
+repeat the following while theta is less than 2 * pi:
+    Declare ctheta to be cos(theta).
+    Declare stheta to be sin(theta).
+    Set theta_values to be append(theta_values, theta).
+    Set cos_thetas to be append(cos_thetas, ctheta).
+    Set sin_thetas to be append(sin_thetas, stheta).
+    Set circle_x_values to be append(circle_x_values, R2 + R1 * ctheta).
+    Set circle_y_values to be append(circle_y_values, R1 * stheta).
+    Set theta to be theta + theta_spacing.
+thats it.
+
+Declare phi_values to be [].
+Declare cos_phis to be [].
+Declare sin_phis to be [].
+Declare phi to be 0.
+repeat the following while phi is less than 2 * pi:
+    Set phi_values to be append(phi_values, phi).
+    Set cos_phis to be append(cos_phis, cos(phi)).
+    Set sin_phis to be append(sin_phis, sin(phi)).
+    Set phi to be phi + phi_spacing.
+thats it.
+
+Print "Spinning ASCII doughnut (math port, press Ctrl+C to stop)...".
+Write "[2J".
+
+repeat forever:
+    Set A to be A + theta_spacing.
+    Set B to be B + phi_spacing.
+
+    Declare cos_A to be cos(A).
+    Declare sin_A to be sin(A).
+    Declare cos_B to be cos(B).
+    Declare sin_B to be sin(B).
+
+    Declare output to be [].
+    Declare zbuffer to be [].
+
+    Declare row_index to be 0.
+    repeat the following while row_index is less than screen_size:
+        Declare row_chars to be [].
+        Declare row_depth to be [].
+        Declare col_index to be 0.
+        repeat the following while col_index is less than screen_size:
+            Set row_chars to be append(row_chars, " ").
+            Set row_depth to be append(row_depth, 0).
+            Set col_index to be col_index + 1.
+        thats it.
+        Set output to be append(output, row_chars).
+        Set zbuffer to be append(zbuffer, row_depth).
+        Set row_index to be row_index + 1.
+    thats it.
+
+    Declare theta_index to be 0.
+    repeat the following while theta_index is less than count(theta_values):
+        Declare cos_theta to be the item at position theta_index in cos_thetas.
+        Declare sin_theta to be the item at position theta_index in sin_thetas.
+        Declare circle_x to be the item at position theta_index in circle_x_values.
+        Declare circle_y to be the item at position theta_index in circle_y_values.
+
+        Declare phi_index to be 0.
+        repeat the following while phi_index is less than count(phi_values):
+            Declare cos_phi to be the item at position phi_index in cos_phis.
+            Declare sin_phi to be the item at position phi_index in sin_phis.
+
+            Declare x to be (cos_B * cos_phi + sin_A * sin_B * sin_phi) * circle_x - circle_y * cos_A * sin_B.
+            Declare y to be (sin_B * cos_phi - sin_A * cos_B * sin_phi) * circle_x + circle_y * cos_A * cos_B.
+            Declare z to be K2 + cos_A * sin_phi * circle_x + circle_y * sin_A.
+
+            Declare ooz to be 1 / z.
+            Declare xp to be floor(screen_size / 2 + K1 * ooz * x).
+            Declare yp to be floor(screen_size / 2 - K1 * ooz * y).
+
+            If xp is less than 0 or xp is greater than or equal to screen_size, then
+                Set phi_index to be phi_index + 1.
+                Continue.
+            thats it.
+            If yp is less than 0 or yp is greater than or equal to screen_size, then
+                Set phi_index to be phi_index + 1.
+                Continue.
+            thats it.
+
+            Declare L1 to be (cos_phi * cos_theta * sin_B) - (cos_A * sin_phi * cos_theta) - (sin_A * sin_theta).
+            Declare L2 to be cos_B * ((cos_A * sin_theta) - (sin_phi * cos_theta * sin_A)).
+            Declare L to be round((L1 + L2) * 8).
+
+            If L is less than 0, then
+                Set phi_index to be phi_index + 1.
+                Continue.
+            thats it.
+            If L is greater than 11, then
+                Set L to be 11.
+            thats it.
+
+            Declare depth_row to be the item at position xp in zbuffer.
+            Declare previous_depth to be the item at position yp in depth_row.
+
+            If ooz is greater than previous_depth, then
+                Set the item at position yp in depth_row to be ooz.
+                Set the item at position xp in zbuffer to be depth_row.
+
+                Declare glyph_row to be the item at position xp in output.
+                Set the item at position yp in glyph_row to be the item at position L in illumination.
+                Set the item at position xp in output to be glyph_row.
+            thats it.
+
+            Set phi_index to be phi_index + 1.
+        thats it.
+
+        Set theta_index to be theta_index + 1.
+    thats it.
+
+    Write "[H".
+    Declare y_index to be 0.
+    repeat the following while y_index is less than screen_size:
+        Declare row to be the item at position y_index in output.
+        Declare x_index to be 0.
+        repeat the following while x_index is less than screen_size:
+            Write the item at position x_index in row.
+            Set x_index to be x_index + 1.
+        thats it.
+        Write "
+".
+        Set y_index to be y_index + 1.
+    thats it.
+
+    Wait for 33 milliseconds.
+thats it.

@@ -1012,7 +1012,7 @@ reported before the program runs.
 ./english run program.101
 
 # Render a spinning ASCII doughnut in-place (Ctrl+C to stop)
-./english donut
+./english run examples/spinning_doughnut.abc
 
 # Show a compiled file as source, or as an opcode listing
 ./english cat program.101
